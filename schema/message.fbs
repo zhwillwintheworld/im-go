@@ -1,0 +1,388 @@
+// IM Message Protocol - FlatBuffers Schema
+// 用于 Client <-> Access 层的高性能通信
+// 对应 Protobuf: message.proto
+
+namespace im.protocol;
+
+// =============================================================================
+// Enums
+// =============================================================================
+
+enum Platform : byte {
+    UNKNOWN = 0,
+    ANDROID = 1,
+    IOS = 2,
+    WEB = 3,
+    DESKTOP = 4,
+    WECHAT = 5
+}
+
+enum ChatType : byte {
+    UNKNOWN = 0,
+    PRIVATE = 1,
+    GROUP = 2,
+    SYSTEM = 3,
+    MAHJONG = 4
+}
+
+enum MsgType : byte {
+    UNKNOWN = 0,
+    TEXT = 1,
+    IMAGE = 2,
+    VOICE = 3,
+    VIDEO = 4,
+    FILE = 5,
+    EMOJI = 6,
+    CMD = 7
+}
+
+enum GameType : byte {
+    UNKNOWN = 0,
+    MAHJONG = 1
+}
+
+enum ErrorCode : short {
+    SUCCESS = 0,
+    UNKNOWN_ERROR = 1,
+    AUTH_FAILED = 1001,
+    PARAM_ERROR = 1002,
+    ROOM_NOT_FOUND = 2001,
+    ROOM_FULL = 2002,
+    NOT_IN_ROOM = 2003
+}
+
+enum MahjongColor : byte {
+    UNKNOWN = 0,
+    MAN = 1,
+    SUO = 2,
+    PIN = 3,
+    HONORS = 4
+}
+
+enum RoomStatus : byte {
+    WAITING = 0,
+    PLAYING = 1,
+    SETTLING = 2
+}
+
+// =============================================================================
+// Client Request (Client -> Access -> Logic)
+// =============================================================================
+
+enum RequestPayload : byte {
+    NONE = 0,
+    ChatSendReq = 1,
+    GameReq = 2,
+    HeartbeatReq = 3,
+    RoomReq = 4
+}
+
+table ClientRequest {
+    req_id: string;
+    timestamp: int64;
+    payload_type: RequestPayload;
+    payload: [ubyte] (flexbuffer);  // 根据 payload_type 解析
+}
+
+// 聊天发送请求
+table ChatSendReq {
+    chat_type: ChatType;
+    target_id: string;
+    msg_type: MsgType;
+    content: string;
+    ext: [KeyValue];
+}
+
+// 房间请求
+enum RoomAction : byte {
+    CREATE = 0,
+    JOIN = 1,
+    LEAVE = 2,
+    READY = 3
+}
+
+table RoomReq {
+    action: RoomAction;
+    game_type: GameType;
+    room_id: string;
+    room_config: string;
+}
+
+// 游戏请求
+enum GamePayload : byte {
+    NONE = 0,
+    MahjongReq = 1
+}
+
+table GameReq {
+    room_id: string;
+    game_type: GameType;
+    game_payload_type: GamePayload;
+    game_payload: [ubyte] (flexbuffer);
+}
+
+// 心跳请求
+table HeartbeatReq {
+    client_time: int64;
+}
+
+// =============================================================================
+// Client Response (Logic -> Access -> Client)
+// =============================================================================
+
+enum ResponsePayload : byte {
+    NONE = 0,
+    // 响应
+    ChatSendAck = 1,
+    RoomResp = 2,
+    HeartbeatResp = 3,
+    // 推送
+    ChatPush = 10,
+    GamePush = 11,
+    RoomPush = 12,
+    SystemPush = 13
+}
+
+table ClientResponse {
+    req_id: string;
+    timestamp: int64;
+    code: ErrorCode;
+    msg: string;
+    payload_type: ResponsePayload;
+    payload: [ubyte] (flexbuffer);
+}
+
+// 聊天发送确认
+table ChatSendAck {
+    msg_id: string;
+    send_time: int64;
+}
+
+// 房间响应
+table RoomResp {
+    room_id: string;
+    room_info: RoomInfo;
+}
+
+// 心跳响应
+table HeartbeatResp {
+    server_time: int64;
+}
+
+// 聊天推送
+table ChatPush {
+    msg_id: string;
+    sender_id: string;
+    sender_info: UserInfo;
+    chat_type: ChatType;
+    target_id: string;
+    msg_type: MsgType;
+    content: string;
+    send_time: int64;
+    ext: [KeyValue];
+}
+
+// 房间推送
+enum RoomEvent : byte {
+    USER_JOINED = 0,
+    USER_LEFT = 1,
+    USER_READY = 2,
+    GAME_START = 3,
+    GAME_OVER = 4,
+    ROOM_DISMISSED = 5
+}
+
+table RoomPush {
+    event: RoomEvent;
+    room_id: string;
+    user_id: string;
+    room_info: RoomInfo;
+}
+
+// 游戏推送
+table GamePush {
+    room_id: string;
+    game_type: GameType;
+    game_payload_type: GamePayload;
+    game_payload: [ubyte] (flexbuffer);
+}
+
+// 系统推送
+enum SystemLevel : byte {
+    INFO = 0,
+    WARNING = 1,
+    ERROR = 2
+}
+
+table SystemPush {
+    title: string;
+    content: string;
+    level: SystemLevel;
+    action_url: string;
+}
+
+// =============================================================================
+// Common Models
+// =============================================================================
+
+table KeyValue {
+    key: string;
+    value: string;
+}
+
+table UserInfo {
+    user_id: string;
+    nickname: string;
+    avatar: string;
+    level: int32;
+    coins: int64;
+}
+
+table RoomInfo {
+    room_id: string;
+    owner_id: string;
+    max_players: int32;
+    current_players: int32;
+    players: [RoomPlayer];
+    status: RoomStatus;
+}
+
+table RoomPlayer {
+    user_id: string;
+    user: UserInfo;
+    is_ready: bool;
+    seat_index: int32;
+    is_online: bool;
+}
+
+table MahjongTile {
+    color: MahjongColor;
+    value: int32;
+    index: int32;
+}
+
+enum MeldType : byte {
+    PONG = 0,
+    KONG = 1,
+    CONCEALED_KONG = 2,
+    CHOW = 3
+}
+
+table MeldGroup {
+    meld_type: MeldType;
+    tiles: [MahjongTile];
+    from_seat: int32;
+}
+
+table PlayerPublicInfo {
+    seat: int32;
+    user_id: string;
+    melds: [MeldGroup];
+    discarded: [MahjongTile];
+    hand_count: int32;
+}
+
+// =============================================================================
+// Mahjong Request
+// =============================================================================
+
+enum MahjongAction : byte {
+    DISCARD = 0,
+    PONG = 1,
+    KONG = 2,
+    HU = 3,
+    ZI_MO = 4,
+    AUTO = 5,
+    PASS = 6
+}
+
+table MahjongReq {
+    action: MahjongAction;
+    tile: MahjongTile;
+    event_id: string;
+    decision_id: string;
+}
+
+// =============================================================================
+// Mahjong Push
+// =============================================================================
+
+enum MahjongPushType : byte {
+    NONE = 0,
+    GameStart = 1,
+    TurnChange = 2,
+    ActionResult = 3,
+    AskAction = 4,
+    Settlement = 5,
+    TotalResult = 6
+}
+
+table MahjongPush {
+    event_id: string;
+    push_type: MahjongPushType;
+    push_data: [ubyte] (flexbuffer);
+}
+
+// 游戏开始 - 发牌
+table MjGameStart {
+    hand_tiles: [MahjongTile];
+    players_public_info: [PlayerPublicInfo];
+    remain_cards: int32;
+    dealer_seat: int32;
+}
+
+// 轮到某人 - 摸牌
+table MjTurnChange {
+    current_seat: int32;
+    remain_cards: int32;
+    countdown: int32;
+    drawn_tile: MahjongTile;  // 仅推送给当前玩家
+}
+
+// 动作结果 - 某人出牌/碰/杠/胡
+table MjActionResult {
+    action_seat: int32;
+    action_user_id: string;
+    action: MahjongAction;
+    tile: MahjongTile;
+    related_tiles: [MahjongTile];  // 碰/杠相关的牌
+}
+
+// 询问操作 - 是否碰/杠/胡
+table MjAskAction {
+    decision_id: string;
+    countdown: int32;
+    trigger_tile: MahjongTile;  // 触发询问的牌
+    allowed_actions: [MahjongAction];
+}
+
+// 单局结算
+table MjSettlement {
+    winner_seat: int32;
+    win_type: int32;  // 0: 自摸, 1: 点炮
+    loser_seat: int32;  // 点炮时有值
+    score_changes: [int32];
+    winning_tiles: [MahjongTile];
+    fan_description: string;
+    fan_count: int32;
+}
+
+// 总结算
+table MjTotalResult {
+    player_results: [MjPlayerResult];
+}
+
+table MjPlayerResult {
+    seat: int32;
+    user_id: string;
+    total_score: int32;
+    win_count: int32;
+    lose_count: int32;
+}
+
+// =============================================================================
+// Root Types
+// =============================================================================
+
+root_type ClientRequest;  // 客户端发送
+// 或使用 ClientResponse 作为 root_type 用于服务端响应
