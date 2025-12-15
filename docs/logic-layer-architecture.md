@@ -26,6 +26,7 @@ Logic Layer（逻辑层）是 IM 系统的业务核心，负责消息处理、�
 ├─────────────────┬───────────────────────────────────────┤
 │ 语言            │ Kotlin 2.2.0                          │
 │ JDK             │ 21                                    │
+│ 构建工具        │ Gradle 9.2.1 (Kotlin DSL)             │
 │ 框架            │ Spring Boot 4.0.0 (无 Web/Servlet)    │
 │ 内部通信        │ NATS (nats.java)                      │
 │ 数据库          │ PostgreSQL                            │
@@ -142,50 +143,44 @@ im-logic/
 │   │   │       │   ├── User.kt
 │   │   │       │   └── Group.kt
 │   │   │       ├── config/
-│   │   │       │   ├── GrpcConfig.kt
+│   │   │       │   ├── NatsConfig.kt               # NATS 配置
 │   │   │       │   └── RedisConfig.kt
 │   │   │       └── util/
-│   │   ├── proto/
-│   │   │   └── access_logic.proto                   # gRPC 定义
 │   │   └── resources/
 │   │       └── application.yml
 │   └── test/
-└── proto/                                           # 共享 Proto 文件
-    └── access_logic.proto
 ```
 
 ### 3.2 核心模块详解
 
-#### 3.2.1 gRPC 双向流服务
+#### 3.2.1 NATS 消息服务
 
 ```mermaid
 classDiagram
-    class AccessLogicServiceImpl {
-        -streamManager: StreamManager
+    class MessageSubscriber {
+        -natsConnection: Connection
         -messageService: MessageService
         -routerService: RouterService
-        +channel(requests: Flow~UpstreamMessage~): Flow~DownstreamMessage~
+        +start()
+        +handleUpstreamMessage(data: ByteArray)
     }
 
-    class StreamManager {
-        -streams: ConcurrentHashMap~String, StreamContext~
-        +register(accessNodeId: String, stream: StreamContext)
-        +unregister(accessNodeId: String)
-        +getStream(accessNodeId: String): StreamContext?
+    class MessagePublisher {
+        -natsConnection: Connection
+        +publishToAccess(accessNodeId: String, message: DownstreamMessage)
         +broadcast(message: DownstreamMessage)
-        +sendTo(accessNodeId: String, message: DownstreamMessage)
     }
 
-    class StreamContext {
-        -accessNodeId: String
-        -sendChannel: SendChannel~DownstreamMessage~
-        -connectedAt: Instant
-        +send(message: DownstreamMessage)
-        +close()
+    class RouterService {
+        -reactiveRedisTemplate: ReactiveRedisTemplate
+        -messagePublisher: MessagePublisher
+        +getUserLocations(userId: Long): List~UserLocation~
+        +routeMessage(userId: Long, message: PushMessage)
+        +routeToMultiple(userIds: List~Long~, message: PushMessage)
     }
 
-    AccessLogicServiceImpl --> StreamManager
-    StreamManager --> "*" StreamContext
+    MessageSubscriber --> RouterService
+    RouterService --> MessagePublisher
 ```
 
 #### 3.2.2 消息路由服务
@@ -210,169 +205,6 @@ classDiagram
     }
 
     RouterService --> UserLocation
-```
-
----
-
-## 4. gRPC 协议定义
-
-### 4.1 Proto 文件
-
-```protobuf
-syntax = "proto3";
-
-package im.protocol;
-
-option java_multiple_files = true;
-option java_package = "com.example.im.logic.proto";
-
-// Access <-> Logic 双向流服务
-service AccessLogicService {
-    // 双向流通道
-    rpc Channel(stream UpstreamMessage) returns (stream DownstreamMessage);
-
-    // 普通 RPC - 用户位置注册
-    rpc RegisterUser(RegisterUserRequest) returns (RegisterUserResponse);
-
-    // 普通 RPC - 用户下线
-    rpc UnregisterUser(UnregisterUserRequest) returns (UnregisterUserResponse);
-}
-
-// ============ 上行消息 (Access -> Logic) ============
-
-message UpstreamMessage {
-    string request_id = 1;
-    string access_node_id = 2;
-    int64 timestamp = 3;
-
-    oneof payload {
-        AccessNodeOnline access_online = 10;       // Access 节点上线
-        AccessNodeOffline access_offline = 11;     // Access 节点下线
-        UserMessage user_message = 20;             // 用户发送的消息
-        UserOnline user_online = 21;               // 用户上线
-        UserOffline user_offline = 22;             // 用户下线
-        MessageAckFromUser message_ack = 30;       // 用户确认收到消息
-        HeartbeatPing ping = 100;                  // 心跳
-    }
-}
-
-message AccessNodeOnline {
-    string node_id = 1;
-    string address = 2;
-    int32 capacity = 3;
-}
-
-message AccessNodeOffline {
-    string node_id = 1;
-}
-
-message UserMessage {
-    int64 from_user_id = 1;
-    int64 to_user_id = 2;           // 单聊目标
-    int64 to_group_id = 3;          // 群聊目标
-    string msg_id = 4;
-    int32 msg_type = 5;             // 1=文本, 2=图片, 3=语音...
-    bytes content = 6;
-    int64 client_timestamp = 7;
-}
-
-message UserOnline {
-    int64 user_id = 1;
-    int64 conn_id = 2;
-    string device_id = 3;
-    string platform = 4;            // iOS/Android/Web/Desktop
-}
-
-message UserOffline {
-    int64 user_id = 1;
-    int64 conn_id = 2;
-    string reason = 3;              // 主动断开/超时/被踢
-}
-
-message MessageAckFromUser {
-    int64 user_id = 1;
-    repeated string msg_ids = 2;
-}
-
-message HeartbeatPing {
-    int64 timestamp = 1;
-}
-
-// ============ 下行消息 (Logic -> Access) ============
-
-message DownstreamMessage {
-    string request_id = 1;
-    int64 timestamp = 2;
-
-    oneof payload {
-        PushMessage push_message = 10;             // 推送消息给用户
-        MessageAckToUser message_ack = 11;         // 消息发送确认
-        KickUser kick_user = 20;                   // 踢用户下线
-        SyncCommand sync_command = 30;             // 同步命令
-        HeartbeatPong pong = 100;                  // 心跳响应
-    }
-}
-
-message PushMessage {
-    int64 target_user_id = 1;
-    int64 target_conn_id = 2;       // 0 表示推送该用户所有连接
-    string msg_id = 3;
-    int64 from_user_id = 4;
-    int64 from_group_id = 5;        // 群消息时填写
-    int32 msg_type = 6;
-    bytes content = 7;
-    int64 server_timestamp = 8;
-}
-
-message MessageAckToUser {
-    int64 target_user_id = 1;
-    string client_msg_id = 2;       // 客户端消息ID
-    string server_msg_id = 3;       // 服务端消息ID
-    int32 code = 4;                 // 0=成功
-    string message = 5;
-}
-
-message KickUser {
-    int64 user_id = 1;
-    int64 conn_id = 2;
-    int32 reason_code = 3;          // 1=重复登录, 2=封禁, 3=Token过期
-    string reason_message = 4;
-}
-
-message SyncCommand {
-    int64 target_user_id = 1;
-    int32 sync_type = 2;            // 1=离线消息, 2=会话列表, 3=联系人
-}
-
-message HeartbeatPong {
-    int64 timestamp = 1;
-}
-
-// ============ 普通 RPC 消息 ============
-
-message RegisterUserRequest {
-    string access_node_id = 1;
-    int64 user_id = 2;
-    int64 conn_id = 3;
-    string device_id = 4;
-    string platform = 5;
-}
-
-message RegisterUserResponse {
-    int32 code = 1;
-    string message = 2;
-    repeated int64 other_conn_ids = 3;  // 该用户其他在线连接
-}
-
-message UnregisterUserRequest {
-    string access_node_id = 1;
-    int64 user_id = 2;
-    int64 conn_id = 3;
-}
-
-message UnregisterUserResponse {
-    int32 code = 1;
-}
 ```
 
 ---
@@ -688,23 +520,25 @@ data class UserLocation(
 ```mermaid
 sequenceDiagram
     participant A as Access Node
+    participant NATS as NATS Cluster
     participant L as Logic Service
-    participant SM as StreamManager
 
-    A->>L: gRPC Channel() 建立双向流
-    L->>L: 创建 channelFlow
-    A->>L: UpstreamMessage (AccessNodeOnline)
-    L->>SM: register(accessNodeId, streamContext)
-    SM-->>L: registered
-    L-->>A: DownstreamMessage (确认)
+    A->>NATS: 连接并订阅 im.access.{nodeId}.downstream
+    L->>NATS: 连接并订阅 im.logic.upstream (队列组)
+    A->>NATS: Publish AccessNodeOnline
+    NATS->>L: 消息分发
+    L->>L: 记录 Access 节点信息
 
     loop 消息交互
-        A->>L: UpstreamMessage (UserMessage)
-        L-->>A: DownstreamMessage (PushMessage)
+        A->>NATS: Publish UpstreamMessage
+        NATS->>L: 队列分发
+        L->>NATS: Publish DownstreamMessage
+        NATS->>A: 消息推送
     end
 
-    A->>L: 连接断开
-    L->>SM: unregister(accessNodeId)
+    A->>NATS: Publish AccessNodeOffline
+    NATS->>L: 消息分发
+    L->>L: 清理 Access 节点信息
 ```
 
 ### 6.2 单聊消息处理流程
@@ -800,7 +634,7 @@ flowchart TB
 ### 8.1 application.yml
 
 ```yaml
-# 无 HTTP 服务器，仅 gRPC
+# 无 HTTP 服务器，通过 NATS 通信
 spring:
   main:
     web-application-type: none  # 关键：禁用 Web 服务器
@@ -921,7 +755,7 @@ protobuf {
 
 | 指标 | 描述 |
 |------|------|
-| `logic_grpc_streams_active` | 当前活跃的 gRPC 流数量 |
+| `logic_nats_connections_active` | 当前活跃的 NATS 连接数 |
 | `logic_messages_processed` | 处理的消息数 (按类型) |
 | `logic_message_latency` | 消息处理延迟 |
 | `logic_route_failures` | 路由失败次数 |
@@ -931,19 +765,20 @@ protobuf {
 
 ```kotlin
 @Component
-class GrpcHealthCheck(
-    private val streamManager: StreamManager
+class NatsHealthCheck(
+    private val natsConnection: Connection
 ) : HealthIndicator {
 
     override fun health(): Health {
-        val connectedNodes = streamManager.getConnectionCount()
-        return if (connectedNodes > 0) {
+        return if (natsConnection.status == Connection.Status.CONNECTED) {
             Health.up()
-                .withDetail("connected_access_nodes", connectedNodes)
+                .withDetail("nats_status", "connected")
+                .withDetail("server_info", natsConnection.serverInfo.toString())
                 .build()
         } else {
             Health.down()
-                .withDetail("reason", "No access nodes connected")
+                .withDetail("reason", "NATS connection not active")
+                .withDetail("status", natsConnection.status.toString())
                 .build()
         }
     }

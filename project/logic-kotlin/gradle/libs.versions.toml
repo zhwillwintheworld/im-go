@@ -1,0 +1,71 @@
+[versions]
+# Kotlin & JVM
+kotlin = "2.2.21"
+java = "21"
+
+# Spring
+spring-boot = "4.0.0"
+spring-dependency-management = "1.1.7"
+
+# Coroutines
+kotlinx-coroutines = "1.10.1"
+
+# Database
+r2dbc-postgresql = "1.0.7.RELEASE"
+
+# Redis
+lettuce = "6.5.0.RELEASE"
+
+# NATS
+jnats = "2.24.1"
+
+# Serialization
+jackson = "2.18.2"
+protobuf = "4.29.2"
+
+# Logging
+logback = "1.5.12"
+
+# Testing
+junit = "5.11.3"
+mockk = "1.13.13"
+
+[libraries]
+# Spring Boot
+spring-boot-starter = { module = "org.springframework.boot:spring-boot-starter" }
+spring-boot-starter-data-r2dbc = { module = "org.springframework.boot:spring-boot-starter-data-r2dbc" }
+spring-boot-starter-data-redis-reactive = { module = "org.springframework.boot:spring-boot-starter-data-redis-reactive" }
+spring-boot-starter-test = { module = "org.springframework.boot:spring-boot-starter-test" }
+
+# R2DBC
+r2dbc-postgresql = { module = "org.postgresql:r2dbc-postgresql", version.ref = "r2dbc-postgresql" }
+
+# Kotlin Coroutines
+kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinx-coroutines" }
+kotlinx-coroutines-reactor = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-reactor", version.ref = "kotlinx-coroutines" }
+
+# NATS
+jnats = { module = "io.nats:jnats", version.ref = "jnats" }
+
+# Jackson
+jackson-module-kotlin = { module = "com.fasterxml.jackson.module:jackson-module-kotlin", version.ref = "jackson" }
+
+# Protobuf
+protobuf-kotlin = { module = "com.google.protobuf:protobuf-kotlin", version.ref = "protobuf" }
+
+# Testing
+junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit" }
+mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
+reactor-test = { module = "io.projectreactor:reactor-test" }
+
+[bundles]
+coroutines = ["kotlinx-coroutines-core", "kotlinx-coroutines-reactor"]
+spring-data = ["spring-boot-starter-data-r2dbc", "spring-boot-starter-data-redis-reactive"]
+testing = ["spring-boot-starter-test", "junit-jupiter", "mockk", "reactor-test"]
+
+[plugins]
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+kotlin-spring = { id = "org.jetbrains.kotlin.plugin.spring", version.ref = "kotlin" }
+spring-boot = { id = "org.springframework.boot", version.ref = "spring-boot" }
+spring-dependency-management = { id = "io.spring.dependency-management", version.ref = "spring-dependency-management" }
+protobuf = { id = "com.google.protobuf", version = "0.9.4" }

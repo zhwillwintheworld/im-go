@@ -1,0 +1,33 @@
+{
+    "name": "im-desktop-web",
+    "version": "1.0.0",
+    "type": "module",
+    "scripts": {
+        "dev": "vite",
+        "build": "tsc && vite build",
+        "preview": "vite preview",
+        "lint": "eslint . --ext ts,tsx",
+        "flatc": "flatc --ts -o src/protocol ../../schema/message.fbs"
+    },
+    "dependencies": {
+        "react": "^19.2.3",
+        "react-dom": "^19.2.3",
+        "react-router-dom": "^7.10.1",
+        "antd": "^6.1.0",
+        "@ant-design/icons": "^6.1.0",
+        "zustand": "^5.0.9",
+        "flatbuffers": "^25.9.23",
+        "dayjs": "^1.11.19",
+        "idb": "^8.0.3"
+    },
+    "devDependencies": {
+        "@types/react": "^19.0.0",
+        "@types/react-dom": "^19.0.0",
+        "@vitejs/plugin-react": "^5.1.2",
+        "typescript": "~5.9.3",
+        "vite": "^7.3.0",
+        "eslint": "^9.39.1",
+        "@eslint/js": "^9.39.1",
+        "typescript-eslint": "^8.18.0"
+    }
+}

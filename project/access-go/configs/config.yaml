@@ -1,0 +1,29 @@
+server:
+  addr: ":8443"
+  max_connections: 50000
+
+quic:
+  max_idle_timeout: 90s
+  keep_alive_period: 30s
+  max_incoming_streams: 100
+  max_incoming_uni_streams: 50
+  allow_0rtt: true
+
+nats:
+  url: "nats://localhost:4222"
+  max_reconnects: -1
+  reconnect_wait: 2s
+
+redis:
+  addr: "localhost:6379"
+  password: ""
+  db: 0
+  pool_size: 50
+
+auth:
+  token_secret: "your-secret-key"
+  token_expire: 24h
+
+logging:
+  level: "info"
+  format: "json"
