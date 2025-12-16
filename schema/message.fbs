@@ -68,6 +68,14 @@ enum RoomStatus : byte {
 // =============================================================================
 // Client Request (Client -> Access -> Logic)
 // =============================================================================
+// 帧格式: [4 bytes length] + [1 byte frameType] + [FlatBuffers body]
+//
+// 帧类型定义:
+//   FrameTypeAuth    = 1  -> AuthRequest (认证请求，独立处理)
+//   FrameTypeRequest = 2  -> ClientRequest (普通业务请求)
+//   FrameTypeAuthAck = 3  -> 认证响应
+//   FrameTypeResponse= 4  -> ClientResponse (普通业务响应)
+// =============================================================================
 
 enum RequestPayload : byte {
     NONE = 0,
@@ -77,6 +85,7 @@ enum RequestPayload : byte {
     RoomReq = 4
 }
 
+// ClientRequest 普通业务请求包装（FrameType=2）
 table ClientRequest {
     req_id: string;
     timestamp: int64;
@@ -126,7 +135,8 @@ table HeartbeatReq {
     client_time: int64;
 }
 
-// 认证请求
+// 认证请求 - 使用独立帧类型 (FrameType=1)，不通过 ClientRequest 包装
+// 认证成功后才能发送其他 ClientRequest 请求
 table AuthRequest {
     token: string;
     device_id: string;

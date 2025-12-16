@@ -19,14 +19,15 @@ import (
 )
 
 type Server struct {
-	cfg         *config.Config
-	natsClient  *nats.Client
-	redisClient *redis.Client
-	logger      *slog.Logger
-	connMgr     *connection.Manager
-	handler     *protocol.Handler
-	wtServer    *webtransport.Server
-	wg          sync.WaitGroup
+	cfg              *config.Config
+	natsClient       *nats.Client
+	redisClient      *redis.Client
+	logger           *slog.Logger
+	connMgr          *connection.Manager
+	handler          *protocol.Handler
+	wtServer         *webtransport.Server
+	heartbeatChecker *connection.HeartbeatChecker
+	wg               sync.WaitGroup
 }
 
 func New(cfg *config.Config, natsClient *nats.Client, redisClient *redis.Client, logger *slog.Logger) *Server {
@@ -86,6 +87,22 @@ func (s *Server) Start(ctx context.Context) error {
 
 	// 订阅 NATS 下行消息
 	s.subscribeDownstream()
+
+	// 启动心跳检测器
+	s.heartbeatChecker = connection.NewHeartbeatChecker(
+		s.connMgr,
+		s.cfg.Server.HeartbeatTimeout,
+		s.cfg.Server.HeartbeatCheckInterval,
+		s.logger,
+		func(conn *connection.Connection) {
+			// 超时回调：清理用户位置并通知 Logic
+			if conn.UserID() > 0 {
+				s.redisClient.UnregisterUserLocation(ctx, conn.UserID(), conn.ID())
+				s.handler.SendUserOfflineToLogic(conn)
+			}
+		},
+	)
+	go s.heartbeatChecker.Start(ctx)
 
 	s.logger.Info("WebTransport server starting", "addr", s.cfg.Server.Addr)
 

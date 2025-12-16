@@ -1,6 +1,9 @@
 import { create } from 'zustand';
 import { transportManager } from '@/services/transport/WebTransportManager';
-import { IMProtocol, MsgType } from '@/services/protocol/IMProtocol';
+import { IMProtocol, FrameType } from '@/services/protocol/IMProtocol';
+import { ChatType } from '@/protocol/im/protocol/chat-type';
+import { MsgType } from '@/protocol/im/protocol/msg-type';
+import { ResponsePayload } from '@/protocol/im/protocol/response-payload';
 
 interface Message {
     id: string;
@@ -37,9 +40,6 @@ export const useMessageStore = create<MessageState>((set, get) => ({
 
     sendMessage: async (convId: string, content: string) => {
         const msgId = crypto.randomUUID();
-        // 假设 convId 就是对方 userId (单聊)
-        // 实际项目应区分单聊/群聊
-        const toUserId = parseInt(convId);
 
         const msg: Message = {
             id: msgId,
@@ -54,16 +54,14 @@ export const useMessageStore = create<MessageState>((set, get) => ({
         get().addMessage(convId, msg);
 
         try {
-            // 构建客户端消息
-            const clientMsg = {
-                clientMsgId: msgId,
-                toUserId: toUserId,
-                toGroupId: 0,
-                content: content // 直接发送字符串内容
-            };
-
-            const bytes = IMProtocol.encode(MsgType.Message, clientMsg);
-            await transportManager.send(bytes);
+            // 使用新的 FlatBuffers 协议发送消息
+            const { frame } = IMProtocol.createChatSendRequest(
+                ChatType.PRIVATE,
+                convId,  // targetId
+                MsgType.TEXT,
+                content
+            );
+            await transportManager.send(frame);
         } catch (e) {
             console.error('Failed to send message:', e);
             get().updateMessageStatus(msgId, 'failed');
@@ -87,52 +85,33 @@ export const useMessageStore = create<MessageState>((set, get) => ({
     },
 
     initListener: () => {
-        transportManager.onMessage((buffer) => {
-            const packet = IMProtocol.decode(buffer);
-            if (!packet) return;
+        transportManager.onMessage((frameType: FrameType, body: Uint8Array) => {
+            console.log('Receive frame:', frameType);
 
-            console.log('Receive packet:', packet);
+            if (frameType === FrameType.Response) {
+                const resp = IMProtocol.parseClientResponse(body);
+                console.log('ClientResponse:', resp);
 
-            switch (packet.msgType) {
-                case MsgType.MessageAck:
-                    const ack = packet.body;
-                    if (ack.ClientMsgId) {
-                        get().updateMessageStatus(ack.ClientMsgId, 'sent');
-                    }
-                    break;
-                case MsgType.Message:
-                    const pushMsg = packet.body;
-                    // 处理接收到的消息
-                    // 假设 FromUserId 是发送者 ID，也是 conversationId
-                    const convId = pushMsg.FromUserId.toString();
-
-                    // Content 是 Base64 编码的字符串，需要解码
-                    let content = '';
-                    try {
-                        const binaryStr = atob(pushMsg.Content);
-                        const bytes = new Uint8Array(binaryStr.length);
-                        for (let i = 0; i < binaryStr.length; i++) {
-                            bytes[i] = binaryStr.charCodeAt(i);
+                switch (resp.payloadType) {
+                    case ResponsePayload.ChatSendAck:
+                        // 消息发送确认
+                        if (resp.reqId) {
+                            // TODO: 根据 reqId 更新消息状态
+                            // 目前 reqId 与 msgId 不同，需要映射
+                            console.log('ChatSendAck received for reqId:', resp.reqId);
                         }
-                        content = new TextDecoder().decode(bytes);
-                    } catch (e) {
-                        console.error('Failed to decode message content:', e);
-                        content = '[Decoding Error]';
-                    }
-
-                    const newMsg: Message = {
-                        id: pushMsg.ServerMsgId.toString(),
-                        conversationId: convId,
-                        content: content,
-                        senderId: pushMsg.FromUserId.toString(),
-                        isSelf: false,
-                        timestamp: pushMsg.Timestamp,
-                        status: 'sent'
-                    };
-                    get().addMessage(convId, newMsg);
-                    break;
+                        break;
+                    case ResponsePayload.ChatPush:
+                        // 接收到新消息
+                        if (resp.payload) {
+                            // TODO: 解析 ChatPush payload
+                            console.log('ChatPush received');
+                        }
+                        break;
+                    default:
+                        console.log('Unknown response payload type:', resp.payloadType);
+                }
             }
         });
     }
 }));
-

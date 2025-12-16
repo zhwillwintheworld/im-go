@@ -17,9 +17,11 @@ type Config struct {
 }
 
 type ServerConfig struct {
-	Addr           string `yaml:"addr"`
-	NodeID         string `yaml:"node_id"`
-	MaxConnections int    `yaml:"max_connections"`
+	Addr                   string        `yaml:"addr"`
+	NodeID                 string        `yaml:"node_id"`
+	MaxConnections         int           `yaml:"max_connections"`
+	HeartbeatTimeout       time.Duration `yaml:"heartbeat_timeout"`        // 心跳超时时间，默认 90s
+	HeartbeatCheckInterval time.Duration `yaml:"heartbeat_check_interval"` // 检测间隔，默认 30s
 }
 
 type QUICConfig struct {

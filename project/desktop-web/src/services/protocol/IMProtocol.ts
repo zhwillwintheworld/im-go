@@ -1,72 +1,207 @@
-export enum MsgType {
-    Heartbeat = 0,
-    Auth = 1,
-    AuthAck = 2,
-    Message = 10,
-    MessageAck = 11,
+import * as flatbuffers from 'flatbuffers';
+import { AuthRequest } from '../../protocol/im/protocol/auth-request.js';
+import { ClientRequest } from '../../protocol/im/protocol/client-request.js';
+import { ClientResponse } from '../../protocol/im/protocol/client-response.js';
+import { HeartbeatReq } from '../../protocol/im/protocol/heartbeat-req.js';
+import { ChatSendReq } from '../../protocol/im/protocol/chat-send-req.js';
+import { Platform } from '../../protocol/im/protocol/platform.js';
+import { RequestPayload } from '../../protocol/im/protocol/request-payload.js';
+import { ResponsePayload } from '../../protocol/im/protocol/response-payload.js';
+import { ChatType } from '../../protocol/im/protocol/chat-type.js';
+import { MsgType } from '../../protocol/im/protocol/msg-type.js';
+
+/**
+ * 帧类型定义 - 与服务端 handler.go 保持一致
+ */
+export enum FrameType {
+    Auth = 1,       // 认证请求 (AuthRequest)
+    Request = 2,    // 普通请求 (ClientRequest)
+    AuthAck = 3,    // 认证响应
+    Response = 4,   // 普通响应 (ClientResponse)
 }
 
-export interface Packet {
-    msgType: MsgType;
-    body: any;
+/**
+ * 帧头大小：4 bytes length + 1 byte frame type
+ */
+const FRAME_HEADER_SIZE = 5;
+
+/**
+ * 生成请求 ID
+ */
+function generateReqId(): string {
+    return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 }
 
+/**
+ * IM 协议编解码器
+ * 使用 FlatBuffers 进行序列化，符合 schema/message.fbs 设计
+ */
 export class IMProtocol {
-    private static HEADER_SIZE = 6; // 4 bytes length + 2 bytes type
+    /**
+     * 构建帧：添加帧头
+     */
+    private static buildFrame(frameType: FrameType, body: Uint8Array): Uint8Array {
+        const frame = new Uint8Array(FRAME_HEADER_SIZE + body.length);
+        const view = new DataView(frame.buffer);
 
-    static encode(msgType: MsgType, data: any): Uint8Array {
-        // 1. Serialize body
-        let bodyBytes: Uint8Array;
-        if (data instanceof Uint8Array) {
-            bodyBytes = data;
-        } else {
-            const jsonStr = JSON.stringify(data);
-            const encoder = new TextEncoder();
-            bodyBytes = encoder.encode(jsonStr);
-        }
+        // 写入长度 (4 bytes, Big Endian)
+        view.setUint32(0, body.length, false);
+        // 写入帧类型 (1 byte)
+        view.setUint8(4, frameType);
+        // 写入 body
+        frame.set(body, FRAME_HEADER_SIZE);
 
-        // 2. Create buffer
-        const buffer = new ArrayBuffer(this.HEADER_SIZE + bodyBytes.length);
-        const view = new DataView(buffer);
-
-        // 3. Write Header
-        // Length (4 bytes, Big Endian)
-        view.setUint32(0, bodyBytes.length, false);
-        // MsgType (2 bytes, Big Endian)
-        view.setUint16(4, msgType, false);
-
-        // 4. Write Body
-        const bytes = new Uint8Array(buffer);
-        bytes.set(bodyBytes, this.HEADER_SIZE);
-
-        return bytes;
+        return frame;
     }
 
-    static decode(buffer: ArrayBuffer): Packet | null {
-        if (buffer.byteLength < this.HEADER_SIZE) {
+    /**
+     * 解析帧头
+     */
+    static parseFrameHeader(buffer: ArrayBuffer): { length: number; frameType: FrameType } | null {
+        if (buffer.byteLength < FRAME_HEADER_SIZE) {
             return null;
         }
-
         const view = new DataView(buffer);
-        const length = view.getUint32(0, false);
-        const msgType = view.getUint16(4, false);
+        return {
+            length: view.getUint32(0, false),
+            frameType: view.getUint8(4) as FrameType,
+        };
+    }
 
-        if (buffer.byteLength < this.HEADER_SIZE + length) {
-            console.warn('Incomplete packet');
-            return null;
-        }
+    /**
+     * 提取帧 body
+     */
+    static extractBody(buffer: ArrayBuffer): Uint8Array {
+        return new Uint8Array(buffer, FRAME_HEADER_SIZE);
+    }
 
-        // Extract body
-        const bodyBytes = new Uint8Array(buffer, this.HEADER_SIZE, length);
-        const decoder = new TextDecoder();
-        const jsonStr = decoder.decode(bodyBytes);
+    // =========================================================================
+    // 认证请求
+    // =========================================================================
 
-        try {
-            const body = JSON.parse(jsonStr);
-            return { msgType, body };
-        } catch (e) {
-            console.error('Failed to parse message body', e);
-            return { msgType, body: null };
-        }
+    /**
+     * 创建认证请求帧
+     */
+    static createAuthRequest(token: string, deviceId: string, appVersion: string): Uint8Array {
+        const builder = new flatbuffers.Builder(256);
+
+        const tokenOffset = builder.createString(token);
+        const deviceIdOffset = builder.createString(deviceId);
+        const appVersionOffset = builder.createString(appVersion);
+
+        const authReqOffset = AuthRequest.createAuthRequest(
+            builder,
+            tokenOffset,
+            deviceIdOffset,
+            Platform.WEB,
+            appVersionOffset
+        );
+        builder.finish(authReqOffset);
+
+        return this.buildFrame(FrameType.Auth, builder.asUint8Array());
+    }
+
+    // =========================================================================
+    // ClientRequest 包装的请求
+    // =========================================================================
+
+    /**
+     * 创建心跳请求帧
+     */
+    static createHeartbeatRequest(): Uint8Array {
+        // 1. 构建 HeartbeatReq payload
+        const payloadBuilder = new flatbuffers.Builder(64);
+        const heartbeatOffset = HeartbeatReq.createHeartbeatReq(
+            payloadBuilder,
+            BigInt(Date.now())
+        );
+        payloadBuilder.finish(heartbeatOffset);
+        const payloadBytes = payloadBuilder.asUint8Array();
+
+        // 2. 构建 ClientRequest
+        const builder = new flatbuffers.Builder(256);
+        const reqIdOffset = builder.createString(generateReqId());
+        const payloadOffset = ClientRequest.createPayloadVector(builder, payloadBytes);
+
+        const clientReqOffset = ClientRequest.createClientRequest(
+            builder,
+            reqIdOffset,
+            BigInt(Date.now()),
+            RequestPayload.HeartbeatReq,
+            payloadOffset
+        );
+        builder.finish(clientReqOffset);
+
+        return this.buildFrame(FrameType.Request, builder.asUint8Array());
+    }
+
+    /**
+     * 创建聊天发送请求帧
+     */
+    static createChatSendRequest(
+        chatType: ChatType,
+        targetId: string,
+        msgType: MsgType,
+        content: string
+    ): { frame: Uint8Array; reqId: string } {
+        // 1. 构建 ChatSendReq payload
+        const payloadBuilder = new flatbuffers.Builder(512);
+        const targetIdOffset = payloadBuilder.createString(targetId);
+        const contentOffset = payloadBuilder.createString(content);
+
+        ChatSendReq.startChatSendReq(payloadBuilder);
+        ChatSendReq.addChatType(payloadBuilder, chatType);
+        ChatSendReq.addTargetId(payloadBuilder, targetIdOffset);
+        ChatSendReq.addMsgType(payloadBuilder, msgType);
+        ChatSendReq.addContent(payloadBuilder, contentOffset);
+        const chatReqOffset = ChatSendReq.endChatSendReq(payloadBuilder);
+        payloadBuilder.finish(chatReqOffset);
+        const payloadBytes = payloadBuilder.asUint8Array();
+
+        // 2. 构建 ClientRequest
+        const builder = new flatbuffers.Builder(1024);
+        const reqId = generateReqId();
+        const reqIdOffset = builder.createString(reqId);
+        const payloadOffset = ClientRequest.createPayloadVector(builder, payloadBytes);
+
+        const clientReqOffset = ClientRequest.createClientRequest(
+            builder,
+            reqIdOffset,
+            BigInt(Date.now()),
+            RequestPayload.ChatSendReq,
+            payloadOffset
+        );
+        builder.finish(clientReqOffset);
+
+        return {
+            frame: this.buildFrame(FrameType.Request, builder.asUint8Array()),
+            reqId,
+        };
+    }
+
+    // =========================================================================
+    // 响应解析
+    // =========================================================================
+
+    /**
+     * 解析 ClientResponse
+     */
+    static parseClientResponse(body: Uint8Array): {
+        reqId: string | null;
+        code: number;
+        msg: string | null;
+        payloadType: ResponsePayload;
+        payload: Uint8Array | null;
+    } {
+        const bb = new flatbuffers.ByteBuffer(body);
+        const resp = ClientResponse.getRootAsClientResponse(bb);
+
+        return {
+            reqId: resp.reqId(),
+            code: resp.code(),
+            msg: resp.msg(),
+            payloadType: resp.payloadType(),
+            payload: resp.payloadArray(),
+        };
     }
 }

@@ -4,7 +4,7 @@
 # 用于在本地开发环境中启动 PostgreSQL 容器
 
 CONTAINER_NAME="postgres-dev"
-POSTGRES_IMAGE="postgres:16-alpine"
+POSTGRES_IMAGE="postgres:18.1-alpine"
 POSTGRES_PORT=5432
 POSTGRES_USER="postgres"
 POSTGRES_PASSWORD="password"

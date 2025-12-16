@@ -4,9 +4,12 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
+	"time"
 
+	flatbuffers "github.com/google/flatbuffers/go"
 	"github.com/quic-go/webtransport-go"
 	"sudooom.im.access/internal/connection"
 	"sudooom.im.access/internal/nats"
@@ -17,14 +20,16 @@ import (
 )
 
 const (
-	HeaderSize = 6 // 4 bytes length + 2 bytes msg type
+	// 帧头大小：4 bytes length + 1 byte frame type
+	FrameHeaderSize = 5
 
-	// 消息类型
-	MsgTypeHeartbeat  uint16 = 0
-	MsgTypeAuth       uint16 = 1
-	MsgTypeAuthAck    uint16 = 2
-	MsgTypeMessage    uint16 = 10
-	MsgTypeMessageAck uint16 = 11
+	// 帧类型
+	FrameTypeAuth    byte = 1 // 认证请求（AuthRequest）
+	FrameTypeRequest byte = 2 // 普通请求（ClientRequest）
+
+	// 响应帧类型
+	FrameTypeAuthAck  byte = 3 // 认证响应
+	FrameTypeResponse byte = 4 // 普通响应（ClientResponse）
 )
 
 type Handler struct {
@@ -46,11 +51,15 @@ func NewHandler(connMgr *connection.Manager, natsClient *nats.Client, redisClien
 }
 
 func (h *Handler) HandleStream(ctx context.Context, conn *connection.Connection, stream *webtransport.Stream) {
-	defer stream.Close()
+	defer func(stream *webtransport.Stream) {
+		err := stream.Close()
+		if err != nil {
+		}
+	}(stream)
 
 	for {
-		// 读取消息头
-		header := make([]byte, HeaderSize)
+		// 读取帧头：4 bytes length + 1 byte frame type
+		header := make([]byte, FrameHeaderSize)
 		if _, err := io.ReadFull(stream, header); err != nil {
 			if err != io.EOF {
 				h.logger.Debug("Failed to read header", "error", err)
@@ -59,7 +68,7 @@ func (h *Handler) HandleStream(ctx context.Context, conn *connection.Connection,
 		}
 
 		length := binary.BigEndian.Uint32(header[:4])
-		msgType := binary.BigEndian.Uint16(header[4:6])
+		frameType := header[4]
 
 		// 读取消息体
 		body := make([]byte, length)
@@ -71,54 +80,39 @@ func (h *Handler) HandleStream(ctx context.Context, conn *connection.Connection,
 		// 更新活跃时间
 		conn.UpdateActive()
 
-		// 处理消息
-		h.dispatch(ctx, conn, stream, msgType, body)
+		// 根据帧类型分发处理
+		h.dispatch(ctx, conn, stream, frameType, body)
 	}
 }
 
-func (h *Handler) dispatch(ctx context.Context, conn *connection.Connection, stream *webtransport.Stream, msgType uint16, body []byte) {
-	switch msgType {
-	case MsgTypeHeartbeat:
-		h.handleHeartbeat(ctx, conn, stream)
-	case MsgTypeAuth:
+func (h *Handler) dispatch(ctx context.Context, conn *connection.Connection, stream *webtransport.Stream, frameType byte, body []byte) {
+	switch frameType {
+	case FrameTypeAuth:
 		h.handleAuth(ctx, conn, stream, body)
+	case FrameTypeRequest:
+		h.handleClientRequest(ctx, conn, stream, body)
 	default:
-		// 转发到 Logic 层
-		h.forwardToLogic(conn, msgType, body)
+		h.logger.Warn("Unknown frame type", "frameType", frameType)
 	}
 }
 
-func (h *Handler) handleHeartbeat(ctx context.Context, conn *connection.Connection, stream *webtransport.Stream) {
-	h.logger.Debug("Heartbeat received", "conn_id", conn.ID())
-
-	// 刷新用户位置 TTL
-	if conn.UserID() > 0 {
-		h.redisClient.RefreshUserLocation(ctx, conn.UserID())
-	}
-
-	// 回复心跳响应
-	h.sendResponse(stream, MsgTypeHeartbeat, nil)
-}
-
+// handleAuth 处理认证请求
 func (h *Handler) handleAuth(ctx context.Context, conn *connection.Connection, stream *webtransport.Stream, body []byte) {
 	h.logger.Debug("Auth request received", "conn_id", conn.ID())
 
-	// 解析 FlatBuffers 消息
+	// 解析 FlatBuffers AuthRequest
 	authReq := im_protocol.GetRootAsAuthRequest(body, 0)
 
 	token := string(authReq.Token())
 	deviceID := string(authReq.DeviceId())
 	platform := authReq.Platform()
-	// appVersion := string(authReq.AppVersion())
 
 	// TODO: 验证 token
-	// 这里简化处理，直接绑定用户
 	sessInfo := &connection.SessionInfo{
-		UserID:   1, // TODO: 从 token 解析，此处可以使用 token
+		UserID:   1, // TODO: 从 token 解析
 		DeviceID: deviceID,
 		Platform: platform.String(),
 	}
-	// 临时使用 token 避免未使用错误
 	_ = token
 	conn.BindSession(sessInfo)
 	h.connMgr.BindUser(conn.ID(), sessInfo.UserID)
@@ -131,14 +125,130 @@ func (h *Handler) handleAuth(ctx context.Context, conn *connection.Connection, s
 	// 发送上线通知到 Logic
 	h.sendUserOnlineToLogic(conn, sessInfo)
 
-	// 回复认证成功
-	response := map[string]interface{}{
-		"code":    0,
-		"user_id": sessInfo.UserID,
-		"message": "success",
+	// 使用 ClientResponse 构建认证响应
+	h.sendClientResponse(stream, "", im_protocol.ErrorCodeSUCCESS, "success", im_protocol.ResponsePayloadNONE, nil)
+}
+
+// handleClientRequest 处理 ClientRequest 统一包装的请求
+func (h *Handler) handleClientRequest(ctx context.Context, conn *connection.Connection, stream *webtransport.Stream, body []byte) {
+	// 解析 ClientRequest
+	clientReq := im_protocol.GetRootAsClientRequest(body, 0)
+	reqID := string(clientReq.ReqId())
+	payloadType := clientReq.PayloadType()
+	payload := clientReq.PayloadBytes()
+
+	h.logger.Debug("ClientRequest received",
+		"conn_id", conn.ID(),
+		"req_id", reqID,
+		"payload_type", payloadType.String())
+
+	// 根据 PayloadType 分发
+	switch payloadType {
+	case im_protocol.RequestPayloadHeartbeatReq:
+		h.handleHeartbeat(ctx, conn, stream, reqID, payload)
+	case im_protocol.RequestPayloadChatSendReq:
+		h.handleChatSend(ctx, conn, stream, reqID, payload)
+	case im_protocol.RequestPayloadRoomReq:
+		h.handleRoomRequest(ctx, conn, stream, reqID, payload)
+	case im_protocol.RequestPayloadGameReq:
+		h.handleGameRequest(ctx, conn, stream, reqID, payload)
+	default:
+		h.logger.Warn("Unknown payload type", "payload_type", payloadType)
+		h.sendClientResponse(stream, reqID, im_protocol.ErrorCodeUNKNOWN_ERROR, "unknown payload type", im_protocol.ResponsePayloadNONE, nil)
 	}
-	respData, _ := json.Marshal(response)
-	h.sendResponse(stream, MsgTypeAuthAck, respData)
+}
+
+// handleHeartbeat 处理心跳请求
+func (h *Handler) handleHeartbeat(ctx context.Context, conn *connection.Connection, stream *webtransport.Stream, reqID string, payload []byte) {
+	h.logger.Debug("Heartbeat received", "conn_id", conn.ID())
+
+	// 刷新用户位置 TTL
+	if conn.UserID() > 0 {
+		h.redisClient.RefreshUserLocation(ctx, conn.UserID())
+	}
+
+	// 构建 HeartbeatResp payload
+	builder := flatbuffers.NewBuilder(64)
+	im_protocol.HeartbeatRespStart(builder)
+	im_protocol.HeartbeatRespAddServerTime(builder, time.Now().UnixMilli())
+	respOffset := im_protocol.HeartbeatRespEnd(builder)
+	builder.Finish(respOffset)
+	respPayload := builder.FinishedBytes()
+
+	h.sendClientResponse(stream, reqID, im_protocol.ErrorCodeSUCCESS, "", im_protocol.ResponsePayloadHeartbeatResp, respPayload)
+}
+
+// handleChatSend 处理聊天发送请求
+func (h *Handler) handleChatSend(ctx context.Context, conn *connection.Connection, stream *webtransport.Stream, reqID string, payload []byte) {
+	h.logger.Debug("ChatSendReq received", "conn_id", conn.ID())
+
+	// 解析 ChatSendReq
+	chatReq := im_protocol.GetRootAsChatSendReq(payload, 0)
+
+	// 封装上行消息到 Logic
+	msg := &proto.UpstreamMessage{
+		AccessNodeId: h.nodeID,
+		UserMessage: &proto.UserMessage{
+			FromUserId:  conn.UserID(),
+			ClientMsgId: reqID,
+			ToUserId:    0, // TODO: 从 chatReq.TargetId() 解析
+			MsgType:     int32(chatReq.MsgType()),
+			Content:     chatReq.Content(),
+			Timestamp:   0, // Logic 层会处理
+		},
+	}
+
+	// 根据 ChatType 设置目标
+	switch chatReq.ChatType() {
+	case im_protocol.ChatTypePRIVATE:
+		// 私聊：targetId 是用户 ID
+		// TODO: 解析 targetId 为 int64
+	case im_protocol.ChatTypeGROUP:
+		// 群聊：targetId 是群组 ID
+		// TODO: 解析 targetId 为群组 ID
+	}
+
+	data, _ := json.Marshal(msg)
+	h.natsClient.Publish(sharedNats.SubjectLogicUpstream, data)
+
+	// 发送 ACK（实际 ACK 由 Logic 返回后再发送）
+	h.logger.Debug("ChatSendReq forwarded to logic", "req_id", reqID)
+}
+
+// handleRoomRequest 处理房间请求
+func (h *Handler) handleRoomRequest(ctx context.Context, conn *connection.Connection, stream *webtransport.Stream, reqID string, payload []byte) {
+	h.logger.Debug("RoomReq received", "conn_id", conn.ID())
+
+	// 解析 RoomReq
+	roomReq := im_protocol.GetRootAsRoomReq(payload, 0)
+	action := roomReq.Action()
+	roomID := string(roomReq.RoomId())
+	gameType := roomReq.GameType()
+
+	h.logger.Debug("RoomReq details",
+		"action", action.String(),
+		"room_id", roomID,
+		"game_type", gameType.String())
+
+	// TODO: 转发到 Logic 处理
+	// 暂时返回成功
+	h.sendClientResponse(stream, reqID, im_protocol.ErrorCodeSUCCESS, "", im_protocol.ResponsePayloadRoomResp, nil)
+}
+
+// handleGameRequest 处理游戏请求
+func (h *Handler) handleGameRequest(ctx context.Context, conn *connection.Connection, stream *webtransport.Stream, reqID string, payload []byte) {
+	h.logger.Debug("GameReq received", "conn_id", conn.ID())
+
+	// 解析 GameReq
+	gameReq := im_protocol.GetRootAsGameReq(payload, 0)
+	roomID := string(gameReq.RoomId())
+	gameType := gameReq.GameType()
+
+	h.logger.Debug("GameReq details",
+		"room_id", roomID,
+		"game_type", gameType.String())
+
+	// TODO: 转发到 Logic 处理
 }
 
 func (h *Handler) sendUserOnlineToLogic(conn *connection.Connection, sessInfo *connection.SessionInfo) {
@@ -174,39 +284,7 @@ func (h *Handler) SendUserOfflineToLogic(conn *connection.Connection) {
 	h.logger.Debug("Sent user offline to logic", "userId", conn.UserID())
 }
 
-// ClientMessage 客户端发送的消息结构
-type ClientMessage struct {
-	ClientMsgId string `json:"clientMsgId"`
-	ToUserId    int64  `json:"toUserId"`
-	ToGroupId   int64  `json:"toGroupId"`
-	Content     string `json:"content"`
-}
-
-func (h *Handler) forwardToLogic(conn *connection.Connection, msgType uint16, body []byte) {
-	// 解析客户端消息
-	var clientMsg ClientMessage
-	if err := json.Unmarshal(body, &clientMsg); err != nil {
-		h.logger.Error("Failed to unmarshal client message", "error", err)
-		return
-	}
-
-	// 封装上行消息
-	msg := &proto.UpstreamMessage{
-		AccessNodeId: h.nodeID,
-		UserMessage: &proto.UserMessage{
-			FromUserId:  conn.UserID(),
-			ClientMsgId: clientMsg.ClientMsgId,
-			ToUserId:    clientMsg.ToUserId,
-			ToGroupId:   clientMsg.ToGroupId,
-			MsgType:     int32(msgType),
-			Content:     []byte(clientMsg.Content),
-			Timestamp:   0, // Logic 层会处理
-		},
-	}
-	data, _ := json.Marshal(msg)
-	h.natsClient.Publish(sharedNats.SubjectLogicUpstream, data)
-}
-
+// HandleDownstream 处理下行消息（从 Logic 推送到客户端）
 func (h *Handler) HandleDownstream(data []byte) {
 	h.logger.Debug("Downstream message received", "size", len(data))
 
@@ -218,59 +296,157 @@ func (h *Handler) HandleDownstream(data []byte) {
 	}
 
 	if msg.Payload.PushMessage != nil {
-		// 查找用户连接并发送
-		conns := h.connMgr.GetByUserID(msg.Payload.PushMessage.ToUserId)
-		for _, conn := range conns {
-			// 构建消息帧: 直接发送内容？还是需要包装？
-			// 这里假设客户端希望收到原始 PushMessage 结构或仅 Content
-			// 为了简单，我们发送整个 PushMessage 的 JSON
-			// 但协议定义的是 binary frame header + body.
-			// MsgTypeMessage = 10.
-			// 让我们将 PushMessage 序列化后作为 Body 发送
-			respData, _ := json.Marshal(msg.Payload.PushMessage)
-			frame := h.buildMessageFrame(MsgTypeMessage, respData)
-			conn.Send(frame)
-		}
-		h.logger.Debug("Pushed message to users",
-			"toUserId", msg.Payload.PushMessage.ToUserId,
-			"connCount", len(conns))
+		h.handlePushMessage(msg.Payload.PushMessage)
 	}
 
 	if msg.Payload.MessageAck != nil {
-		// 处理消息 ACK
-		ack := msg.Payload.MessageAck
-		conns := h.connMgr.GetByUserID(ack.ToUserId)
-		for _, conn := range conns {
-			// 构建 ACK 帧
-			// 使用 MsgTypeMessageAck (11)
-			respData, _ := json.Marshal(ack)
-			frame := h.buildMessageFrame(MsgTypeMessageAck, respData)
-			conn.Send(frame)
-		}
-
-		if len(conns) > 0 {
-			h.logger.Debug("Message ACK sent to user",
-				"userId", ack.ToUserId,
-				"clientMsgId", ack.ClientMsgId)
-		} else {
-			h.logger.Debug("Message ACK dropped, user offline",
-				"userId", ack.ToUserId)
-		}
+		h.handleMessageAck(msg.Payload.MessageAck)
 	}
 }
 
-func (h *Handler) buildMessageFrame(msgType uint16, body []byte) []byte {
-	frame := make([]byte, HeaderSize+len(body))
-	binary.BigEndian.PutUint32(frame[:4], uint32(len(body)))
-	binary.BigEndian.PutUint16(frame[4:6], msgType)
-	copy(frame[HeaderSize:], body)
+func (h *Handler) handlePushMessage(pushMsg *proto.PushMessage) {
+	conns := h.connMgr.GetByUserID(pushMsg.ToUserId)
+	if len(conns) == 0 {
+		h.logger.Debug("Push dropped, user offline", "toUserId", pushMsg.ToUserId)
+		return
+	}
+
+	// 使用 FlatBuffers 构建 ChatPush
+	builder := flatbuffers.NewBuilder(512)
+
+	msgIdOffset := builder.CreateString(fmt.Sprintf("%d", pushMsg.ServerMsgId))
+	senderIdOffset := builder.CreateString(fmt.Sprintf("%d", pushMsg.FromUserId))
+	targetIdOffset := builder.CreateString(fmt.Sprintf("%d", pushMsg.ToUserId))
+	contentOffset := builder.CreateByteVector(pushMsg.Content)
+
+	im_protocol.ChatPushStart(builder)
+	im_protocol.ChatPushAddMsgId(builder, msgIdOffset)
+	im_protocol.ChatPushAddSenderId(builder, senderIdOffset)
+	im_protocol.ChatPushAddChatType(builder, im_protocol.ChatTypePRIVATE)
+	im_protocol.ChatPushAddTargetId(builder, targetIdOffset)
+	im_protocol.ChatPushAddMsgType(builder, im_protocol.MsgType(pushMsg.MsgType))
+	im_protocol.ChatPushAddContent(builder, contentOffset)
+	im_protocol.ChatPushAddSendTime(builder, pushMsg.Timestamp)
+	chatPushOffset := im_protocol.ChatPushEnd(builder)
+	builder.Finish(chatPushOffset)
+
+	payload := builder.FinishedBytes()
+
+	// 构建 ClientResponse 并发送
+	for _, conn := range conns {
+		respFrame := h.buildClientResponseFrame("", im_protocol.ErrorCodeSUCCESS, "", im_protocol.ResponsePayloadChatPush, payload)
+		conn.Send(respFrame)
+	}
+
+	h.logger.Debug("Pushed message to users",
+		"toUserId", pushMsg.ToUserId,
+		"connCount", len(conns))
+}
+
+func (h *Handler) handleMessageAck(ack *proto.MessageAck) {
+	conns := h.connMgr.GetByUserID(ack.ToUserId)
+	if len(conns) == 0 {
+		h.logger.Debug("Message ACK dropped, user offline", "userId", ack.ToUserId)
+		return
+	}
+
+	// 使用 FlatBuffers 构建 ChatSendAck
+	builder := flatbuffers.NewBuilder(128)
+
+	msgIdOffset := builder.CreateString(fmt.Sprintf("%d", ack.ServerMsgId))
+
+	im_protocol.ChatSendAckStart(builder)
+	im_protocol.ChatSendAckAddMsgId(builder, msgIdOffset)
+	im_protocol.ChatSendAckAddSendTime(builder, ack.Timestamp)
+	ackOffset := im_protocol.ChatSendAckEnd(builder)
+	builder.Finish(ackOffset)
+
+	payload := builder.FinishedBytes()
+
+	// 构建 ClientResponse 并发送
+	// reqId 使用 ClientMsgId，让客户端可以关联请求
+	for _, conn := range conns {
+		respFrame := h.buildClientResponseFrame(ack.ClientMsgId, im_protocol.ErrorCodeSUCCESS, "", im_protocol.ResponsePayloadChatSendAck, payload)
+		conn.Send(respFrame)
+	}
+
+	h.logger.Debug("Message ACK sent to user",
+		"userId", ack.ToUserId,
+		"clientMsgId", ack.ClientMsgId)
+}
+
+// buildClientResponseFrame 构建完整的 ClientResponse 帧（用于 conn.Send 推送）
+func (h *Handler) buildClientResponseFrame(reqID string, code im_protocol.ErrorCode, msg string, payloadType im_protocol.ResponsePayload, payload []byte) []byte {
+	builder := flatbuffers.NewBuilder(256 + len(payload))
+
+	reqIDOffset := builder.CreateString(reqID)
+	msgOffset := builder.CreateString(msg)
+
+	var payloadOffset flatbuffers.UOffsetT
+	if len(payload) > 0 {
+		payloadOffset = builder.CreateByteVector(payload)
+	}
+
+	im_protocol.ClientResponseStart(builder)
+	im_protocol.ClientResponseAddReqId(builder, reqIDOffset)
+	im_protocol.ClientResponseAddTimestamp(builder, time.Now().UnixMilli())
+	im_protocol.ClientResponseAddCode(builder, code)
+	im_protocol.ClientResponseAddMsg(builder, msgOffset)
+	im_protocol.ClientResponseAddPayloadType(builder, payloadType)
+	if len(payload) > 0 {
+		im_protocol.ClientResponseAddPayload(builder, payloadOffset)
+	}
+	respOffset := im_protocol.ClientResponseEnd(builder)
+	builder.Finish(respOffset)
+
+	respBytes := builder.FinishedBytes()
+
+	// 构建帧：header + body
+	frame := make([]byte, FrameHeaderSize+len(respBytes))
+	binary.BigEndian.PutUint32(frame[:4], uint32(len(respBytes)))
+	frame[4] = FrameTypeResponse
+	copy(frame[FrameHeaderSize:], respBytes)
 	return frame
 }
 
-func (h *Handler) sendResponse(stream *webtransport.Stream, msgType uint16, body []byte) {
-	header := make([]byte, HeaderSize)
+// sendClientResponse 发送 ClientResponse 响应
+func (h *Handler) sendClientResponse(stream *webtransport.Stream, reqID string, code im_protocol.ErrorCode, msg string, payloadType im_protocol.ResponsePayload, payload []byte) {
+	builder := flatbuffers.NewBuilder(256)
+
+	// 创建字符串偏移
+	reqIDOffset := builder.CreateString(reqID)
+	msgOffset := builder.CreateString(msg)
+
+	// 创建 payload 向量（如果有）
+	var payloadOffset flatbuffers.UOffsetT
+	if len(payload) > 0 {
+		payloadOffset = builder.CreateByteVector(payload)
+	}
+
+	// 构建 ClientResponse
+	im_protocol.ClientResponseStart(builder)
+	im_protocol.ClientResponseAddReqId(builder, reqIDOffset)
+	im_protocol.ClientResponseAddTimestamp(builder, time.Now().UnixMilli())
+	im_protocol.ClientResponseAddCode(builder, code)
+	im_protocol.ClientResponseAddMsg(builder, msgOffset)
+	im_protocol.ClientResponseAddPayloadType(builder, payloadType)
+	if len(payload) > 0 {
+		im_protocol.ClientResponseAddPayload(builder, payloadOffset)
+	}
+	respOffset := im_protocol.ClientResponseEnd(builder)
+	builder.Finish(respOffset)
+
+	respBytes := builder.FinishedBytes()
+
+	// 发送带帧头的响应
+	h.sendFrame(stream, FrameTypeResponse, respBytes)
+}
+
+// sendFrame 发送带帧头的数据
+func (h *Handler) sendFrame(stream *webtransport.Stream, frameType byte, body []byte) {
+	header := make([]byte, FrameHeaderSize)
 	binary.BigEndian.PutUint32(header[:4], uint32(len(body)))
-	binary.BigEndian.PutUint16(header[4:6], msgType)
+	header[4] = frameType
 	stream.Write(header)
 	if len(body) > 0 {
 		stream.Write(body)

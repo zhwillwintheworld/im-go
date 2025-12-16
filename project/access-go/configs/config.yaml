@@ -2,6 +2,8 @@ server:
   addr: ":8443"
   node_id: "access-1"
   max_connections: 50000
+  heartbeat_timeout: 90s        # 心跳超时时间
+  heartbeat_check_interval: 30s # 心跳检测间隔
 
 quic:
   max_idle_timeout: 90s

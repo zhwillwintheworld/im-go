@@ -4,7 +4,7 @@
 # 用于在本地开发环境中启动 Redis 容器
 
 CONTAINER_NAME="redis-dev"
-REDIS_IMAGE="redis:7-alpine"
+REDIS_IMAGE="redis:8.4-alpine"
 REDIS_PORT=6379
 
 # 颜色输出

@@ -1,5 +1,7 @@
+import { IMProtocol, FrameType } from '../protocol/IMProtocol.js';
+
 type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'reconnecting';
-type MessageHandler = (data: ArrayBuffer) => void;
+type MessageHandler = (frameType: FrameType, body: Uint8Array) => void;
 type StatusHandler = (status: ConnectionStatus) => void;
 
 /**
@@ -57,6 +59,8 @@ class WebTransportManager {
 
             this.setStatus('connected');
             this.reconnectAttempts = 0;
+
+            // 启动心跳
             this.startHeartbeat();
 
             // 启动数据接收
@@ -225,7 +229,12 @@ class WebTransportManager {
                 offset += chunk.length;
             }
 
-            this.messageHandlers.forEach((handler) => handler(data.buffer));
+            // 解析帧头并分发
+            const header = IMProtocol.parseFrameHeader(data.buffer);
+            if (header) {
+                const body = IMProtocol.extractBody(data.buffer);
+                this.messageHandlers.forEach((handler) => handler(header.frameType, body));
+            }
         } catch (error) {
             console.error('[WebTransport] Stream read error:', error);
         }
@@ -245,13 +254,15 @@ class WebTransportManager {
     }
 
     private startHeartbeat(): void {
-        this.heartbeatInterval = window.setInterval(() => {
-            // TODO: 发送心跳包
-            // 可以通过 datagram 发送心跳
-            if (this.transport?.datagrams) {
-                // const writer = this.transport.datagrams.writable.getWriter();
-                // await writer.write(heartbeatData);
-                // writer.releaseLock();
+        this.heartbeatInterval = window.setInterval(async () => {
+            if (this.status !== 'connected') return;
+
+            try {
+                const heartbeatFrame = IMProtocol.createHeartbeatRequest();
+                await this.send(heartbeatFrame);
+                console.debug('[WebTransport] Heartbeat sent');
+            } catch (error) {
+                console.error('[WebTransport] Heartbeat failed:', error);
             }
         }, 30000);
     }
@@ -264,4 +275,5 @@ class WebTransportManager {
     }
 }
 
+// 导出单例
 export const transportManager = new WebTransportManager();

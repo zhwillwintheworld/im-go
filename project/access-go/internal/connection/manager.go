@@ -100,3 +100,16 @@ func (m *Manager) Broadcast(data []byte) {
 		conn.Send(data)
 	}
 }
+
+// GetAllConnections 返回所有连接（用于心跳检测）
+func (m *Manager) GetAllConnections() []*Connection {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	conns := make([]*Connection, 0, len(m.connections))
+	for _, conn := range m.connections {
+		conns = append(conns, conn)
+	}
+	return conns
+}
+

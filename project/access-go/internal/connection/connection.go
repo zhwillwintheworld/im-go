@@ -126,3 +126,12 @@ func (c *Connection) UpdateActive() {
 func (c *Connection) CreateTime() time.Time {
 	return c.createTime
 }
+
+// LastActiveTime 返回最后活跃时间
+func (c *Connection) LastActiveTime() time.Time {
+	if c.sessInfo != nil {
+		return c.sessInfo.LastActiveTime
+	}
+	return c.createTime
+}
+
