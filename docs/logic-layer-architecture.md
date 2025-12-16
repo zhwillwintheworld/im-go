@@ -1,6 +1,6 @@
 # IM Logic Layer 架构设计
 
-基于 Kotlin + Spring Boot 的即时通讯系统逻辑层架构设计文档。
+基于 Go 的即时通讯系统逻辑层架构设计文档。
 
 ---
 
@@ -16,7 +16,6 @@ Logic Layer（逻辑层）是 IM 系统的业务核心，负责消息处理、�
 | 用户管理 | 用户状态、在线信息、多端同步 |
 | 群组管理 | 群消息扩散、成员管理 |
 | 消息路由 | 根据用户位置路由到正确的 Access 节点 |
-| 业务逻辑 | 敏感词过滤、消息审核、已读回执 |
 
 ### 1.2 技术选型
 
@@ -24,21 +23,20 @@ Logic Layer（逻辑层）是 IM 系统的业务核心，负责消息处理、�
 ┌─────────────────────────────────────────────────────────┐
 │                    技术栈                                │
 ├─────────────────┬───────────────────────────────────────┤
-│ 语言            │ Kotlin 2.2.0                          │
-│ JDK             │ 21                                    │
-│ 构建工具        │ Gradle 9.2.1 (Kotlin DSL)             │
-│ 框架            │ Spring Boot 4.0.0 (无 Web/Servlet)    │
-│ 内部通信        │ NATS (nats.java)                      │
+│ 语言            │ Go 1.25.5                               │
+│ 内部通信        │ NATS (nats.go 官方客户端)              │
 │ 数据库          │ PostgreSQL                            │
-│ ORM             │ Spring Data R2DBC (响应式)             │
-│ 缓存            │ Spring Data Reactive Redis            │
-│ 协程            │ Kotlin Coroutines + Flow              │
+│ ORM             │ sqlc / pgx                            │
+│ 缓存            │ go-redis                              │
+│ 并发            │ Goroutines + Channels                 │
+│ 日志            │ log/slog 或 zerolog                   │
+│ 配置            │ Viper                                  │
 └─────────────────┴───────────────────────────────────────┘
 ```
 
 > [!IMPORTANT]
-> **无 Servlet/Jakarta EE 架构**：本服务不包含任何 HTTP 服务器，通过 NATS 与 Access 层通信。
-> 所有 I/O 操作均为响应式/非阻塞，包括数据库 (R2DBC) 和 Redis (Reactive)。
+> **无 HTTP 服务**：本服务不包含任何 HTTP 服务器，通过 NATS 与 Access 层通信。
+> 所有 I/O 操作均为非阻塞，充分利用 Go 的并发特性。
 
 ### 1.3 与 Access 层通信
 
@@ -54,7 +52,7 @@ graph LR
         N[NATS]
     end
 
-    subgraph LogicLayer["Logic Layer (Kotlin)"]
+    subgraph LogicLayer["Logic Layer (Go)"]
         L1[Logic-1]
         L2[Logic-2]
     end
@@ -117,38 +115,36 @@ graph TB
 ### 3.1 项目目录结构
 
 ```
-im-logic/
-├── build.gradle.kts
-├── settings.gradle.kts
-├── src/
-│   ├── main/
-│   │   ├── kotlin/
-│   │   │   └── com/example/im/logic/
-│   │   │       ├── ImLogicApplication.kt
-│   │   │       ├── nats/
-│   │   │       │   ├── NatsClient.kt              # NATS 客户端
-│   │   │       │   ├── MessageSubscriber.kt       # 消息订阅器
-│   │   │       │   └── MessagePublisher.kt        # 消息发布器
-│   │   │       ├── service/
-│   │   │       │   ├── MessageService.kt            # 消息业务
-│   │   │       │   ├── UserService.kt               # 用户业务
-│   │   │       │   ├── GroupService.kt              # 群组业务
-│   │   │       │   └── RouterService.kt             # 路由服务
-│   │   │       ├── repository/
-│   │   │       │   ├── MessageRepository.kt
-│   │   │       │   ├── UserRepository.kt
-│   │   │       │   └── GroupRepository.kt
-│   │   │       ├── entity/
-│   │   │       │   ├── Message.kt
-│   │   │       │   ├── User.kt
-│   │   │       │   └── Group.kt
-│   │   │       ├── config/
-│   │   │       │   ├── NatsConfig.kt               # NATS 配置
-│   │   │       │   └── RedisConfig.kt
-│   │   │       └── util/
-│   │   └── resources/
-│   │       └── application.yml
-│   └── test/
+logic-go/
+├── cmd/
+│   └── logic/
+│       └── main.go                 # 程序入口
+├── configs/
+│   └── config.yaml                 # 配置文件
+├── internal/
+│   ├── config/
+│   │   └── config.go               # 配置加载
+│   ├── nats/
+│   │   ├── client.go               # NATS 客户端
+│   │   ├── subscriber.go           # 消息订阅器
+│   │   └── publisher.go            # 消息发布器
+│   ├── service/
+│   │   ├── message.go              # 消息业务
+│   │   ├── user.go                 # 用户业务
+│   │   ├── group.go                # 群组业务
+│   │   └── router.go               # 路由服务
+│   ├── repository/
+│   │   ├── message.go
+│   │   ├── user.go
+│   │   └── group.go
+│   └── model/
+│       ├── message.go
+│       ├── user.go
+│       └── group.go
+├── pkg/
+│   └── proto/                      # Protobuf 生成的代码
+├── go.mod
+└── go.sum
 ```
 
 ### 3.2 核心模块详解
@@ -158,25 +154,25 @@ im-logic/
 ```mermaid
 classDiagram
     class MessageSubscriber {
-        -natsConnection: Connection
-        -messageService: MessageService
-        -routerService: RouterService
-        +start()
-        +handleUpstreamMessage(data: ByteArray)
+        -nc: *nats.Conn
+        -messageService: *MessageService
+        -routerService: *RouterService
+        +Start()
+        +handleUpstreamMessage(data []byte)
     }
 
     class MessagePublisher {
-        -natsConnection: Connection
-        +publishToAccess(accessNodeId: String, message: DownstreamMessage)
-        +broadcast(message: DownstreamMessage)
+        -nc: *nats.Conn
+        +PublishToAccess(accessNodeId string, message *pb.DownstreamMessage)
+        +Broadcast(message *pb.DownstreamMessage)
     }
 
     class RouterService {
-        -reactiveRedisTemplate: ReactiveRedisTemplate
-        -messagePublisher: MessagePublisher
-        +getUserLocations(userId: Long): List~UserLocation~
-        +routeMessage(userId: Long, message: PushMessage)
-        +routeToMultiple(userIds: List~Long~, message: PushMessage)
+        -redisClient: *redis.Client
+        -publisher: *MessagePublisher
+        +GetUserLocations(userId int64) []UserLocation
+        +RouteMessage(userId int64, message *pb.PushMessage)
+        +RouteToMultiple(userIds []int64, message *pb.PushMessage)
     }
 
     MessageSubscriber --> RouterService
@@ -188,20 +184,20 @@ classDiagram
 ```mermaid
 classDiagram
     class RouterService {
-        -reactiveRedisTemplate: ReactiveRedisTemplate
-        -streamManager: StreamManager
-        +getUserLocation(userId: Long): Flow~UserLocation~
-        +routeMessage(userId: Long, message: PushMessage)
-        +routeToMultiple(userIds: List~Long~, message: PushMessage)
+        -redisClient: *redis.Client
+        -publisher: *MessagePublisher
+        +GetUserLocation(userId int64) []UserLocation
+        +RouteMessage(userId int64, message *pb.PushMessage)
+        +RouteToMultiple(userIds []int64, message *pb.PushMessage)
     }
 
     class UserLocation {
-        +userId: Long
-        +accessNodeId: String
-        +connId: Long
-        +deviceId: String
-        +platform: String
-        +loginTime: Instant
+        +UserId: int64
+        +AccessNodeId: string
+        +ConnId: int64
+        +DeviceId: string
+        +Platform: string
+        +LoginTime: time.Time
     }
 
     RouterService --> UserLocation
@@ -213,302 +209,363 @@ classDiagram
 
 ### 5.1 NATS 订阅者实现
 
-```kotlin
-@Component
-class MessageSubscriber(
-    private val natsConnection: Connection,
-    private val messageService: MessageService,
-    private val userService: UserService,
-    private val routerService: RouterService,
-    private val objectMapper: ObjectMapper
-) {
-    private val logger = LoggerFactory.getLogger(javaClass)
-    private val dispatcher: Dispatcher = natsConnection.createDispatcher()
+```go
+package nats
 
-    @PostConstruct
-    fun start() {
-        // 订阅上行消息 - 使用队列组实现负载均衡
-        dispatcher.subscribe("im.logic.upstream", "logic-group") { msg ->
-            CoroutineScope(Dispatchers.IO).launch {
-                handleUpstreamMessage(msg.data)
-            }
+import (
+    "context"
+    "log/slog"
+
+    "github.com/nats-io/nats.go"
+    "google.golang.org/protobuf/proto"
+)
+
+type MessageSubscriber struct {
+    nc             *nats.Conn
+    messageService *service.MessageService
+    userService    *service.UserService
+    routerService  *service.RouterService
+    logger         *slog.Logger
+}
+
+func NewMessageSubscriber(
+    nc *nats.Conn,
+    messageService *service.MessageService,
+    userService *service.UserService,
+    routerService *service.RouterService,
+) *MessageSubscriber {
+    return &MessageSubscriber{
+        nc:             nc,
+        messageService: messageService,
+        userService:    userService,
+        routerService:  routerService,
+        logger:         slog.Default(),
+    }
+}
+
+func (s *MessageSubscriber) Start(ctx context.Context) error {
+    // 订阅上行消息 - 使用队列组实现负载均衡
+    _, err := s.nc.QueueSubscribe("im.logic.upstream", "logic-group", func(msg *nats.Msg) {
+        go s.handleUpstreamMessage(ctx, msg.Data)
+    })
+    if err != nil {
+        return err
+    }
+
+    s.logger.Info("NATS subscriber started, listening on im.logic.upstream")
+    return nil
+}
+
+func (s *MessageSubscriber) handleUpstreamMessage(ctx context.Context, data []byte) {
+    var message pb.UpstreamMessage
+    if err := proto.Unmarshal(data, &message); err != nil {
+        s.logger.Error("Failed to unmarshal message", "error", err)
+        return
+    }
+
+    accessNodeId := message.GetAccessNodeId()
+
+    switch {
+    case message.GetUserMessage() != nil:
+        s.handleUserMessage(ctx, message.GetUserMessage(), accessNodeId)
+    case message.GetUserOnline() != nil:
+        s.handleUserOnline(ctx, message.GetUserOnline(), accessNodeId)
+    case message.GetUserOffline() != nil:
+        s.handleUserOffline(ctx, message.GetUserOffline(), accessNodeId)
+    }
+}
+
+func (s *MessageSubscriber) handleUserMessage(ctx context.Context, msg *pb.UserMessage, accessNodeId string) {
+    // 1. 消息存储
+    serverMsgId, err := s.messageService.SaveMessage(ctx, msg)
+    if err != nil {
+        s.logger.Error("Failed to save message", "error", err)
+        return
+    }
+
+    // 2. 发送 ACK 给发送者
+    if err := s.routerService.SendAckToUser(ctx, msg.GetFromUserId(), msg.GetMsgId(), serverMsgId); err != nil {
+        s.logger.Error("Failed to send ack", "error", err)
+    }
+
+    // 3. 路由消息给接收者
+    if msg.GetToUserId() > 0 {
+        s.routerService.RouteMessage(ctx, msg.GetToUserId(), msg, serverMsgId)
+    } else if msg.GetToGroupId() > 0 {
+        members, _ := s.groupService.GetGroupMembers(ctx, msg.GetToGroupId())
+        // 过滤发送者
+        filteredMembers := filterOut(members, msg.GetFromUserId())
+        s.routerService.RouteToMultiple(ctx, filteredMembers, msg, serverMsgId)
+    }
+}
+
+func (s *MessageSubscriber) handleUserOnline(ctx context.Context, event *pb.UserOnline, accessNodeId string) {
+    s.userService.RegisterUserLocation(ctx, &model.UserLocation{
+        UserId:       event.GetUserId(),
+        AccessNodeId: accessNodeId,
+        ConnId:       event.GetConnId(),
+        DeviceId:     event.GetDeviceId(),
+        Platform:     event.GetPlatform(),
+    })
+}
+
+func (s *MessageSubscriber) handleUserOffline(ctx context.Context, event *pb.UserOffline, accessNodeId string) {
+    s.userService.UnregisterUserLocation(ctx, event.GetUserId(), event.GetConnId(), accessNodeId)
+}
+
+func (s *MessageSubscriber) Stop() {
+    s.logger.Info("NATS subscriber stopped")
+}
+
+func filterOut(members []int64, excludeId int64) []int64 {
+    result := make([]int64, 0, len(members))
+    for _, m := range members {
+        if m != excludeId {
+            result = append(result, m)
         }
-        logger.info("NATS subscriber started, listening on im.logic.upstream")
     }
-
-    private suspend fun handleUpstreamMessage(data: ByteArray) {
-        val message = UpstreamMessage.parseFrom(data)
-        val accessNodeId = message.accessNodeId
-
-        when {
-            message.hasUserMessage() -> handleUserMessage(message.userMessage, accessNodeId)
-            message.hasUserOnline() -> handleUserOnline(message.userOnline, accessNodeId)
-            message.hasUserOffline() -> handleUserOffline(message.userOffline, accessNodeId)
-        }
-    }
-
-    private suspend fun handleUserMessage(msg: UserMessage, accessNodeId: String) {
-        // 1. 消息存储
-        val serverMsgId = messageService.saveMessage(msg)
-
-        // 2. 发送 ACK 给发送者
-        routerService.sendAckToUser(msg.fromUserId, msg.msgId, serverMsgId)
-
-        // 3. 路由消息给接收者
-        if (msg.toUserId > 0) {
-            routerService.routeMessage(msg.toUserId, msg, serverMsgId)
-        } else if (msg.toGroupId > 0) {
-            val members = groupService.getGroupMembers(msg.toGroupId)
-            routerService.routeToMultiple(members.filter { it != msg.fromUserId }, msg, serverMsgId)
-        }
-    }
-
-    private suspend fun handleUserOnline(event: UserOnline, accessNodeId: String) {
-        userService.registerUserLocation(
-            userId = event.userId,
-            accessNodeId = accessNodeId,
-            connId = event.connId,
-            deviceId = event.deviceId,
-            platform = event.platform
-        )
-    }
-
-    private suspend fun handleUserOffline(event: UserOffline, accessNodeId: String) {
-        userService.unregisterUserLocation(event.userId, event.connId, accessNodeId)
-    }
-
-    @PreDestroy
-    fun stop() {
-        dispatcher.unsubscribe("im.logic.upstream")
-        logger.info("NATS subscriber stopped")
-    }
+    return result
 }
 ```
 
 ### 5.2 NATS 发布者 (用于下行推送)
 
-```kotlin
-@Component
-class MessagePublisher(
-    private val natsConnection: Connection
-) {
-    private val logger = LoggerFactory.getLogger(javaClass)
+```go
+package nats
 
-    /**
-     * 推送消息到指定 Access 节点
-     */
-    fun publishToAccess(accessNodeId: String, message: DownstreamMessage) {
-        val subject = "im.access.$accessNodeId.downstream"
-        natsConnection.publish(subject, message.toByteArray())
-    }
+import (
+    "fmt"
+    "log/slog"
 
-    /**
-     * 广播消息到所有 Access 节点
-     */
-    fun broadcast(message: DownstreamMessage) {
-        natsConnection.publish("im.access.broadcast", message.toByteArray())
-    }
-}
-```
-
-### 5.2 双向流管理器
-
-```kotlin
-@Component
-class StreamManager {
-
-    private val logger = LoggerFactory.getLogger(javaClass)
-    private val streams = ConcurrentHashMap<String, StreamContext>()
-
-    fun register(accessNodeId: String, context: StreamContext) {
-        streams[accessNodeId] = context
-        logger.info("Registered stream for access node: $accessNodeId, total: ${streams.size}")
-    }
-
-    fun unregister(accessNodeId: String) {
-        streams.remove(accessNodeId)?.close()
-        logger.info("Unregistered stream for access node: $accessNodeId, total: ${streams.size}")
-    }
-
-    fun getStream(accessNodeId: String): StreamContext? = streams[accessNodeId]
-
-    suspend fun sendTo(accessNodeId: String, message: DownstreamMessage): Boolean {
-        val stream = streams[accessNodeId] ?: return false
-        return try {
-            stream.send(message)
-            true
-        } catch (e: Exception) {
-            logger.error("Failed to send message to $accessNodeId", e)
-            unregister(accessNodeId)
-            false
-        }
-    }
-
-    suspend fun broadcast(message: DownstreamMessage) {
-        streams.values.forEach { stream ->
-            try {
-                stream.send(message)
-            } catch (e: Exception) {
-                logger.error("Broadcast failed for ${stream.accessNodeId}", e)
-            }
-        }
-    }
-
-    fun getConnectedNodes(): Set<String> = streams.keys.toSet()
-
-    fun getConnectionCount(): Int = streams.size
-}
-
-class StreamContext(
-    val accessNodeId: String,
-    private val sendChannel: SendChannel<DownstreamMessage>,
-    val connectedAt: Instant = Instant.now()
-) {
-    suspend fun send(message: DownstreamMessage) {
-        sendChannel.send(message)
-    }
-
-    fun close() {
-        sendChannel.close()
-    }
-}
-```
-
-### 5.3 路由服务 (响应式)
-
-```kotlin
-@Service
-class RouterService(
-    private val reactiveRedisTemplate: ReactiveRedisTemplate<String, String>,
-    private val streamManager: StreamManager,
-    private val objectMapper: ObjectMapper
-) {
-    private val logger = LoggerFactory.getLogger(javaClass)
-
-    companion object {
-        private const val USER_LOCATION_KEY_PREFIX = "im:user:location:"
-        private val LOCATION_TTL = Duration.ofHours(24)
-    }
-
-    /**
-     * 获取用户所在的 Access 节点 (响应式)
-     */
-    suspend fun getUserLocations(userId: Long): List<UserLocation> {
-        val key = "$USER_LOCATION_KEY_PREFIX$userId"
-        return reactiveRedisTemplate.opsForHash<String, String>()
-            .entries(key)
-            .mapNotNull { entry ->
-                try {
-                    objectMapper.readValue(entry.value, UserLocation::class.java)
-                } catch (e: Exception) {
-                    null
-                }
-            }
-            .asFlow()
-            .toList()
-    }
-
-    /**
-     * 注册用户位置 (响应式)
-     */
-    suspend fun registerUserLocation(location: UserLocation) {
-        val key = "$USER_LOCATION_KEY_PREFIX${location.userId}"
-        val field = "${location.accessNodeId}:${location.connId}"
-        val value = objectMapper.writeValueAsString(location)
-
-        reactiveRedisTemplate.opsForHash<String, String>()
-            .put(key, field, value)
-            .awaitSingle()
-
-        reactiveRedisTemplate.expire(key, LOCATION_TTL).awaitSingle()
-    }
-
-    /**
-     * 移除用户位置 (响应式)
-     */
-    suspend fun removeUserLocation(userId: Long, accessNodeId: String, connId: Long) {
-        val key = "$USER_LOCATION_KEY_PREFIX$userId"
-        val field = "$accessNodeId:$connId"
-        reactiveRedisTemplate.opsForHash<String, String>()
-            .remove(key, field)
-            .awaitSingleOrNull()
-    }
-
-    /**
-     * 路由消息到用户
-     */
-    suspend fun routeMessage(userId: Long, message: PushMessage) {
-        val locations = getUserLocations(userId)
-
-        if (locations.isEmpty()) {
-            logger.debug("User $userId is offline, saving to offline storage")
-            // offlineMessageService.save(userId, message)
-            return
-        }
-
-        // 并行推送到所有在线设备
-        coroutineScope {
-            locations.groupBy { it.accessNodeId }.forEach { (accessNodeId, _) ->
-                launch {
-                    val downstreamMsg = DownstreamMessage.newBuilder()
-                        .setPushMessage(message.toBuilder()
-                            .setTargetUserId(userId)
-                            .build())
-                        .build()
-
-                    if (!streamManager.sendTo(accessNodeId, downstreamMsg)) {
-                        logger.warn("Failed to route message to access node: $accessNodeId")
-                    }
-                }
-            }
-        }
-    }
-
-    /**
-     * 批量路由消息（群消息）- 并行处理
-     */
-    suspend fun routeToMultiple(userIds: List<Long>, message: PushMessage) {
-        // 并行获取所有用户位置
-        val allLocations = coroutineScope {
-            userIds.map { userId ->
-                async { userId to getUserLocations(userId) }
-            }.awaitAll()
-        }
-
-        // 按 Access 节点分组
-        val nodeToUsers = mutableMapOf<String, MutableList<Long>>()
-        allLocations.forEach { (userId, locations) ->
-            locations.forEach { location ->
-                nodeToUsers.getOrPut(location.accessNodeId) { mutableListOf() }.add(userId)
-            }
-        }
-
-        // 并行发送
-        coroutineScope {
-            nodeToUsers.forEach { (accessNodeId, users) ->
-                launch {
-                    users.forEach { userId ->
-                        val downstreamMsg = DownstreamMessage.newBuilder()
-                            .setPushMessage(message.toBuilder()
-                                .setTargetUserId(userId)
-                                .build())
-                            .build()
-                        streamManager.sendTo(accessNodeId, downstreamMsg)
-                    }
-                }
-            }
-        }
-    }
-}
-
-data class UserLocation(
-    val userId: Long,
-    val accessNodeId: String,
-    val connId: Long,
-    val deviceId: String,
-    val platform: String,
-    val loginTime: Instant = Instant.now()
+    "github.com/nats-io/nats.go"
+    "google.golang.org/protobuf/proto"
 )
+
+type MessagePublisher struct {
+    nc     *nats.Conn
+    logger *slog.Logger
+}
+
+func NewMessagePublisher(nc *nats.Conn) *MessagePublisher {
+    return &MessagePublisher{
+        nc:     nc,
+        logger: slog.Default(),
+    }
+}
+
+// PublishToAccess 推送消息到指定 Access 节点
+func (p *MessagePublisher) PublishToAccess(accessNodeId string, message *pb.DownstreamMessage) error {
+    subject := fmt.Sprintf("im.access.%s.downstream", accessNodeId)
+    data, err := proto.Marshal(message)
+    if err != nil {
+        return err
+    }
+    return p.nc.Publish(subject, data)
+}
+
+// Broadcast 广播消息到所有 Access 节点
+func (p *MessagePublisher) Broadcast(message *pb.DownstreamMessage) error {
+    data, err := proto.Marshal(message)
+    if err != nil {
+        return err
+    }
+    return p.nc.Publish("im.access.broadcast", data)
+}
+```
+
+### 5.3 路由服务
+
+```go
+package service
+
+import (
+    "context"
+    "encoding/json"
+    "fmt"
+    "log/slog"
+    "sync"
+    "time"
+
+    "github.com/redis/go-redis/v9"
+)
+
+const (
+    userLocationKeyPrefix = "im:user:location:"
+    locationTTL           = 24 * time.Hour
+)
+
+type RouterService struct {
+    redisClient *redis.Client
+    publisher   *nats.MessagePublisher
+    logger      *slog.Logger
+}
+
+type UserLocation struct {
+    UserId       int64     `json:"userId"`
+    AccessNodeId string    `json:"accessNodeId"`
+    ConnId       int64     `json:"connId"`
+    DeviceId     string    `json:"deviceId"`
+    Platform     string    `json:"platform"`
+    LoginTime    time.Time `json:"loginTime"`
+}
+
+func NewRouterService(redisClient *redis.Client, publisher *nats.MessagePublisher) *RouterService {
+    return &RouterService{
+        redisClient: redisClient,
+        publisher:   publisher,
+        logger:      slog.Default(),
+    }
+}
+
+// GetUserLocations 获取用户所在的 Access 节点
+func (s *RouterService) GetUserLocations(ctx context.Context, userId int64) ([]UserLocation, error) {
+    key := fmt.Sprintf("%s%d", userLocationKeyPrefix, userId)
+
+    entries, err := s.redisClient.HGetAll(ctx, key).Result()
+    if err != nil {
+        return nil, err
+    }
+
+    locations := make([]UserLocation, 0, len(entries))
+    for _, value := range entries {
+        var loc UserLocation
+        if err := json.Unmarshal([]byte(value), &loc); err != nil {
+            continue
+        }
+        locations = append(locations, loc)
+    }
+
+    return locations, nil
+}
+
+// RegisterUserLocation 注册用户位置
+func (s *RouterService) RegisterUserLocation(ctx context.Context, location *UserLocation) error {
+    key := fmt.Sprintf("%s%d", userLocationKeyPrefix, location.UserId)
+    field := fmt.Sprintf("%s:%d", location.AccessNodeId, location.ConnId)
+
+    value, err := json.Marshal(location)
+    if err != nil {
+        return err
+    }
+
+    pipe := s.redisClient.Pipeline()
+    pipe.HSet(ctx, key, field, value)
+    pipe.Expire(ctx, key, locationTTL)
+    _, err = pipe.Exec(ctx)
+
+    s.logger.Debug("Registered user location",
+        "userId", location.UserId,
+        "accessNodeId", location.AccessNodeId)
+
+    return err
+}
+
+// RemoveUserLocation 移除用户位置
+func (s *RouterService) RemoveUserLocation(ctx context.Context, userId int64, accessNodeId string, connId int64) error {
+    key := fmt.Sprintf("%s%d", userLocationKeyPrefix, userId)
+    field := fmt.Sprintf("%s:%d", accessNodeId, connId)
+
+    s.logger.Debug("Unregistered user location",
+        "userId", userId,
+        "connId", connId)
+
+    return s.redisClient.HDel(ctx, key, field).Err()
+}
+
+// RouteMessage 路由消息到用户
+func (s *RouterService) RouteMessage(ctx context.Context, userId int64, message *pb.PushMessage) error {
+    locations, err := s.GetUserLocations(ctx, userId)
+    if err != nil {
+        return err
+    }
+
+    if len(locations) == 0 {
+        s.logger.Debug("User is offline, saving to offline storage", "userId", userId)
+        // TODO: offlineMessageService.Save(userId, message)
+        return nil
+    }
+
+    // 按 Access 节点分组并行推送
+    nodeLocations := make(map[string][]UserLocation)
+    for _, loc := range locations {
+        nodeLocations[loc.AccessNodeId] = append(nodeLocations[loc.AccessNodeId], loc)
+    }
+
+    var wg sync.WaitGroup
+    for accessNodeId := range nodeLocations {
+        wg.Add(1)
+        go func(nodeId string) {
+            defer wg.Done()
+            downstreamMsg := &pb.DownstreamMessage{
+                Payload: &pb.DownstreamMessage_PushMessage{
+                    PushMessage: message,
+                },
+            }
+            if err := s.publisher.PublishToAccess(nodeId, downstreamMsg); err != nil {
+                s.logger.Warn("Failed to route message to access node",
+                    "accessNodeId", nodeId,
+                    "error", err)
+            }
+        }(accessNodeId)
+    }
+    wg.Wait()
+
+    return nil
+}
+
+// RouteToMultiple 批量路由消息（群消息）- 并行处理
+func (s *RouterService) RouteToMultiple(ctx context.Context, userIds []int64, message *pb.PushMessage) error {
+    // 并行获取所有用户位置
+    type userLoc struct {
+        userId    int64
+        locations []UserLocation
+    }
+
+    results := make(chan userLoc, len(userIds))
+    var wg sync.WaitGroup
+
+    for _, userId := range userIds {
+        wg.Add(1)
+        go func(uid int64) {
+            defer wg.Done()
+            locs, _ := s.GetUserLocations(ctx, uid)
+            results <- userLoc{userId: uid, locations: locs}
+        }(userId)
+    }
+
+    go func() {
+        wg.Wait()
+        close(results)
+    }()
+
+    // 按 Access 节点分组
+    nodeToUsers := make(map[string][]int64)
+    for result := range results {
+        for _, loc := range result.locations {
+            nodeToUsers[loc.AccessNodeId] = append(nodeToUsers[loc.AccessNodeId], result.userId)
+        }
+    }
+
+    // 并行发送
+    var sendWg sync.WaitGroup
+    for accessNodeId, users := range nodeToUsers {
+        sendWg.Add(1)
+        go func(nodeId string, targetUsers []int64) {
+            defer sendWg.Done()
+            for _, userId := range targetUsers {
+                downstreamMsg := &pb.DownstreamMessage{
+                    Payload: &pb.DownstreamMessage_PushMessage{
+                        PushMessage: message,
+                    },
+                }
+                s.publisher.PublishToAccess(nodeId, downstreamMsg)
+            }
+        }(accessNodeId, users)
+    }
+    sendWg.Wait()
+
+    return nil
+}
 ```
 
 ---
@@ -600,8 +657,8 @@ sequenceDiagram
 
 | 场景 | 处理方式 |
 |------|----------|
-| Access 断线 | StreamManager 自动清理，用户位置保留到 TTL |
-| Logic 重启 | Access 主动重连，重新注册 |
+| Access 断线 | NATS 自动清理订阅，用户位置保留到 TTL |
+| Logic 重启 | NATS 队列组自动负载均衡 |
 | 用户多端 | 同一用户多个 Location，按需推送 |
 
 ### 7.2 消息可靠性
@@ -631,120 +688,157 @@ flowchart TB
 
 ## 8. 配置示例
 
-### 8.1 application.yml
+### 8.1 config.yaml
 
 ```yaml
-# 无 HTTP 服务器，通过 NATS 通信
-spring:
-  main:
-    web-application-type: none  # 关键：禁用 Web 服务器
-
-  application:
-    name: im-logic
-
-  # R2DBC - 响应式 PostgreSQL
-  r2dbc:
-    url: r2dbc:postgresql://localhost:5432/im
-    username: postgres
-    password: password
-    pool:
-      initial-size: 10
-      max-size: 50
-      max-idle-time: 30m
-
-  # Reactive Redis
-  data:
-    redis:
-      host: localhost
-      port: 6379
-      # cluster:
-      #   nodes:
-      #     - redis-1:6379
-      #     - redis-2:6379
-      #     - redis-3:6379
-      lettuce:
-        pool:
-          max-active: 50
-          max-idle: 10
+# Logic 服务配置
+app:
+  name: im-logic
+  log_level: debug
 
 # NATS 配置
 nats:
-  server:
-    url: nats://localhost:4222
-    # cluster:
-    #   urls:
-    #     - nats://nats-1:4222
-    #     - nats://nats-2:4222
-    #     - nats://nats-3:4222
-  connection:
-    max-reconnects: -1  # 无限重连
-    reconnect-wait: 2s
+  url: nats://localhost:4222
+  # cluster:
+  #   urls:
+  #     - nats://nats-1:4222
+  #     - nats://nats-2:4222
+  #     - nats://nats-3:4222
+  max_reconnects: -1  # 无限重连
+  reconnect_wait: 2s
 
-logging:
-  level:
-    com.example.im: DEBUG
-    io.nats: INFO
-    io.r2dbc: DEBUG
+# PostgreSQL
+database:
+  host: localhost
+  port: 5432
+  name: im
+  user: postgres
+  password: password
+  max_open_conns: 50
+  max_idle_conns: 10
+  conn_max_lifetime: 30m
+
+# Redis
+redis:
+  host: localhost
+  port: 6379
+  password: ""
+  db: 0
+  pool_size: 50
+  # cluster:
+  #   addrs:
+  #     - redis-1:6379
+  #     - redis-2:6379
+  #     - redis-3:6379
 ```
 
-### 8.2 build.gradle.kts
+### 8.2 main.go
 
-```kotlin
-plugins {
-    kotlin("jvm") version "2.2.0"
-    kotlin("plugin.spring") version "2.2.0"
-    id("org.springframework.boot") version "4.0.0"
-    id("io.spring.dependency-management") version "1.1.7"
-    id("com.google.protobuf") version "0.9.4"
-}
+```go
+package main
 
-java {
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
+import (
+    "context"
+    "log/slog"
+    "os"
+    "os/signal"
+    "syscall"
+    "time"
+
+    "github.com/nats-io/nats.go"
+    "github.com/redis/go-redis/v9"
+    "github.com/spf13/viper"
+)
+
+func main() {
+    // 初始化日志
+    logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+    slog.SetDefault(logger)
+
+    // 加载配置
+    cfg := loadConfig()
+
+    // 连接 NATS
+    nc, err := connectNATS(cfg.NATS)
+    if err != nil {
+        logger.Error("Failed to connect to NATS", "error", err)
+        os.Exit(1)
     }
-}
+    defer nc.Close()
 
-dependencies {
-    // Spring Boot Core - 无 Web 依赖
-    implementation("org.springframework.boot:spring-boot-starter")
+    // 连接 Redis
+    redisClient := connectRedis(cfg.Redis)
+    defer redisClient.Close()
 
-    // R2DBC - 响应式数据库
-    implementation("org.springframework.boot:spring-boot-starter-data-r2dbc")
-    implementation("org.postgresql:r2dbc-postgresql")
+    // 连接数据库
+    db := connectDatabase(cfg.Database)
+    defer db.Close()
 
-    // Reactive Redis
-    implementation("org.springframework.boot:spring-boot-starter-data-redis-reactive")
+    // 初始化服务
+    publisher := nats.NewMessagePublisher(nc)
+    routerService := service.NewRouterService(redisClient, publisher)
+    userService := service.NewUserService(redisClient)
+    messageService := service.NewMessageService(db)
 
-    // Kotlin Coroutines
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor")
+    // 启动订阅者
+    ctx, cancel := context.WithCancel(context.Background())
+    defer cancel()
 
-    // NATS
-    implementation("io.nats:jnats:2.20.5")
-
-    // Protobuf (用于消息序列化，不需要 gRPC)
-    implementation("com.google.protobuf:protobuf-kotlin")
-
-    // Jackson for JSON
-    implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
-
-    // Test
-    testImplementation("org.springframework.boot:spring-boot-starter-test")
-    testImplementation("io.projectreactor:reactor-test")
-}
-
-protobuf {
-    protoc {
-        artifact = "com.google.protobuf:protoc:4.29.2"
+    subscriber := nats.NewMessageSubscriber(nc, messageService, userService, routerService)
+    if err := subscriber.Start(ctx); err != nil {
+        logger.Error("Failed to start subscriber", "error", err)
+        os.Exit(1)
     }
-    generateProtoTasks {
-        all().forEach {
-            it.builtins {
-                create("kotlin")
-            }
-        }
-    }
+
+    logger.Info("Logic service started")
+
+    // 优雅退出
+    quit := make(chan os.Signal, 1)
+    signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+    <-quit
+
+    logger.Info("Shutting down...")
+    subscriber.Stop()
 }
+
+func connectNATS(cfg NATSConfig) (*nats.Conn, error) {
+    opts := []nats.Option{
+        nats.MaxReconnects(cfg.MaxReconnects),
+        nats.ReconnectWait(cfg.ReconnectWait),
+        nats.DisconnectErrHandler(func(nc *nats.Conn, err error) {
+            slog.Warn("Disconnected from NATS", "error", err)
+        }),
+        nats.ReconnectHandler(func(nc *nats.Conn) {
+            slog.Info("Reconnected to NATS", "url", nc.ConnectedUrl())
+        }),
+    }
+    return nats.Connect(cfg.URL, opts...)
+}
+
+func connectRedis(cfg RedisConfig) *redis.Client {
+    return redis.NewClient(&redis.Options{
+        Addr:     fmt.Sprintf("%s:%d", cfg.Host, cfg.Port),
+        Password: cfg.Password,
+        DB:       cfg.DB,
+        PoolSize: cfg.PoolSize,
+    })
+}
+```
+
+### 8.3 go.mod
+
+```go
+module github.com/yourorg/im-logic
+
+go 1.21
+
+require (
+    github.com/nats-io/nats.go v1.31.0
+    github.com/redis/go-redis/v9 v9.3.0
+    github.com/jackc/pgx/v5 v5.5.0
+    github.com/spf13/viper v1.17.0
+    google.golang.org/protobuf v1.31.0
+)
 ```
 
 ---
@@ -763,25 +857,60 @@ protobuf {
 
 ### 9.2 健康检查
 
-```kotlin
-@Component
-class NatsHealthCheck(
-    private val natsConnection: Connection
-) : HealthIndicator {
+```go
+package health
 
-    override fun health(): Health {
-        return if (natsConnection.status == Connection.Status.CONNECTED) {
-            Health.up()
-                .withDetail("nats_status", "connected")
-                .withDetail("server_info", natsConnection.serverInfo.toString())
-                .build()
-        } else {
-            Health.down()
-                .withDetail("reason", "NATS connection not active")
-                .withDetail("status", natsConnection.status.toString())
-                .build()
+import (
+    "context"
+    "net/http"
+    "time"
+
+    "github.com/nats-io/nats.go"
+    "github.com/redis/go-redis/v9"
+)
+
+type HealthChecker struct {
+    nc          *nats.Conn
+    redisClient *redis.Client
+}
+
+func NewHealthChecker(nc *nats.Conn, redisClient *redis.Client) *HealthChecker {
+    return &HealthChecker{nc: nc, redisClient: redisClient}
+}
+
+func (h *HealthChecker) Check(ctx context.Context) map[string]string {
+    status := make(map[string]string)
+
+    // 检查 NATS
+    if h.nc.IsConnected() {
+        status["nats"] = "connected"
+    } else {
+        status["nats"] = "disconnected"
+    }
+
+    // 检查 Redis
+    ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+    defer cancel()
+
+    if err := h.redisClient.Ping(ctx).Err(); err == nil {
+        status["redis"] = "connected"
+    } else {
+        status["redis"] = "disconnected"
+    }
+
+    return status
+}
+
+// ServeHTTP 可选的 HTTP 健康检查端点
+func (h *HealthChecker) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+    status := h.Check(r.Context())
+    for k, v := range status {
+        if v != "connected" {
+            w.WriteHeader(http.StatusServiceUnavailable)
+            break
         }
     }
+    json.NewEncoder(w).Encode(status)
 }
 ```
 

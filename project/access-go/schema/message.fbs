@@ -1,0 +1,133 @@
+// IM 协议 FlatBuffers Schema
+// 用于 Access 层与客户端之间的通信
+
+namespace im.protocol;
+
+// 消息类型枚举
+enum MsgType : short {
+    Heartbeat = 0,
+    Auth = 1,
+    AuthAck = 2,
+    Message = 10,
+    MessageAck = 11,
+    Sync = 20,
+    SyncAck = 21,
+    Kick = 30,
+}
+
+// 内容类型枚举
+enum ContentType : byte {
+    Text = 1,
+    Image = 2,
+    File = 3,
+    Voice = 4,
+    Video = 5,
+    Location = 6,
+    Custom = 100,
+}
+
+// 平台类型枚举
+enum Platform : byte {
+    Unknown = 0,
+    iOS = 1,
+    Android = 2,
+    Web = 3,
+    Desktop = 4,
+}
+
+// ============== 客户端协议包 ==============
+
+// 协议包头
+table Packet {
+    seq: uint64;           // 序列号
+    msg_type: MsgType;     // 消息类型
+    timestamp: uint64;     // 时间戳 (毫秒)
+    payload: [ubyte];      // 载荷数据
+}
+
+// ============== 认证相关 ==============
+
+// 认证请求
+table AuthRequest {
+    token: string;         // JWT Token
+    device_id: string;     // 设备 ID
+    platform: Platform;    // 平台类型
+    app_version: string;   // App 版本
+}
+
+// 认证响应
+table AuthResponse {
+    code: int;             // 响应码 (0=成功)
+    user_id: int64;        // 用户 ID
+    message: string;       // 消息
+    server_time: uint64;   // 服务器时间
+}
+
+// ============== 聊天消息 ==============
+
+// 聊天消息
+table ChatMessage {
+    client_msg_id: string;     // 客户端消息 ID (UUID)
+    from_user_id: int64;       // 发送者 ID
+    to_user_id: int64;         // 接收者 ID (单聊)
+    to_group_id: int64;        // 群组 ID (群聊)
+    content_type: ContentType; // 内容类型
+    content: [ubyte];          // 消息内容
+    timestamp: uint64;         // 发送时间
+    at_user_ids: [int64];      // @的用户列表
+}
+
+// 消息确认
+table MessageAck {
+    client_msg_id: string; // 客户端消息 ID
+    server_msg_id: int64;  // 服务端消息 ID
+    timestamp: uint64;     // 服务器时间
+    code: int;             // 状态码 (0=成功)
+}
+
+// 推送消息 (服务端下发)
+table PushMessage {
+    server_msg_id: int64;      // 服务端消息 ID
+    from_user_id: int64;       // 发送者 ID
+    to_user_id: int64;         // 接收者 ID
+    to_group_id: int64;        // 群组 ID
+    content_type: ContentType; // 内容类型
+    content: [ubyte];          // 消息内容
+    timestamp: uint64;         // 发送时间
+    from_nickname: string;     // 发送者昵称
+    from_avatar: string;       // 发送者头像
+}
+
+// ============== 同步相关 ==============
+
+// 同步请求
+table SyncRequest {
+    last_msg_id: int64;    // 最后一条消息 ID
+    limit: int;            // 拉取数量限制
+}
+
+// 同步响应
+table SyncResponse {
+    messages: [PushMessage];   // 消息列表
+    has_more: bool;            // 是否还有更多
+}
+
+// ============== 其他 ==============
+
+// 踢出通知
+table KickNotify {
+    reason: string;        // 踢出原因
+    device_id: string;     // 新登录设备 ID
+}
+
+// 心跳
+table Heartbeat {
+    timestamp: uint64;     // 客户端时间戳
+}
+
+// 心跳响应
+table HeartbeatAck {
+    timestamp: uint64;     // 服务器时间戳
+}
+
+root_type Packet;

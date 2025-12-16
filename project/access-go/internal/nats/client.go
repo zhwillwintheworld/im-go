@@ -1,12 +1,15 @@
 package nats
 
 import (
-	"github.com/example/im-access/internal/config"
+	"log/slog"
+
 	"github.com/nats-io/nats.go"
+	"sudooom.im.access/internal/config"
 )
 
 type Client struct {
-	conn *nats.Conn
+	conn   *nats.Conn
+	logger *slog.Logger
 }
 
 func NewClient(cfg config.NATSConfig) (*Client, error) {
@@ -14,10 +17,13 @@ func NewClient(cfg config.NATSConfig) (*Client, error) {
 		nats.MaxReconnects(cfg.MaxReconnects),
 		nats.ReconnectWait(cfg.ReconnectWait),
 		nats.DisconnectErrHandler(func(nc *nats.Conn, err error) {
-			// 断开连接处理
+			slog.Warn("Disconnected from NATS", "error", err)
 		}),
 		nats.ReconnectHandler(func(nc *nats.Conn) {
-			// 重连处理
+			slog.Info("Reconnected to NATS", "url", nc.ConnectedUrl())
+		}),
+		nats.ClosedHandler(func(nc *nats.Conn) {
+			slog.Info("NATS connection closed")
 		}),
 	}
 
@@ -26,7 +32,15 @@ func NewClient(cfg config.NATSConfig) (*Client, error) {
 		return nil, err
 	}
 
-	return &Client{conn: conn}, nil
+	return &Client{
+		conn:   conn,
+		logger: slog.Default(),
+	}, nil
+}
+
+// Conn 返回底层 NATS 连接
+func (c *Client) Conn() *nats.Conn {
+	return c.conn
 }
 
 func (c *Client) Publish(subject string, data []byte) error {
@@ -47,6 +61,12 @@ func (c *Client) QueueSubscribe(subject, queue string, handler func(data []byte)
 	return err
 }
 
+func (c *Client) IsConnected() bool {
+	return c.conn != nil && c.conn.IsConnected()
+}
+
 func (c *Client) Close() {
-	c.conn.Close()
+	if c.conn != nil {
+		c.conn.Close()
+	}
 }

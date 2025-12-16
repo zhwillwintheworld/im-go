@@ -12,7 +12,15 @@
     border-bottom: 1px solid #e8e8e8;
 }
 
+.convList {
+    overflow-y: auto;
+    flex: 1;
+}
+
 .convItem {
+    display: flex;
+    align-items: center;
+    gap: 12px;
     padding: 12px 16px;
     cursor: pointer;
     transition: background 0.3s;
@@ -24,6 +32,31 @@
 
 .convItem.active {
     background: #e6f7ff;
+}
+
+.convAvatar {
+    flex-shrink: 0;
+}
+
+.convInfo {
+    flex: 1;
+    min-width: 0;
+}
+
+.convName {
+    font-weight: 500;
+    color: rgba(0, 0, 0, 0.85);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.convLastMsg {
+    font-size: 12px;
+    color: rgba(0, 0, 0, 0.45);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .content {

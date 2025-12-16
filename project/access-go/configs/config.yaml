@@ -1,5 +1,6 @@
 server:
   addr: ":8443"
+  node_id: "access-1"
   max_connections: 50000
 
 quic:
@@ -8,6 +9,9 @@ quic:
   max_incoming_streams: 100
   max_incoming_uni_streams: 50
   allow_0rtt: true
+  # TLS 证书配置（可选，不配置时使用自签名证书）
+  # cert_file: "certs/server.crt"
+  # key_file: "certs/server.key"
 
 nats:
   url: "nats://localhost:4222"

@@ -18,6 +18,7 @@ type Config struct {
 
 type ServerConfig struct {
 	Addr           string `yaml:"addr"`
+	NodeID         string `yaml:"node_id"`
 	MaxConnections int    `yaml:"max_connections"`
 }
 
@@ -27,6 +28,8 @@ type QUICConfig struct {
 	MaxIncomingStreams    int64         `yaml:"max_incoming_streams"`
 	MaxIncomingUniStreams int64         `yaml:"max_incoming_uni_streams"`
 	Allow0RTT             bool          `yaml:"allow_0rtt"`
+	CertFile              string        `yaml:"cert_file"`
+	KeyFile               string        `yaml:"key_file"`
 }
 
 type NATSConfig struct {

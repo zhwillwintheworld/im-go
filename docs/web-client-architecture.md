@@ -12,7 +12,7 @@ Web Client 是 IM 系统的 Web 端实现，负责用户界面展示、消息收
 
 | 职责 | 描述 |
 |------|------|
-| 连接管理 | WebSocket/WebTransport 长连接维护 |
+| 连接管理 | WebTransport/QUIC 长连接维护 |
 | 消息渲染 | 聊天消息展示、多媒体预览 |
 | 状态管理 | 会话列表、消息队列、用户状态 |
 | 离线支持 | IndexedDB 本地存储、离线消息同步 |
@@ -66,7 +66,7 @@ graph TB
         end
 
         subgraph Network["Network Layer"]
-            WS[WebSocket Manager]
+            WT[WebTransport Manager]
             HTTP[HTTP Client]
             FB[FlatBuffers Codec]
         end
@@ -84,8 +84,8 @@ graph TB
 
     Pages --> Components
     Components --> Store
-    Store --> WS & HTTP
-    WS & HTTP --> FB
+    Store --> WT & HTTP
+    WT & HTTP --> FB
     FB --> Access & API
     Store --> IDB & LS
 ```
@@ -118,7 +118,7 @@ im-web/
 │   │   ├── Contacts/
 │   │   └── Settings/
 │   ├── hooks/                        # 自定义 Hooks
-│   │   ├── useWebSocket.ts
+│   │   ├── useWebTransport.ts
 │   │   ├── useMessage.ts
 │   │   └── useAuth.ts
 │   ├── stores/                       # 状态管理
@@ -127,8 +127,8 @@ im-web/
 │   │   ├── messageStore.ts
 │   │   └── uiStore.ts
 │   ├── services/                     # 业务服务
-│   │   ├── websocket/
-│   │   │   ├── WebSocketManager.ts
+│   │   ├── transport/
+│   │   │   ├── WebTransportManager.ts
 │   │   │   └── MessageHandler.ts
 │   │   ├── api/
 │   │   │   ├── client.ts
@@ -158,12 +158,12 @@ im-web/
 
 ### 3.2 核心模块详解
 
-#### 3.2.1 WebSocket 管理器
+#### 3.2.1 WebTransport 管理器
 
 ```mermaid
 classDiagram
-    class WebSocketManager {
-        -ws: WebSocket
+    class WebTransportManager {
+        -transport: WebTransport
         -status: ConnectionStatus
         -messageQueue: Message[]
         -reconnectAttempts: number
@@ -188,7 +188,7 @@ classDiagram
         +dispatch(message: Message): void
     }
 
-    WebSocketManager --> MessageHandler
+    WebTransportManager --> MessageHandler
     MessageHandler --> MessageDispatcher
 ```
 
@@ -284,19 +284,19 @@ export class FlatBufferCodec {
 sequenceDiagram
     participant User as 用户
     participant App as React App
-    participant WS as WebSocket Manager
+    participant WT as WebTransport Manager
     participant Store as Zustand Store
     participant Server as Access Layer
 
     User->>App: 打开应用
     App->>Store: 检查登录状态
     Store-->>App: 已登录 (token)
-    App->>WS: connect(url, token)
-    WS->>Server: WebSocket 连接
-    WS->>Server: AuthRequest (token)
-    Server-->>WS: AuthResponse (success)
-    WS->>Store: 更新连接状态
-    WS->>WS: 启动心跳
+    App->>WT: connect(url, token)
+    WT->>Server: WebTransport 连接
+    WT->>Server: AuthRequest (token)
+    Server-->>WT: AuthResponse (success)
+    WT->>Store: 更新连接状态
+    WT->>WT: 启动心跳
     App->>Store: 加载会话列表
 ```
 
@@ -307,16 +307,16 @@ sequenceDiagram
     participant User as 用户
     participant Input as ChatInput
     participant Store as MessageStore
-    participant WS as WebSocket Manager
+    participant WT as WebTransport Manager
     participant Server as Access Layer
 
     User->>Input: 输入消息 + 发送
     Input->>Store: sendMessage(msg)
     Store->>Store: 添加到发送队列 (pending)
-    Store->>WS: send(encodedMsg)
-    WS->>Server: FlatBuffer 消息
-    Server-->>WS: MessageAck
-    WS->>Store: 更新消息状态 (sent)
+    Store->>WT: send(encodedMsg)
+    WT->>Server: FlatBuffer 消息
+    Server-->>WT: MessageAck
+    WT->>Store: 更新消息状态 (sent)
     Store->>Store: 移出发送队列
 ```
 
@@ -325,13 +325,13 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     participant Server as Access Layer
-    participant WS as WebSocket Manager
+    participant WT as WebTransport Manager
     participant Handler as MessageHandler
     participant Store as Zustand Stores
     participant UI as React Component
 
-    Server->>WS: 推送消息
-    WS->>Handler: onMessage(data)
+    Server->>WT: 推送消息
+    WT->>Handler: onMessage(data)
     Handler->>Handler: decode(data)
     Handler->>Store: dispatch 到对应 Store
     Store->>Store: 更新状态
@@ -527,7 +527,7 @@ const sanitizeMessage = (content: string): string => {
 | 资源预加载 | 关键页面 prefetch |
 | 图片懒加载 | loading="lazy" + IntersectionObserver |
 | 消息缓存 | IndexedDB + 内存 LRU Cache |
-| WebSocket 复用 | 单例连接管理 |
+| WebTransport 复用 | 单例连接管理 |
 
 ### 8.2 Bundle 优化
 
@@ -554,7 +554,7 @@ build: {
 
 | 指标 | 描述 |
 |------|------|
-| `ws_connection_status` | WebSocket 连接状态 |
+| `wt_connection_status` | WebTransport 连接状态 |
 | `message_send_latency` | 消息发送延迟 |
 | `message_render_time` | 消息渲染耗时 |
 | `reconnect_count` | 重连次数 |
@@ -563,14 +563,14 @@ build: {
 
 - React DevTools：组件状态调试
 - Zustand DevTools：状态变更追踪
-- Network Panel：WebSocket 帧分析
+- Network Panel：WebTransport/QUIC 帧分析
 
 ---
 
 ## 10. 后续演进
 
 - [ ] PWA 支持 (Service Worker)
-- [ ] WebTransport 协议升级
+- [x] WebTransport 协议升级 ✓
 - [ ] 端到端加密 (E2EE)
 - [ ] 语音/视频通话 (WebRTC)
 - [ ] 消息搜索 (全文检索)

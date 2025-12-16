@@ -3,41 +3,51 @@ package server
 import (
 	"context"
 	"crypto/tls"
+	"log/slog"
+	"net/http"
 	"sync"
 
-	"github.com/example/im-access/internal/config"
-	"github.com/example/im-access/internal/connection"
-	"github.com/example/im-access/internal/nats"
-	"github.com/example/im-access/internal/protocol"
 	"github.com/quic-go/quic-go"
-	"go.uber.org/zap"
+	"github.com/quic-go/quic-go/http3"
+	"github.com/quic-go/webtransport-go"
+	"sudooom.im.access/internal/config"
+	"sudooom.im.access/internal/connection"
+	"sudooom.im.access/internal/nats"
+	"sudooom.im.access/internal/protocol"
+	"sudooom.im.access/internal/redis"
+	sharedNats "sudooom.im.shared/nats"
 )
 
 type Server struct {
-	cfg        *config.Config
-	natsClient *nats.Client
-	logger     *zap.Logger
-	connMgr    *connection.Manager
-	handler    *protocol.Handler
-	listener   *quic.Listener
-	wg         sync.WaitGroup
+	cfg         *config.Config
+	natsClient  *nats.Client
+	redisClient *redis.Client
+	logger      *slog.Logger
+	connMgr     *connection.Manager
+	handler     *protocol.Handler
+	wtServer    *webtransport.Server
+	wg          sync.WaitGroup
 }
 
-func New(cfg *config.Config, natsClient *nats.Client, logger *zap.Logger) *Server {
+func New(cfg *config.Config, natsClient *nats.Client, redisClient *redis.Client, logger *slog.Logger) *Server {
 	connMgr := connection.NewManager()
-	handler := protocol.NewHandler(connMgr, natsClient, logger)
+	handler := protocol.NewHandler(connMgr, natsClient, redisClient, cfg.Server.NodeID, logger)
 
 	return &Server{
-		cfg:        cfg,
-		natsClient: natsClient,
-		logger:     logger,
-		connMgr:    connMgr,
-		handler:    handler,
+		cfg:         cfg,
+		natsClient:  natsClient,
+		redisClient: redisClient,
+		logger:      logger,
+		connMgr:     connMgr,
+		handler:     handler,
 	}
 }
 
 func (s *Server) Start(ctx context.Context) error {
-	tlsConfig := s.generateTLSConfig()
+	tlsConfig, err := s.loadTLSConfig()
+	if err != nil {
+		return err
+	}
 
 	quicConfig := &quic.Config{
 		MaxIdleTimeout:        s.cfg.QUIC.MaxIdleTimeout,
@@ -47,45 +57,63 @@ func (s *Server) Start(ctx context.Context) error {
 		Allow0RTT:             s.cfg.QUIC.Allow0RTT,
 	}
 
-	listener, err := quic.ListenAddr(s.cfg.Server.Addr, tlsConfig, quicConfig)
-	if err != nil {
-		return err
+	// 创建 WebTransport 服务器
+	s.wtServer = &webtransport.Server{
+		H3: http3.Server{
+			Addr:       s.cfg.Server.Addr,
+			TLSConfig:  tlsConfig,
+			QUICConfig: quicConfig,
+		},
+		CheckOrigin: func(r *http.Request) bool {
+			// TODO: 生产环境应该检查 Origin
+			return true
+		},
 	}
-	s.listener = listener
+
+	// 设置 HTTP 路由
+	mux := http.NewServeMux()
+	mux.HandleFunc("/webtransport", func(w http.ResponseWriter, r *http.Request) {
+		session, err := s.wtServer.Upgrade(w, r)
+		if err != nil {
+			s.logger.Error("WebTransport upgrade failed", "error", err)
+			return
+		}
+		s.wg.Add(1)
+		go s.handleSession(ctx, session)
+	})
+
+	s.wtServer.H3.Handler = mux
 
 	// 订阅 NATS 下行消息
 	s.subscribeDownstream()
 
-	// 接受连接
-	for {
-		select {
-		case <-ctx.Done():
-			return nil
-		default:
-			conn, err := listener.Accept(ctx)
-			if err != nil {
-				s.logger.Error("Failed to accept connection", zap.Error(err))
-				continue
-			}
-			s.wg.Add(1)
-			go s.handleConnection(ctx, conn)
-		}
-	}
+	s.logger.Info("WebTransport server starting", "addr", s.cfg.Server.Addr)
+
+	// 启动服务器
+	return s.wtServer.ListenAndServe()
 }
 
-func (s *Server) handleConnection(ctx context.Context, conn quic.Connection) {
+func (s *Server) handleSession(ctx context.Context, session *webtransport.Session) {
 	defer s.wg.Done()
 
-	c := connection.New(conn, s.logger)
+	c := connection.NewFromWebTransport(session, s.logger)
 	s.connMgr.Add(c)
-	defer s.connMgr.Remove(c.ID())
+	defer func() {
+		// 连接关闭时清理用户位置
+		if c.UserID() > 0 {
+			s.redisClient.UnregisterUserLocation(ctx, c.UserID(), c.ID())
+			s.handler.SendUserOfflineToLogic(c)
+		}
+		s.connMgr.Remove(c.ID())
+	}()
 
-	s.logger.Info("New connection", zap.Int64("conn_id", c.ID()))
+	s.logger.Info("New WebTransport session", "conn_id", c.ID())
 
+	// 处理传入的双向流
 	for {
-		stream, err := conn.AcceptStream(ctx)
+		stream, err := session.AcceptStream(ctx)
 		if err != nil {
-			s.logger.Debug("Connection closed", zap.Int64("conn_id", c.ID()))
+			s.logger.Debug("Session closed", "conn_id", c.ID())
 			return
 		}
 		go s.handler.HandleStream(ctx, c, stream)
@@ -94,31 +122,53 @@ func (s *Server) handleConnection(ctx context.Context, conn quic.Connection) {
 
 func (s *Server) subscribeDownstream() {
 	nodeID := s.getNodeID()
-	subject := "im.access." + nodeID + ".downstream"
+	subject := sharedNats.BuildAccessDownstreamSubject(nodeID)
 
 	s.natsClient.Subscribe(subject, func(data []byte) {
 		s.handler.HandleDownstream(data)
 	})
 
-	s.logger.Info("Subscribed to downstream", zap.String("subject", subject))
+	// 订阅广播
+	s.natsClient.Subscribe(sharedNats.SubjectAccessBroadcast, func(data []byte) {
+		s.handler.HandleDownstream(data)
+	})
+
+	s.logger.Info("Subscribed to downstream", "subject", subject)
 }
 
 func (s *Server) getNodeID() string {
-	// TODO: 从配置或环境变量获取
+	if s.cfg.Server.NodeID != "" {
+		return s.cfg.Server.NodeID
+	}
 	return "access-1"
 }
 
-func (s *Server) generateTLSConfig() *tls.Config {
-	// TODO: 从配置加载证书
-	return &tls.Config{
-		NextProtos: []string{"im-access"},
-		MinVersion: tls.VersionTLS13,
+func (s *Server) loadTLSConfig() (*tls.Config, error) {
+	if s.cfg.QUIC.CertFile != "" && s.cfg.QUIC.KeyFile != "" {
+		cert, err := tls.LoadX509KeyPair(s.cfg.QUIC.CertFile, s.cfg.QUIC.KeyFile)
+		if err != nil {
+			return nil, err
+		}
+		return &tls.Config{
+			Certificates: []tls.Certificate{cert},
+			NextProtos:   []string{"h3", "webtransport"},
+			MinVersion:   tls.VersionTLS13,
+		}, nil
 	}
+
+	// 开发环境：生成自签名证书
+	s.logger.Warn("No TLS certificate configured, using self-signed certificate")
+	return generateSelfSignedTLSConfig()
+}
+
+// ConnManager 返回连接管理器
+func (s *Server) ConnManager() *connection.Manager {
+	return s.connMgr
 }
 
 func (s *Server) Shutdown() {
-	if s.listener != nil {
-		s.listener.Close()
+	if s.wtServer != nil {
+		s.wtServer.Close()
 	}
 	s.wg.Wait()
 }

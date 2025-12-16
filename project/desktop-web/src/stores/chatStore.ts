@@ -18,7 +18,24 @@ interface ChatState {
 }
 
 export const useChatStore = create<ChatState>((set) => ({
-    conversations: [],
+    conversations: [
+        {
+            id: '2',
+            name: '用户二',
+            avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=2',
+            lastMessage: '你好',
+            unreadCount: 0,
+            updatedAt: Date.now(),
+        },
+        {
+            id: '3',
+            name: '用户三',
+            avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=3',
+            lastMessage: '在吗？',
+            unreadCount: 1,
+            updatedAt: Date.now(),
+        }
+    ],
     activeConversationId: null,
 
     setActiveConversation: (id: string) => {

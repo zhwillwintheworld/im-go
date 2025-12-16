@@ -1,12 +1,12 @@
 package connection
 
 import (
+	"log/slog"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/quic-go/quic-go"
-	"go.uber.org/zap"
+	"github.com/quic-go/webtransport-go"
 )
 
 var connIDCounter int64
@@ -17,17 +17,17 @@ type Connection struct {
 	userID     int64
 	deviceID   string
 	platform   string
-	quicConn   quic.Connection
-	session    *Session
-	logger     *zap.Logger
+	session    *webtransport.Session
+	sessInfo   *SessionInfo
+	logger     *slog.Logger
 	writeChan  chan []byte
 	closeChan  chan struct{}
 	closeOnce  sync.Once
 	createTime time.Time
 }
 
-// Session 表示会话状态
-type Session struct {
+// SessionInfo 表示会话状态
+type SessionInfo struct {
 	UserID         int64
 	DeviceID       string
 	Platform       string
@@ -35,11 +35,11 @@ type Session struct {
 	LastActiveTime time.Time
 }
 
-func New(quicConn quic.Connection, logger *zap.Logger) *Connection {
+func NewFromWebTransport(session *webtransport.Session, logger *slog.Logger) *Connection {
 	id := atomic.AddInt64(&connIDCounter, 1)
 	c := &Connection{
 		id:         id,
-		quicConn:   quicConn,
+		session:    session,
 		logger:     logger,
 		writeChan:  make(chan []byte, 256),
 		closeChan:  make(chan struct{}),
@@ -57,14 +57,28 @@ func (c *Connection) UserID() int64 {
 	return c.userID
 }
 
-func (c *Connection) BindSession(session *Session) {
-	c.session = session
-	c.userID = session.UserID
-	c.deviceID = session.DeviceID
-	c.platform = session.Platform
+func (c *Connection) DeviceID() string {
+	return c.deviceID
 }
 
-func (c *Connection) Session() *Session {
+func (c *Connection) Platform() string {
+	return c.platform
+}
+
+func (c *Connection) BindSession(sessInfo *SessionInfo) {
+	c.sessInfo = sessInfo
+	c.userID = sessInfo.UserID
+	c.deviceID = sessInfo.DeviceID
+	c.platform = sessInfo.Platform
+	sessInfo.LoginTime = time.Now()
+	sessInfo.LastActiveTime = time.Now()
+}
+
+func (c *Connection) SessionInfo() *SessionInfo {
+	return c.sessInfo
+}
+
+func (c *Connection) WebTransportSession() *webtransport.Session {
 	return c.session
 }
 
@@ -81,13 +95,13 @@ func (c *Connection) writeLoop() {
 	for {
 		select {
 		case data := <-c.writeChan:
-			stream, err := c.quicConn.OpenUniStream()
+			stream, err := c.session.OpenUniStream()
 			if err != nil {
-				c.logger.Error("Failed to open stream", zap.Error(err))
+				c.logger.Error("Failed to open stream", "error", err)
 				continue
 			}
 			if _, err := stream.Write(data); err != nil {
-				c.logger.Error("Failed to write to stream", zap.Error(err))
+				c.logger.Error("Failed to write to stream", "error", err)
 			}
 			stream.Close()
 		case <-c.closeChan:
@@ -99,12 +113,16 @@ func (c *Connection) writeLoop() {
 func (c *Connection) Close() {
 	c.closeOnce.Do(func() {
 		close(c.closeChan)
-		c.quicConn.CloseWithError(0, "connection closed")
+		c.session.CloseWithError(0, "connection closed")
 	})
 }
 
 func (c *Connection) UpdateActive() {
-	if c.session != nil {
-		c.session.LastActiveTime = time.Now()
+	if c.sessInfo != nil {
+		c.sessInfo.LastActiveTime = time.Now()
 	}
+}
+
+func (c *Connection) CreateTime() time.Time {
+	return c.createTime
 }

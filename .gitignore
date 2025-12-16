@@ -12,6 +12,10 @@ tmp/
 *.tmp
 build/
 
+# Go 二进制文件
+project/**/bin/
+project/**/certs/
+
 # 通用日志文件
 *.log
 
