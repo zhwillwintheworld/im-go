@@ -95,7 +95,7 @@ func (c *Connection) writeLoop() {
 	for {
 		select {
 		case data := <-c.writeChan:
-			stream, err := c.session.OpenUniStream()
+			stream, err := c.session.OpenStream()
 			if err != nil {
 				c.logger.Error("Failed to open stream", "error", err)
 				continue

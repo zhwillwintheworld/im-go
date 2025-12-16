@@ -4,7 +4,7 @@
 # 需要先安装 flatc: brew install flatbuffers
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SCHEMA_FILE="${SCRIPT_DIR}/message.fbs"
+SCHEMA_FILE="${SCRIPT_DIR}/../../../schema/message.fbs"
 OUTPUT_DIR="${SCRIPT_DIR}/../pkg/flatbuf"
 
 # 检查 flatc 是否安装

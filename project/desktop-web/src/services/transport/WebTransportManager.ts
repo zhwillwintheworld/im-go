@@ -104,9 +104,9 @@ class WebTransportManager {
         }
 
         try {
-            // 使用单向流发送数据
-            const stream = await this.transport.createUnidirectionalStream();
-            const writer = stream.getWriter();
+            // 使用双向流发送数据 (Server 端的 AcceptStream 仅接受双向流)
+            const stream = await this.transport.createBidirectionalStream();
+            const writer = stream.writable.getWriter();
             await writer.write(data);
             await writer.close();
         } catch (error) {
@@ -183,15 +183,15 @@ class WebTransportManager {
         if (!this.transport) return;
 
         try {
-            // 接收服务器发起的单向流（用于推送消息）
-            const reader = this.transport.incomingUnidirectionalStreams.getReader();
+            // 接收服务器发起的流（改为双向流，不再使用单向流）
+            const reader = this.transport.incomingBidirectionalStreams.getReader();
 
             while (true) {
                 const { done, value: stream } = await reader.read();
                 if (done) break;
 
-                // 处理每个传入的流
-                this.handleIncomingStream(stream);
+                // 处理每个传入的流 (读取其 readable 部分)
+                this.handleIncomingStream(stream.readable);
             }
         } catch (error) {
             console.error('[WebTransport] Receive error:', error);

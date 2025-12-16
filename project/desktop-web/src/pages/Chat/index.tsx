@@ -1,3 +1,7 @@
+import * as flatbuffers from 'flatbuffers';
+import { AuthRequest } from '@/protocol/im/protocol/auth-request';
+import { Platform } from '@/protocol/im/protocol/platform';
+
 import { Layout, Avatar, Input, Button } from 'antd';
 import { SendOutlined } from '@ant-design/icons';
 import { useState, useMemo, useEffect } from 'react';
@@ -29,8 +33,23 @@ function Chat() {
                 // 开发环境自签名证书需要 Chrome 启动参数 --origin-to-force-quic-on=localhost:8443
                 await transportManager.connect('https://localhost:8443/webtransport');
 
-                // 发送认证请求 (内容暂时随意，服务端目前 hardcode 用户 ID 为 1)
-                const authBytes = IMProtocol.encode(MsgType.Auth, { token: "mock-token" });
+                // 发送认证请求 - 使用 FlatBuffers
+                const builder = new flatbuffers.Builder(1024);
+
+                const tokenOffset = builder.createString("mock-token");
+                const deviceIdOffset = builder.createString("device-1");
+                const appVersionOffset = builder.createString("1.0.0");
+
+                AuthRequest.startAuthRequest(builder);
+                AuthRequest.addToken(builder, tokenOffset);
+                AuthRequest.addDeviceId(builder, deviceIdOffset);
+                AuthRequest.addPlatform(builder, Platform.WEB);
+                AuthRequest.addAppVersion(builder, appVersionOffset);
+                const authReq = AuthRequest.endAuthRequest(builder);
+                builder.finish(authReq);
+
+                const buf = builder.asUint8Array();
+                const authBytes = IMProtocol.encode(MsgType.Auth, buf);
                 await transportManager.send(authBytes);
 
                 console.log('Connected and Authenticated');

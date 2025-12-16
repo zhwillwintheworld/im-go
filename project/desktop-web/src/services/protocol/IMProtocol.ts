@@ -15,10 +15,15 @@ export class IMProtocol {
     private static HEADER_SIZE = 6; // 4 bytes length + 2 bytes type
 
     static encode(msgType: MsgType, data: any): Uint8Array {
-        // 1. Serialize body to JSON string then to bytes
-        const jsonStr = JSON.stringify(data);
-        const encoder = new TextEncoder();
-        const bodyBytes = encoder.encode(jsonStr);
+        // 1. Serialize body
+        let bodyBytes: Uint8Array;
+        if (data instanceof Uint8Array) {
+            bodyBytes = data;
+        } else {
+            const jsonStr = JSON.stringify(data);
+            const encoder = new TextEncoder();
+            bodyBytes = encoder.encode(jsonStr);
+        }
 
         // 2. Create buffer
         const buffer = new ArrayBuffer(this.HEADER_SIZE + bodyBytes.length);

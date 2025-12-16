@@ -11,6 +11,7 @@ import (
 	"sudooom.im.access/internal/connection"
 	"sudooom.im.access/internal/nats"
 	"sudooom.im.access/internal/redis"
+	im_protocol "sudooom.im.access/pkg/flatbuf/im/protocol"
 	sharedNats "sudooom.im.shared/nats"
 	"sudooom.im.shared/proto"
 )
@@ -102,13 +103,23 @@ func (h *Handler) handleHeartbeat(ctx context.Context, conn *connection.Connecti
 func (h *Handler) handleAuth(ctx context.Context, conn *connection.Connection, stream *webtransport.Stream, body []byte) {
 	h.logger.Debug("Auth request received", "conn_id", conn.ID())
 
-	// TODO: 解析认证请求，验证 token
+	// 解析 FlatBuffers 消息
+	authReq := im_protocol.GetRootAsAuthRequest(body, 0)
+
+	token := string(authReq.Token())
+	deviceID := string(authReq.DeviceId())
+	platform := authReq.Platform()
+	// appVersion := string(authReq.AppVersion())
+
+	// TODO: 验证 token
 	// 这里简化处理，直接绑定用户
 	sessInfo := &connection.SessionInfo{
-		UserID:   1, // TODO: 从 token 解析
-		DeviceID: "device-1",
-		Platform: "web",
+		UserID:   1, // TODO: 从 token 解析，此处可以使用 token
+		DeviceID: deviceID,
+		Platform: platform.String(),
 	}
+	// 临时使用 token 避免未使用错误
+	_ = token
 	conn.BindSession(sessInfo)
 	h.connMgr.BindUser(conn.ID(), sessInfo.UserID)
 
