@@ -83,6 +83,13 @@ export class IMProtocol {
      * 创建认证请求帧
      */
     static createAuthRequest(token: string, deviceId: string, appVersion: string): Uint8Array {
+        console.log('[IMProtocol] Creating AuthRequest:', {
+            token: token.substring(0, 20) + '...',
+            deviceId,
+            platform: 'WEB',
+            appVersion
+        });
+
         const builder = new flatbuffers.Builder(256);
 
         const tokenOffset = builder.createString(token);
@@ -144,6 +151,16 @@ export class IMProtocol {
         msgType: MsgType,
         content: string
     ): { frame: Uint8Array; reqId: string } {
+        const reqId = generateReqId();
+
+        console.log('[IMProtocol] Creating ChatSendRequest:', {
+            reqId,
+            chatType: ChatType[chatType],
+            targetId,
+            msgType: MsgType[msgType],
+            content: content.length > 50 ? content.substring(0, 50) + '...' : content
+        });
+
         // 1. 构建 ChatSendReq payload
         const payloadBuilder = new flatbuffers.Builder(512);
         const targetIdOffset = payloadBuilder.createString(targetId);
@@ -160,7 +177,6 @@ export class IMProtocol {
 
         // 2. 构建 ClientRequest
         const builder = new flatbuffers.Builder(1024);
-        const reqId = generateReqId();
         const reqIdOffset = builder.createString(reqId);
         const payloadOffset = ClientRequest.createPayloadVector(builder, payloadBytes);
 
