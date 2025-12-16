@@ -28,10 +28,18 @@ function Chat() {
 
     // 初始化连接
     useEffect(() => {
+        let isMounted = true;
+
         const connect = async () => {
             try {
                 // 开发环境自签名证书需要 Chrome 启动参数 --origin-to-force-quic-on=localhost:8443
                 await transportManager.connect('https://localhost:8443/webtransport');
+
+                // 检查组件是否仍然挂载 (React Strict Mode 会导致双重挂载/卸载)
+                if (!isMounted) {
+                    console.log('[Chat] Component unmounted during connect, aborting');
+                    return;
+                }
 
                 // 发送认证请求 - 使用 FlatBuffers
                 const builder = new flatbuffers.Builder(1024);
@@ -55,13 +63,16 @@ function Chat() {
                 console.log('Connected and Authenticated');
                 initListener();
             } catch (err) {
-                console.error('Failed to connect:', err);
+                if (isMounted) {
+                    console.error('Failed to connect:', err);
+                }
             }
         };
 
         connect();
 
         return () => {
+            isMounted = false;
             transportManager.disconnect();
         };
     }, [initListener]);
