@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -15,7 +14,6 @@ import (
 
 	"sudooom.im.logic/internal/config"
 	"sudooom.im.logic/internal/handler"
-	"sudooom.im.logic/internal/health"
 	imNats "sudooom.im.logic/internal/nats"
 	"sudooom.im.logic/internal/service"
 )
@@ -83,10 +81,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	// 启动健康检查 HTTP 服务
-	healthChecker := health.NewChecker(natsClient.Conn(), redisClient, db)
-	go startHealthServer(healthChecker, logger)
-
 	logger.Info("Logic service started", "name", cfg.App.Name)
 
 	// 优雅退出
@@ -98,31 +92,6 @@ func main() {
 	cancel()
 	subscriber.Stop()
 	logger.Info("Logic service stopped")
-}
-
-// startHealthServer 启动健康检查 HTTP 服务
-func startHealthServer(healthChecker *health.Checker, logger *slog.Logger) {
-	mux := http.NewServeMux()
-	mux.Handle("/health", healthChecker)
-	mux.HandleFunc("/ready", func(w http.ResponseWriter, r *http.Request) {
-		if healthChecker.IsHealthy(r.Context()) {
-			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("OK"))
-		} else {
-			w.WriteHeader(http.StatusServiceUnavailable)
-			w.Write([]byte("Not Ready"))
-		}
-	})
-
-	server := &http.Server{
-		Addr:    ":8081",
-		Handler: mux,
-	}
-
-	logger.Info("Health check server started", "addr", server.Addr)
-	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		logger.Error("Health check server failed", "error", err)
-	}
 }
 
 // connectRedis 连接 Redis
