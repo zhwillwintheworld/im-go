@@ -5,7 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"sudooom.im.web/internal/jwt"
+	"sudooom.im.shared/jwt"
 	"sudooom.im.web/internal/repository"
 	"sudooom.im.web/internal/service"
 	"sudooom.im.web/pkg/response"

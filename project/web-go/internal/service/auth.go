@@ -6,7 +6,7 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
-	"sudooom.im.web/internal/jwt"
+	"sudooom.im.shared/jwt"
 	"sudooom.im.web/internal/model"
 	"sudooom.im.web/internal/repository"
 )

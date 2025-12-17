@@ -3,9 +3,9 @@ package router
 import (
 	"github.com/gin-gonic/gin"
 
+	"sudooom.im.shared/jwt"
 	"sudooom.im.web/internal/config"
 	"sudooom.im.web/internal/handler"
-	"sudooom.im.web/internal/jwt"
 	"sudooom.im.web/internal/middleware"
 )
 

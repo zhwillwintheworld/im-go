@@ -12,9 +12,9 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 
+	"sudooom.im.shared/jwt"
 	"sudooom.im.web/internal/config"
 	"sudooom.im.web/internal/handler"
-	"sudooom.im.web/internal/jwt"
 	"sudooom.im.web/internal/repository"
 	"sudooom.im.web/internal/router"
 	"sudooom.im.web/internal/service"
