@@ -38,14 +38,13 @@ func (h *UserHandler) GetProfile(c *gin.Context) {
 	}
 
 	response.Success(c, gin.H{
-		"id":         user.ID,
-		"username":   user.Username,
-		"nickname":   user.Nickname,
-		"avatar":     user.Avatar,
-		"phone":      user.Phone,
-		"email":      user.Email,
-		"status":     user.Status,
-		"created_at": user.CreatedAt,
+		"id":          user.ID,
+		"object_code": user.ObjectCode,
+		"username":    user.Username,
+		"nickname":    user.Nickname,
+		"avatar":      user.Avatar,
+		"status":      user.Status,
+		"create_at":   user.CreateAt,
 	})
 }
 

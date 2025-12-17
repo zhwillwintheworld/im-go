@@ -41,8 +41,8 @@ func (h *FriendHandler) GetFriendList(c *gin.Context) {
 			"username":   f.Username,
 			"nickname":   f.Nickname,
 			"avatar":     f.Avatar,
-			"remark":     f.Remark,
-			"created_at": f.CreatedAt,
+			"remark":    f.Remark,
+			"create_at": f.CreateAt,
 		})
 	}
 
@@ -104,8 +104,8 @@ func (h *FriendHandler) GetPendingRequests(c *gin.Context) {
 			"from_username": r.FromUsername,
 			"from_nickname": r.FromNickname,
 			"from_avatar":   r.FromAvatar,
-			"message":       r.Message,
-			"created_at":    r.CreatedAt,
+			"message":   r.Message,
+			"create_at": r.CreateAt,
 		})
 	}
 

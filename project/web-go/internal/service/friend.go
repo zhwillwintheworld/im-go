@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"sudooom.im.shared/snowflake"
 	"sudooom.im.web/internal/model"
 	"sudooom.im.web/internal/repository"
 )
@@ -22,13 +23,15 @@ type FriendRequestRequest struct {
 type FriendService struct {
 	friendRepo *repository.FriendRepository
 	userRepo   *repository.UserRepository
+	snowflake  *snowflake.Node
 }
 
 // NewFriendService 创建好友服务
-func NewFriendService(friendRepo *repository.FriendRepository, userRepo *repository.UserRepository) *FriendService {
+func NewFriendService(friendRepo *repository.FriendRepository, userRepo *repository.UserRepository, sf *snowflake.Node) *FriendService {
 	return &FriendService{
 		friendRepo: friendRepo,
 		userRepo:   userRepo,
+		snowflake:  sf,
 	}
 }
 
@@ -65,10 +68,11 @@ func (s *FriendService) SendRequest(ctx context.Context, userID int64, req *Frie
 
 	// 创建好友请求
 	request := &model.FriendRequest{
+		ObjectCode: s.snowflake.Generate().String(),
 		FromUserID: userID,
 		ToUserID:   req.FriendID,
 		Message:    req.Message,
-		Status:     model.FriendRequestPending,
+		Status:     model.FriendRequestStatusPending,
 	}
 	return s.friendRepo.CreateRequest(ctx, request)
 }
@@ -87,17 +91,19 @@ func (s *FriendService) AcceptRequest(ctx context.Context, userID, requestID int
 	}
 
 	// 验证状态
-	if request.Status != model.FriendRequestPending {
+	if request.Status != model.FriendRequestStatusPending {
 		return repository.ErrFriendRequestNotFound
 	}
 
 	// 更新请求状态
-	if err := s.friendRepo.UpdateRequestStatus(ctx, requestID, model.FriendRequestAccepted); err != nil {
+	if err := s.friendRepo.UpdateRequestStatus(ctx, requestID, model.FriendRequestStatusAccepted); err != nil {
 		return err
 	}
 
-	// 创建好友关系
-	return s.friendRepo.CreateFriendship(ctx, userID, request.FromUserID)
+	// 创建好友关系（双向，需要两个 object_code）
+	userObjectCode := s.snowflake.Generate().String()
+	friendObjectCode := s.snowflake.Generate().String()
+	return s.friendRepo.CreateFriendship(ctx, userObjectCode, friendObjectCode, userID, request.FromUserID)
 }
 
 // RejectRequest 拒绝好友请求
@@ -114,11 +120,11 @@ func (s *FriendService) RejectRequest(ctx context.Context, userID, requestID int
 	}
 
 	// 验证状态
-	if request.Status != model.FriendRequestPending {
+	if request.Status != model.FriendRequestStatusPending {
 		return repository.ErrFriendRequestNotFound
 	}
 
-	return s.friendRepo.UpdateRequestStatus(ctx, requestID, model.FriendRequestRejected)
+	return s.friendRepo.UpdateRequestStatus(ctx, requestID, model.FriendRequestStatusRejected)
 }
 
 // DeleteFriend 删除好友

@@ -7,6 +7,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	"sudooom.im.shared/jwt"
+	"sudooom.im.shared/snowflake"
 	"sudooom.im.web/internal/model"
 	"sudooom.im.web/internal/repository"
 )
@@ -21,8 +22,6 @@ type RegisterRequest struct {
 	Username string `json:"username" binding:"required,min=3,max=50"`
 	Password string `json:"password" binding:"required,min=6,max=50"`
 	Nickname string `json:"nickname" binding:"required,min=1,max=50"`
-	Phone    string `json:"phone"`
-	Email    string `json:"email"`
 }
 
 // LoginRequest 登录请求
@@ -36,6 +35,7 @@ type LoginRequest struct {
 // LoginResponse 登录响应
 type LoginResponse struct {
 	UserID       int64  `json:"user_id"`
+	ObjectCode   string `json:"object_code"`
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
 	ExpiresAt    int64  `json:"expires_at"`
@@ -45,13 +45,15 @@ type LoginResponse struct {
 type AuthService struct {
 	userRepo   *repository.UserRepository
 	jwtService *jwt.Service
+	snowflake  *snowflake.Node
 }
 
 // NewAuthService 创建认证服务
-func NewAuthService(userRepo *repository.UserRepository, jwtService *jwt.Service) *AuthService {
+func NewAuthService(userRepo *repository.UserRepository, jwtService *jwt.Service, sf *snowflake.Node) *AuthService {
 	return &AuthService{
 		userRepo:   userRepo,
 		jwtService: jwtService,
+		snowflake:  sf,
 	}
 }
 
@@ -72,12 +74,14 @@ func (s *AuthService) Register(ctx context.Context, req *RegisterRequest) (*mode
 		return nil, err
 	}
 
+	// 生成雪花ID
+	objectCode := s.snowflake.Generate().String()
+
 	user := &model.User{
+		ObjectCode:   objectCode,
 		Username:     req.Username,
 		PasswordHash: string(passwordHash),
 		Nickname:     req.Nickname,
-		Phone:        req.Phone,
-		Email:        req.Email,
 		Status:       model.UserStatusNormal,
 	}
 
@@ -117,6 +121,7 @@ func (s *AuthService) Login(ctx context.Context, req *LoginRequest) (*LoginRespo
 
 	return &LoginResponse{
 		UserID:       user.ID,
+		ObjectCode:   user.ObjectCode,
 		AccessToken:  tokenPair.AccessToken,
 		RefreshToken: tokenPair.RefreshToken,
 		ExpiresAt:    tokenPair.ExpiresAt,
@@ -150,6 +155,7 @@ func (s *AuthService) RefreshToken(ctx context.Context, refreshToken string) (*L
 
 	return &LoginResponse{
 		UserID:       user.ID,
+		ObjectCode:   user.ObjectCode,
 		AccessToken:  tokenPair.AccessToken,
 		RefreshToken: tokenPair.RefreshToken,
 		ExpiresAt:    tokenPair.ExpiresAt,

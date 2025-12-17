@@ -13,6 +13,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"sudooom.im.shared/jwt"
+	"sudooom.im.shared/snowflake"
 	"sudooom.im.web/internal/config"
 	"sudooom.im.web/internal/handler"
 	"sudooom.im.web/internal/repository"
@@ -59,14 +60,21 @@ func main() {
 		cfg.JWT.RefreshExpire,
 	)
 
+	// 初始化雪花ID生成器
+	sfNode, err := snowflake.NewNode(1)
+	if err != nil {
+		logger.Error("Failed to create snowflake node", "error", err)
+		os.Exit(1)
+	}
+
 	// 初始化 Repository
 	userRepo := repository.NewUserRepository(db)
 	friendRepo := repository.NewFriendRepository(db)
 
 	// 初始化 Service
-	authService := service.NewAuthService(userRepo, jwtService)
+	authService := service.NewAuthService(userRepo, jwtService, sfNode)
 	userService := service.NewUserService(userRepo)
-	friendService := service.NewFriendService(friendRepo, userRepo)
+	friendService := service.NewFriendService(friendRepo, userRepo, sfNode)
 
 	// 初始化 Handler
 	authHandler := handler.NewAuthHandler(authService)
