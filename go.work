@@ -4,4 +4,5 @@ use (
 	./project/access-go
 	./project/logic-go
 	./project/shared
+	./project/web-go
 )
