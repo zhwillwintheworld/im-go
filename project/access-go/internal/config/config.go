@@ -4,6 +4,8 @@ import (
 	"os"
 	"time"
 
+	sharedConfig "sudooom.im.shared/config"
+
 	"gopkg.in/yaml.v3"
 )
 
@@ -41,6 +43,8 @@ type NATSConfig struct {
 }
 
 type RedisConfig struct {
+	Host     string `yaml:"host"`
+	Port     int    `yaml:"port"`
 	Addr     string `yaml:"addr"`
 	Password string `yaml:"password"`
 	DB       int    `yaml:"db"`
@@ -68,5 +72,42 @@ func Load(path string) (*Config, error) {
 		return nil, err
 	}
 
+	// 从环境变量覆盖配置
+	cfg.applyEnv()
+
 	return &cfg, nil
+}
+
+// applyEnv 从环境变量覆盖配置
+func (c *Config) applyEnv() {
+	// NATS
+	c.NATS.URL = sharedConfig.GetEnv("NATS_URL", c.NATS.URL)
+	c.NATS.MaxReconnects = sharedConfig.GetEnvInt("NATS_MAX_RECONNECTS", c.NATS.MaxReconnects)
+	c.NATS.ReconnectWait = sharedConfig.GetEnvDuration("NATS_RECONNECT_WAIT", c.NATS.ReconnectWait)
+
+	// Redis
+	c.Redis.Host = sharedConfig.GetEnv("REDIS_HOST", c.Redis.Host)
+	c.Redis.Port = sharedConfig.GetEnvInt("REDIS_PORT", c.Redis.Port)
+	c.Redis.Password = sharedConfig.GetEnv("REDIS_PASSWORD", c.Redis.Password)
+	c.Redis.DB = sharedConfig.GetEnvInt("REDIS_DB", c.Redis.DB)
+	c.Redis.PoolSize = sharedConfig.GetEnvInt("REDIS_POOL_SIZE", c.Redis.PoolSize)
+
+	// 组装 Redis addr
+	if c.Redis.Host != "" && c.Redis.Port > 0 {
+		c.Redis.Addr = c.Redis.Host + ":" + sharedConfig.GetEnv("REDIS_PORT", "6379")
+	}
+	if c.Redis.Addr == "" {
+		c.Redis.Addr = sharedConfig.GetEnv("REDIS_HOST", "localhost") + ":" + sharedConfig.GetEnv("REDIS_PORT", "6379")
+	}
+
+	// Auth/JWT
+	c.Auth.TokenSecret = sharedConfig.GetEnv("JWT_SECRET", c.Auth.TokenSecret)
+
+	// TLS
+	c.QUIC.CertFile = sharedConfig.GetEnv("TLS_CERT_FILE", c.QUIC.CertFile)
+	c.QUIC.KeyFile = sharedConfig.GetEnv("TLS_KEY_FILE", c.QUIC.KeyFile)
+
+	// Logging
+	c.Logging.Level = sharedConfig.GetEnv("LOG_LEVEL", c.Logging.Level)
+	c.Logging.Format = sharedConfig.GetEnv("LOG_FORMAT", c.Logging.Format)
 }

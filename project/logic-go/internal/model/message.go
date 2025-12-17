@@ -6,29 +6,43 @@ import "time"
 type MessageType int
 
 const (
-	MessageTypeText  MessageType = 1
-	MessageTypeImage MessageType = 2
-	MessageTypeFile  MessageType = 3
-	MessageTypeVoice MessageType = 4
-	MessageTypeVideo MessageType = 5
+    MessageTypeText  MessageType = 1 // 文本
+    MessageTypeImage MessageType = 2 // 图片
+    MessageTypeVoice MessageType = 3 // 语音
+    MessageTypeVideo MessageType = 4 // 视频
+    MessageTypeFile  MessageType = 5 // 文件
+)
+
+// MessageStatus 消息状态
+const (
+    MessageStatusNormal    = 0 // 正常
+    MessageStatusRecalled  = 1 // 已撤回
+    MessageStatusDeleted   = 2 // 已删除
 )
 
 // Message 消息实体
 type Message struct {
-	Id          int64       `json:"id"`
-	ClientMsgId string      `json:"clientMsgId"`
-	FromUserId  int64       `json:"fromUserId"`
-	ToUserId    int64       `json:"toUserId"`
-	ToGroupId   int64       `json:"toGroupId"`
-	MsgType     MessageType `json:"msgType"`
-	Content     string      `json:"content"`
-	Status      int         `json:"status"`
-	CreatedAt   time.Time   `json:"createdAt"`
+    Id          int64       `json:"id" db:"id"`
+    ObjectCode  string      `json:"objectCode" db:"object_code"`
+    ClientMsgId string      `json:"clientMsgId" db:"client_msg_id"`
+    FromUserId  int64       `json:"fromUserId" db:"from_user_id"`
+    ToUserId    *int64      `json:"toUserId" db:"to_user_id"`
+    ToGroupId   *int64      `json:"toGroupId" db:"to_group_id"`
+    MsgType     MessageType `json:"msgType" db:"msg_type"`
+    Content     []byte      `json:"content" db:"content"`
+    Status      int         `json:"status" db:"status"`
+    CreateAt    time.Time   `json:"createAt" db:"create_at"`
+    UpdateAt    time.Time   `json:"updateAt" db:"update_at"`
+    Deleted     int         `json:"-" db:"deleted"`
 }
 
 // OfflineMessage 离线消息
 type OfflineMessage struct {
-	UserId    int64     `json:"userId"`
-	MessageId int64     `json:"messageId"`
-	CreatedAt time.Time `json:"createdAt"`
+    Id         int64     `json:"id" db:"id"`
+    ObjectCode string    `json:"objectCode" db:"object_code"`
+    UserId     int64     `json:"userId" db:"user_id"`
+    MessageId  int64     `json:"messageId" db:"message_id"`
+    CreateAt   time.Time `json:"createAt" db:"create_at"`
+    UpdateAt   time.Time `json:"updateAt" db:"update_at"`
+    Deleted    int       `json:"-" db:"deleted"`
 }

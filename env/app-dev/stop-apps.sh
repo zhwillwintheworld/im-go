@@ -71,6 +71,10 @@ kill_process "access-go" "Access-Go (Binary)"
 kill_process "cmd/logic/main.go" "Logic-Go (Source)"
 kill_process "logic-go" "Logic-Go (Binary)"
 
+# 停止 Web-Go
+kill_process "cmd/web/main.go" "Web-Go (Source)"
+kill_process "web-go" "Web-Go (Binary)"
+
 # 停止 Desktop Web (Vite)
 kill_process "vite" "Desktop Web (Vite)"
 kill_process "npm run dev" "Desktop Web (NPM)"
@@ -139,6 +143,12 @@ else
     log_info "Logic 进程 ✓ 已停止"
 fi
 
+if pgrep -f "web-go\|cmd/web" > /dev/null; then
+    log_warn "Web 进程可能仍在运行"
+else
+    log_info "Web 进程 ✓ 已停止"
+fi
+
 if pgrep -f "vite" > /dev/null; then
     log_warn "Desktop 进程可能仍在运行"
 else
@@ -149,6 +159,7 @@ echo ""
 check_port 8443 "Access QUIC"
 check_port 8080 "Access HTTP"
 check_port 8081 "Logic HTTP"
+check_port 8082 "Web API"
 check_port 3000 "Desktop Web"
 
 echo ""

@@ -67,6 +67,10 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
     osascript -e "tell application \"Terminal\" to do script \"cd '${SCRIPT_DIR}' && ./start-logic.sh\""
     sleep 2
 
+    # 启动 Web
+    osascript -e "tell application \"Terminal\" to do script \"cd '${SCRIPT_DIR}' && ./start-web.sh\""
+    sleep 2
+
     # 启动 Access
     osascript -e "tell application \"Terminal\" to do script \"cd '${SCRIPT_DIR}' && ./start-access.sh\""
     sleep 2
@@ -82,6 +86,8 @@ else
         tmux new-session -d -s im-services
         tmux send-keys -t im-services "${SCRIPT_DIR}/start-logic.sh" C-m
         tmux split-window -h -t im-services
+        tmux send-keys -t im-services "${SCRIPT_DIR}/start-web.sh" C-m
+        tmux split-window -v -t im-services
         tmux send-keys -t im-services "${SCRIPT_DIR}/start-access.sh" C-m
         tmux split-window -v -t im-services
         tmux send-keys -t im-services "${SCRIPT_DIR}/start-desktop.sh" C-m
@@ -90,8 +96,9 @@ else
         log_warn "未检测到 tmux，请手动在不同终端中启动服务"
         echo ""
         echo "  终端1: ./start-logic.sh"
-        echo "  终端2: ./start-access.sh"
-        echo "  终端3: ./start-desktop.sh"
+        echo "  终端2: ./start-web.sh"
+        echo "  终端3: ./start-access.sh"
+        echo "  终端4: ./start-desktop.sh"
         exit 0
     fi
 fi
@@ -101,8 +108,8 @@ echo "=========================================="
 log_info "所有服务已启动!"
 echo ""
 echo "服务地址:"
-echo "  - Access QUIC:     :8443"
-echo "  - Access 健康检查: http://localhost:8080/health"
-echo "  - Logic 健康检查:  http://localhost:8081/health"
-echo "  - Desktop Web:     http://localhost:5173"
+echo "  - Access QUIC: :8443"
+echo "  - Logic:       :8081"
+echo "  - Web API:     :8082"
+echo "  - Desktop Web: :5173"
 echo "=========================================="

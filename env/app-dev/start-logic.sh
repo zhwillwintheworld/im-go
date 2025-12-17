@@ -4,6 +4,7 @@
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="${SCRIPT_DIR}/../../project/logic-go"
+ENV_FILE="${SCRIPT_DIR}/../.env-dev"
 
 # 颜色输出
 GREEN='\033[0;32m'
@@ -16,8 +17,15 @@ log_info() {
 
 cd "${PROJECT_DIR}"
 
+# 加载环境变量
+if [ -f "${ENV_FILE}" ]; then
+    set -a
+    source "${ENV_FILE}"
+    set +a
+    log_info "已加载环境变量: ${ENV_FILE}"
+fi
+
 log_info "启动 Logic-Go 服务..."
-log_info "健康检查: http://localhost:8081/health"
 echo ""
 
 go run cmd/logic/main.go
