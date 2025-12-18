@@ -9,6 +9,9 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m'
 
+# 获取脚本所在目录
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 log_info() {
     echo -e "${GREEN}[INFO]${NC} $1"
 }
@@ -161,6 +164,39 @@ check_port 8080 "Access HTTP"
 check_port 8081 "Logic HTTP"
 check_port 8082 "Web API"
 check_port 3000 "Desktop Web"
+
+# 关闭 macOS Terminal 窗口
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    echo ""
+    log_info "关闭服务终端窗口..."
+
+    # 使用 AppleScript 关闭包含特定脚本的终端窗口
+    osascript <<EOF
+tell application "Terminal"
+    set windowsToClose to {}
+    repeat with w in windows
+        repeat with t in tabs of w
+            set tabProcess to processes of t
+            set tabHistory to history of t
+            -- 检查窗口是否包含服务启动脚本
+            if tabHistory contains "start-logic.sh" or ¬
+               tabHistory contains "start-access.sh" or ¬
+               tabHistory contains "start-web.sh" or ¬
+               tabHistory contains "start-desktop.sh" then
+                set end of windowsToClose to w
+                exit repeat
+            end if
+        end repeat
+    end repeat
+    -- 关闭匹配的窗口
+    repeat with w in windowsToClose
+        close w
+    end repeat
+end tell
+EOF
+
+    log_info "终端窗口已关闭 ✓"
+fi
 
 echo ""
 echo "=========================================="
