@@ -44,14 +44,16 @@ type LoginResponse struct {
 // AuthService 认证服务
 type AuthService struct {
 	userRepo   *repository.UserRepository
+	tokenRepo  *repository.TokenRepository
 	jwtService *jwt.Service
 	snowflake  *snowflake.Node
 }
 
 // NewAuthService 创建认证服务
-func NewAuthService(userRepo *repository.UserRepository, jwtService *jwt.Service, sf *snowflake.Node) *AuthService {
+func NewAuthService(userRepo *repository.UserRepository, tokenRepo *repository.TokenRepository, jwtService *jwt.Service, sf *snowflake.Node) *AuthService {
 	return &AuthService{
 		userRepo:   userRepo,
+		tokenRepo:  tokenRepo,
 		jwtService: jwtService,
 		snowflake:  sf,
 	}
@@ -116,6 +118,25 @@ func (s *AuthService) Login(ctx context.Context, req *LoginRequest) (*LoginRespo
 	// 生成 Token
 	tokenPair, err := s.jwtService.GenerateTokenPair(user.ID, req.DeviceID, jwt.Platform(req.Platform))
 	if err != nil {
+		return nil, err
+	}
+
+	// 删除旧Token（同一用户同一平台只保留一个Token）
+	if err := s.tokenRepo.DeleteOldToken(ctx, user.ID, req.Platform); err != nil {
+		return nil, err
+	}
+
+	// 存储Token到Redis
+	userTokenInfo := &repository.UserTokenInfo{
+		UserID:     user.ID,
+		ObjectCode: user.ObjectCode,
+		Username:   user.Username,
+		Nickname:   user.Nickname,
+		Avatar:     user.Avatar,
+		DeviceID:   req.DeviceID,
+		Platform:   req.Platform,
+	}
+	if err := s.tokenRepo.SaveToken(ctx, userTokenInfo, tokenPair.AccessToken, s.jwtService.GetAccessExpire()); err != nil {
 		return nil, err
 	}
 

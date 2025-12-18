@@ -83,9 +83,10 @@ func main() {
 	// 初始化 Repository
 	userRepo := repository.NewUserRepository(db)
 	friendRepo := repository.NewFriendRepository(db)
+	tokenRepo := repository.NewTokenRepository(redisClient)
 
 	// 初始化 Service
-	authService := service.NewAuthService(userRepo, jwtService, sfNode)
+	authService := service.NewAuthService(userRepo, tokenRepo, jwtService, sfNode)
 	userService := service.NewUserService(userRepo)
 	friendService := service.NewFriendService(friendRepo, userRepo, sfNode)
 

@@ -114,6 +114,11 @@ func (s *Service) ValidateRefreshToken(tokenString string) (*Claims, error) {
 	return s.validateToken(tokenString, RefreshToken)
 }
 
+// GetAccessExpire 获取 AccessToken 过期时长
+func (s *Service) GetAccessExpire() time.Duration {
+	return s.accessExpire
+}
+
 // validateToken 验证 Token
 func (s *Service) validateToken(tokenString string, expectedType TokenType) (*Claims, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
