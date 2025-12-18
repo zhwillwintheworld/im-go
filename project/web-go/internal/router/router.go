@@ -2,6 +2,8 @@ package router
 
 import (
 	"github.com/gin-gonic/gin"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 
 	"sudooom.im.shared/jwt"
 	"sudooom.im.web/internal/config"
@@ -29,6 +31,9 @@ func SetupRouter(
 		cfg.CORS.AllowedMethods,
 		cfg.CORS.AllowCredentials,
 	))
+
+	// Swagger 文档路由
+	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	// API v1
 	v1 := r.Group("/api/v1")

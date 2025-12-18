@@ -1,5 +1,16 @@
 package main
 
+// @title           IM Web API
+// @version         1.0
+// @description     IM 即时通讯 Web 服务 API
+
+// @host            localhost:8080
+// @BasePath        /api/v1
+
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+
 import (
 	"context"
 	"fmt"
@@ -19,6 +30,8 @@ import (
 	"sudooom.im.web/internal/repository"
 	"sudooom.im.web/internal/router"
 	"sudooom.im.web/internal/service"
+
+	_ "sudooom.im.web/docs" // Swagger docs
 )
 
 func main() {

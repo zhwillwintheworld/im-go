@@ -39,9 +39,14 @@ container_exists() {
     podman ps -a --format "{{.Names}}" | grep -q "^${CONTAINER_NAME}$"
 }
 
-# 检查容器是否运行中
-container_running() {
-    podman ps --format "{{.Names}}" | grep -q "^${CONTAINER_NAME}$"
+# 删除旧容器
+remove_container() {
+    if container_exists; then
+        log_warn "删除旧容器: ${CONTAINER_NAME}"
+        podman stop "${CONTAINER_NAME}" 2>/dev/null
+        podman rm "${CONTAINER_NAME}" 2>/dev/null
+        log_info "旧容器已删除"
+    fi
 }
 
 # 创建并启动容器
@@ -61,38 +66,28 @@ create_container() {
     fi
 }
 
-# 启动已存在的容器
-start_container() {
-    log_info "启动已存在的 Redis 容器: ${CONTAINER_NAME}"
-    podman start "${CONTAINER_NAME}"
-
-    if [ $? -eq 0 ]; then
-        log_info "Redis 容器启动成功"
-    else
-        log_error "Redis 容器启动失败"
-        exit 1
-    fi
-}
-
 # 主逻辑
 main() {
-    log_info "检查 Redis 开发环境..."
+    echo ""
+    echo "=========================================="
+    echo "     Redis 开发环境初始化"
+    echo "=========================================="
+    echo ""
 
     check_podman
 
-    if container_exists; then
-        if container_running; then
-            log_info "Redis 容器已在运行中"
-        else
-            log_warn "Redis 容器存在但未运行"
-            start_container
-        fi
-    else
-        log_warn "Redis 容器不存在"
-        create_container
-    fi
+    # 删除旧容器，重新创建
+    remove_container
+    create_container
 
+    echo ""
+    echo "=========================================="
     log_info "Redis 开发环境就绪!"
+    echo ""
+    echo "连接信息:"
+    echo "  Host: localhost"
+    echo "  Port: ${REDIS_PORT}"
+    echo "=========================================="
 }
 
 main "$@"

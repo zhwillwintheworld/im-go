@@ -23,7 +23,14 @@ func NewFriendHandler(friendService *service.FriendService) *FriendHandler {
 }
 
 // GetFriendList 获取好友列表
-// GET /api/v1/friends
+// @Summary      获取好友列表
+// @Description  获取当前用户的好友列表
+// @Tags         好友
+// @Produce      json
+// @Security     BearerAuth
+// @Success      200  {object}  response.Response{data=object{list=[]object{id=int64,friend_id=int64,username=string,nickname=string,avatar=string,remark=string,create_at=time.Time}}}
+// @Failure      200  {object}  response.Response
+// @Router       /friends [get]
 func (h *FriendHandler) GetFriendList(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 
@@ -36,11 +43,11 @@ func (h *FriendHandler) GetFriendList(c *gin.Context) {
 	var result []gin.H
 	for _, f := range friends {
 		result = append(result, gin.H{
-			"id":         f.ID,
-			"friend_id":  f.FriendID,
-			"username":   f.Username,
-			"nickname":   f.Nickname,
-			"avatar":     f.Avatar,
+			"id":        f.ID,
+			"friend_id": f.FriendID,
+			"username":  f.Username,
+			"nickname":  f.Nickname,
+			"avatar":    f.Avatar,
 			"remark":    f.Remark,
 			"create_at": f.CreateAt,
 		})
@@ -50,7 +57,16 @@ func (h *FriendHandler) GetFriendList(c *gin.Context) {
 }
 
 // SendRequest 发送好友请求
-// POST /api/v1/friends/request
+// @Summary      发送好友请求
+// @Description  向指定用户发送好友请求
+// @Tags         好友
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        request body service.FriendRequestRequest true "好友请求信息"
+// @Success      200  {object}  response.Response
+// @Failure      200  {object}  response.Response
+// @Router       /friends/request [post]
 func (h *FriendHandler) SendRequest(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 
@@ -86,7 +102,14 @@ func (h *FriendHandler) SendRequest(c *gin.Context) {
 }
 
 // GetPendingRequests 获取待处理的好友请求
-// GET /api/v1/friends/requests
+// @Summary      获取待处理的好友请求
+// @Description  获取发送给当前用户的待处理好友请求
+// @Tags         好友
+// @Produce      json
+// @Security     BearerAuth
+// @Success      200  {object}  response.Response{data=object{list=[]object{id=int64,from_user_id=int64,from_username=string,from_nickname=string,from_avatar=string,message=string,create_at=time.Time}}}
+// @Failure      200  {object}  response.Response
+// @Router       /friends/requests [get]
 func (h *FriendHandler) GetPendingRequests(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 
@@ -104,8 +127,8 @@ func (h *FriendHandler) GetPendingRequests(c *gin.Context) {
 			"from_username": r.FromUsername,
 			"from_nickname": r.FromNickname,
 			"from_avatar":   r.FromAvatar,
-			"message":   r.Message,
-			"create_at": r.CreateAt,
+			"message":       r.Message,
+			"create_at":     r.CreateAt,
 		})
 	}
 
@@ -113,7 +136,15 @@ func (h *FriendHandler) GetPendingRequests(c *gin.Context) {
 }
 
 // AcceptRequest 接受好友请求
-// POST /api/v1/friends/accept/:id
+// @Summary      接受好友请求
+// @Description  接受指定的好友请求
+// @Tags         好友
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id path int true "好友请求 ID"
+// @Success      200  {object}  response.Response
+// @Failure      200  {object}  response.Response
+// @Router       /friends/accept/{id} [post]
 func (h *FriendHandler) AcceptRequest(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 
@@ -136,7 +167,15 @@ func (h *FriendHandler) AcceptRequest(c *gin.Context) {
 }
 
 // RejectRequest 拒绝好友请求
-// POST /api/v1/friends/reject/:id
+// @Summary      拒绝好友请求
+// @Description  拒绝指定的好友请求
+// @Tags         好友
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id path int true "好友请求 ID"
+// @Success      200  {object}  response.Response
+// @Failure      200  {object}  response.Response
+// @Router       /friends/reject/{id} [post]
 func (h *FriendHandler) RejectRequest(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 
@@ -159,7 +198,15 @@ func (h *FriendHandler) RejectRequest(c *gin.Context) {
 }
 
 // DeleteFriend 删除好友
-// DELETE /api/v1/friends/:id
+// @Summary      删除好友
+// @Description  删除指定的好友关系
+// @Tags         好友
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id path int true "好友用户 ID"
+// @Success      200  {object}  response.Response
+// @Failure      200  {object}  response.Response
+// @Router       /friends/{id} [delete]
 func (h *FriendHandler) DeleteFriend(c *gin.Context) {
 	userID := middleware.GetUserID(c)
 

@@ -22,7 +22,15 @@ func NewAuthHandler(authService *service.AuthService) *AuthHandler {
 }
 
 // Register 用户注册
-// POST /api/v1/auth/register
+// @Summary      用户注册
+// @Description  创建新用户账号
+// @Tags         认证
+// @Accept       json
+// @Produce      json
+// @Param        request body service.RegisterRequest true "注册信息"
+// @Success      200  {object}  response.Response{data=object{user_id=int64,username=string,nickname=string}}
+// @Failure      200  {object}  response.Response
+// @Router       /auth/register [post]
 func (h *AuthHandler) Register(c *gin.Context) {
 	var req service.RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -48,7 +56,15 @@ func (h *AuthHandler) Register(c *gin.Context) {
 }
 
 // Login 用户登录
-// POST /api/v1/auth/login
+// @Summary      用户登录
+// @Description  用户登录获取 Token
+// @Tags         认证
+// @Accept       json
+// @Produce      json
+// @Param        request body service.LoginRequest true "登录信息"
+// @Success      200  {object}  response.Response{data=service.LoginResponse}
+// @Failure      200  {object}  response.Response
+// @Router       /auth/login [post]
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req service.LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -74,14 +90,29 @@ func (h *AuthHandler) Login(c *gin.Context) {
 }
 
 // Logout 用户登出
-// POST /api/v1/auth/logout
+// @Summary      用户登出
+// @Description  用户登出，Token 失效
+// @Tags         认证
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Success      200  {object}  response.Response
+// @Router       /auth/logout [post]
 func (h *AuthHandler) Logout(c *gin.Context) {
 	// TODO: 将 Token 加入黑名单
 	response.Success(c, nil)
 }
 
 // RefreshToken 刷新 Token
-// POST /api/v1/auth/refresh
+// @Summary      刷新 Token
+// @Description  使用 refresh_token 获取新的 access_token
+// @Tags         认证
+// @Accept       json
+// @Produce      json
+// @Param        request body object{refresh_token=string} true "刷新 Token"
+// @Success      200  {object}  response.Response{data=service.LoginResponse}
+// @Failure      200  {object}  response.Response
+// @Router       /auth/refresh [post]
 func (h *AuthHandler) RefreshToken(c *gin.Context) {
 	var req struct {
 		RefreshToken string `json:"refresh_token" binding:"required"`

@@ -48,11 +48,6 @@ container_exists() {
     podman ps -a --format "{{.Names}}" | grep -q "^${CONTAINER_NAME}$"
 }
 
-# 检查容器是否运行中
-container_running() {
-    podman ps --format "{{.Names}}" | grep -q "^${CONTAINER_NAME}$"
-}
-
 # 删除旧容器
 remove_container() {
     if container_exists; then
