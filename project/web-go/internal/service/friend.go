@@ -15,8 +15,8 @@ var (
 
 // FriendRequestRequest 好友请求
 type FriendRequestRequest struct {
-	FriendID int64  `json:"friend_id" binding:"required"`
-	Message  string `json:"message"`
+	FriendID int64  `json:"friend_id" binding:"required" example:"2"` // 好友用户ID
+	Message  string `json:"message" example:"你好，我是张三"`                // 验证消息
 }
 
 // FriendService 好友服务

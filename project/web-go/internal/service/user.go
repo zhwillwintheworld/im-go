@@ -9,8 +9,8 @@ import (
 
 // UpdateProfileRequest 更新资料请求
 type UpdateProfileRequest struct {
-	Nickname string `json:"nickname"`
-	Avatar   string `json:"avatar"`
+	Nickname string `json:"nickname" example:"张三"`                           // 昵称
+	Avatar   string `json:"avatar" example:"https://example.com/avatar.png"` // 头像URL
 }
 
 // UserService 用户服务

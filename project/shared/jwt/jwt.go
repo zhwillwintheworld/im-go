@@ -20,10 +20,20 @@ const (
 	RefreshToken TokenType = "refresh"
 )
 
+// Platform 平台类型
+type Platform string
+
+const (
+	PlatformPC          Platform = "pc"           // PC 客户端
+	PlatformMiniProgram Platform = "mini_program" // 小程序
+	PlatformApp         Platform = "app"          // 移动端 App
+)
+
 // Claims JWT 声明
 type Claims struct {
 	UserID    int64     `json:"user_id"`
 	DeviceID  string    `json:"device_id"`
+	Platform  Platform  `json:"platform"`
 	TokenType TokenType `json:"token_type"`
 	jwt.RegisteredClaims
 }
@@ -52,19 +62,19 @@ func NewService(secretKey string, accessExpire, refreshExpire time.Duration) *Se
 }
 
 // GenerateTokenPair 生成 Token 对
-func (s *Service) GenerateTokenPair(userID int64, deviceID string) (*TokenPair, error) {
+func (s *Service) GenerateTokenPair(userID int64, deviceID string, platform Platform) (*TokenPair, error) {
 	now := time.Now()
 	accessExpiresAt := now.Add(s.accessExpire)
 	refreshExpiresAt := now.Add(s.refreshExpire)
 
 	// 生成 Access Token
-	accessToken, err := s.generateToken(userID, deviceID, AccessToken, accessExpiresAt)
+	accessToken, err := s.generateToken(userID, deviceID, platform, AccessToken, accessExpiresAt)
 	if err != nil {
 		return nil, err
 	}
 
 	// 生成 Refresh Token
-	refreshToken, err := s.generateToken(userID, deviceID, RefreshToken, refreshExpiresAt)
+	refreshToken, err := s.generateToken(userID, deviceID, platform, RefreshToken, refreshExpiresAt)
 	if err != nil {
 		return nil, err
 	}
@@ -77,10 +87,11 @@ func (s *Service) GenerateTokenPair(userID int64, deviceID string) (*TokenPair, 
 }
 
 // generateToken 生成单个 Token
-func (s *Service) generateToken(userID int64, deviceID string, tokenType TokenType, expiresAt time.Time) (string, error) {
+func (s *Service) generateToken(userID int64, deviceID string, platform Platform, tokenType TokenType, expiresAt time.Time) (string, error) {
 	claims := &Claims{
 		UserID:    userID,
 		DeviceID:  deviceID,
+		Platform:  platform,
 		TokenType: tokenType,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expiresAt),

@@ -35,7 +35,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/sudooom_im_web_internal_service.LoginRequest"
+                            "$ref": "#/definitions/service.LoginRequest"
                         }
                     }
                 ],
@@ -43,7 +43,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/sudooom_im_web_pkg_response.Response"
+                            "$ref": "#/definitions/response.Response"
                         }
                     }
                 }
@@ -71,7 +71,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/sudooom_im_web_pkg_response.Response"
+                            "$ref": "#/definitions/response.Response"
                         }
                     }
                 }
@@ -110,7 +110,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/sudooom_im_web_pkg_response.Response"
+                            "$ref": "#/definitions/response.Response"
                         }
                     }
                 }
@@ -136,7 +136,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/sudooom_im_web_internal_service.RegisterRequest"
+                            "$ref": "#/definitions/service.RegisterRequest"
                         }
                     }
                 ],
@@ -144,7 +144,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/sudooom_im_web_pkg_response.Response"
+                            "$ref": "#/definitions/response.Response"
                         }
                     }
                 }
@@ -169,7 +169,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/sudooom_im_web_pkg_response.Response"
+                            "$ref": "#/definitions/response.Response"
                         }
                     }
                 }
@@ -203,7 +203,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/sudooom_im_web_pkg_response.Response"
+                            "$ref": "#/definitions/response.Response"
                         }
                     }
                 }
@@ -237,7 +237,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/sudooom_im_web_pkg_response.Response"
+                            "$ref": "#/definitions/response.Response"
                         }
                     }
                 }
@@ -268,7 +268,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/sudooom_im_web_internal_service.FriendRequestRequest"
+                            "$ref": "#/definitions/service.FriendRequestRequest"
                         }
                     }
                 ],
@@ -276,7 +276,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/sudooom_im_web_pkg_response.Response"
+                            "$ref": "#/definitions/response.Response"
                         }
                     }
                 }
@@ -301,7 +301,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/sudooom_im_web_pkg_response.Response"
+                            "$ref": "#/definitions/response.Response"
                         }
                     }
                 }
@@ -335,7 +335,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/sudooom_im_web_pkg_response.Response"
+                            "$ref": "#/definitions/response.Response"
                         }
                     }
                 }
@@ -360,7 +360,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/sudooom_im_web_pkg_response.Response"
+                            "$ref": "#/definitions/response.Response"
                         }
                     }
                 }
@@ -389,7 +389,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/sudooom_im_web_internal_service.UpdateProfileRequest"
+                            "$ref": "#/definitions/service.UpdateProfileRequest"
                         }
                     }
                 ],
@@ -397,7 +397,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/sudooom_im_web_pkg_response.Response"
+                            "$ref": "#/definitions/response.Response"
                         }
                     }
                 }
@@ -445,7 +445,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/sudooom_im_web_pkg_response.Response"
+                            "$ref": "#/definitions/response.Response"
                         }
                     }
                 }
@@ -479,7 +479,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/sudooom_im_web_pkg_response.Response"
+                            "$ref": "#/definitions/response.Response"
                         }
                     }
                 }
@@ -487,98 +487,7 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "sudooom_im_web_internal_service.FriendRequestRequest": {
-            "type": "object",
-            "required": [
-                "friend_id"
-            ],
-            "properties": {
-                "friend_id": {
-                    "type": "integer"
-                },
-                "message": {
-                    "type": "string"
-                }
-            }
-        },
-        "sudooom_im_web_internal_service.LoginRequest": {
-            "type": "object",
-            "required": [
-                "password",
-                "username"
-            ],
-            "properties": {
-                "device_id": {
-                    "type": "string"
-                },
-                "password": {
-                    "type": "string"
-                },
-                "platform": {
-                    "type": "string"
-                },
-                "username": {
-                    "type": "string"
-                }
-            }
-        },
-        "sudooom_im_web_internal_service.LoginResponse": {
-            "type": "object",
-            "properties": {
-                "access_token": {
-                    "type": "string"
-                },
-                "expires_at": {
-                    "type": "integer"
-                },
-                "object_code": {
-                    "type": "string"
-                },
-                "refresh_token": {
-                    "type": "string"
-                },
-                "user_id": {
-                    "type": "integer"
-                }
-            }
-        },
-        "sudooom_im_web_internal_service.RegisterRequest": {
-            "type": "object",
-            "required": [
-                "nickname",
-                "password",
-                "username"
-            ],
-            "properties": {
-                "nickname": {
-                    "type": "string",
-                    "maxLength": 50,
-                    "minLength": 1
-                },
-                "password": {
-                    "type": "string",
-                    "maxLength": 50,
-                    "minLength": 6
-                },
-                "username": {
-                    "type": "string",
-                    "maxLength": 50,
-                    "minLength": 3
-                }
-            }
-        },
-        "sudooom_im_web_internal_service.UpdateProfileRequest": {
-            "type": "object",
-            "properties": {
-                "avatar": {
-                    "type": "string"
-                },
-                "nickname": {
-                    "type": "string"
-                }
-            }
-        },
-        "sudooom_im_web_pkg_response.Response": {
+        "response.Response": {
             "type": "object",
             "properties": {
                 "code": {
@@ -587,6 +496,134 @@ const docTemplate = `{
                 "data": {},
                 "message": {
                     "type": "string"
+                }
+            }
+        },
+        "service.FriendRequestRequest": {
+            "type": "object",
+            "required": [
+                "friend_id"
+            ],
+            "properties": {
+                "friend_id": {
+                    "description": "好友用户ID",
+                    "type": "integer",
+                    "example": 2
+                },
+                "message": {
+                    "description": "验证消息",
+                    "type": "string",
+                    "example": "你好，我是张三"
+                }
+            }
+        },
+        "service.LoginRequest": {
+            "type": "object",
+            "required": [
+                "password",
+                "username"
+            ],
+            "properties": {
+                "device_id": {
+                    "description": "设备ID",
+                    "type": "string",
+                    "example": "device-uuid-123"
+                },
+                "password": {
+                    "description": "密码",
+                    "type": "string",
+                    "example": "123456"
+                },
+                "platform": {
+                    "description": "平台类型",
+                    "type": "string",
+                    "enum": [
+                        "pc",
+                        "mini_program",
+                        "app"
+                    ],
+                    "example": "pc"
+                },
+                "username": {
+                    "description": "用户名",
+                    "type": "string",
+                    "example": "zhangsan"
+                }
+            }
+        },
+        "service.LoginResponse": {
+            "type": "object",
+            "properties": {
+                "access_token": {
+                    "description": "访问令牌",
+                    "type": "string",
+                    "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6..."
+                },
+                "expires_at": {
+                    "description": "过期时间戳",
+                    "type": "integer",
+                    "example": 1702915200
+                },
+                "object_code": {
+                    "description": "用户唯一标识",
+                    "type": "string",
+                    "example": "1234567890123456789"
+                },
+                "refresh_token": {
+                    "description": "刷新令牌",
+                    "type": "string",
+                    "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6..."
+                },
+                "user_id": {
+                    "description": "用户ID",
+                    "type": "integer",
+                    "example": 1
+                }
+            }
+        },
+        "service.RegisterRequest": {
+            "type": "object",
+            "required": [
+                "nickname",
+                "password",
+                "username"
+            ],
+            "properties": {
+                "nickname": {
+                    "description": "昵称",
+                    "type": "string",
+                    "maxLength": 50,
+                    "minLength": 1,
+                    "example": "张三"
+                },
+                "password": {
+                    "description": "密码",
+                    "type": "string",
+                    "maxLength": 50,
+                    "minLength": 6,
+                    "example": "123456"
+                },
+                "username": {
+                    "description": "用户名",
+                    "type": "string",
+                    "maxLength": 50,
+                    "minLength": 3,
+                    "example": "zhangsan"
+                }
+            }
+        },
+        "service.UpdateProfileRequest": {
+            "type": "object",
+            "properties": {
+                "avatar": {
+                    "description": "头像URL",
+                    "type": "string",
+                    "example": "https://example.com/avatar.png"
+                },
+                "nickname": {
+                    "description": "昵称",
+                    "type": "string",
+                    "example": "张三"
                 }
             }
         }

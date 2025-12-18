@@ -1,52 +1,92 @@
 basePath: /api/v1
 definitions:
-  sudooom_im_web_internal_service.FriendRequestRequest:
+  response.Response:
+    properties:
+      code:
+        type: integer
+      data: {}
+      message:
+        type: string
+    type: object
+  service.FriendRequestRequest:
     properties:
       friend_id:
+        description: 好友用户ID
+        example: 2
         type: integer
       message:
+        description: 验证消息
+        example: 你好，我是张三
         type: string
     required:
     - friend_id
     type: object
-  sudooom_im_web_internal_service.LoginRequest:
+  service.LoginRequest:
     properties:
       device_id:
+        description: 设备ID
+        example: device-uuid-123
         type: string
       password:
+        description: 密码
+        example: "123456"
         type: string
       platform:
+        description: 平台类型
+        enum:
+        - pc
+        - mini_program
+        - app
+        example: pc
         type: string
       username:
+        description: 用户名
+        example: zhangsan
         type: string
     required:
     - password
     - username
     type: object
-  sudooom_im_web_internal_service.LoginResponse:
+  service.LoginResponse:
     properties:
       access_token:
+        description: 访问令牌
+        example: eyJhbGciOiJIUzI1NiIsInR5cCI6...
         type: string
       expires_at:
+        description: 过期时间戳
+        example: 1702915200
         type: integer
       object_code:
+        description: 用户唯一标识
+        example: "1234567890123456789"
         type: string
       refresh_token:
+        description: 刷新令牌
+        example: eyJhbGciOiJIUzI1NiIsInR5cCI6...
         type: string
       user_id:
+        description: 用户ID
+        example: 1
         type: integer
     type: object
-  sudooom_im_web_internal_service.RegisterRequest:
+  service.RegisterRequest:
     properties:
       nickname:
+        description: 昵称
+        example: 张三
         maxLength: 50
         minLength: 1
         type: string
       password:
+        description: 密码
+        example: "123456"
         maxLength: 50
         minLength: 6
         type: string
       username:
+        description: 用户名
+        example: zhangsan
         maxLength: 50
         minLength: 3
         type: string
@@ -55,19 +95,15 @@ definitions:
     - password
     - username
     type: object
-  sudooom_im_web_internal_service.UpdateProfileRequest:
+  service.UpdateProfileRequest:
     properties:
       avatar:
+        description: 头像URL
+        example: https://example.com/avatar.png
         type: string
       nickname:
-        type: string
-    type: object
-  sudooom_im_web_pkg_response.Response:
-    properties:
-      code:
-        type: integer
-      data: {}
-      message:
+        description: 昵称
+        example: 张三
         type: string
     type: object
 host: localhost:8080
@@ -88,14 +124,14 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/sudooom_im_web_internal_service.LoginRequest'
+          $ref: '#/definitions/service.LoginRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/sudooom_im_web_pkg_response.Response'
+            $ref: '#/definitions/response.Response'
       summary: 用户登录
       tags:
       - 认证
@@ -110,7 +146,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/sudooom_im_web_pkg_response.Response'
+            $ref: '#/definitions/response.Response'
       security:
       - BearerAuth: []
       summary: 用户登出
@@ -137,7 +173,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/sudooom_im_web_pkg_response.Response'
+            $ref: '#/definitions/response.Response'
       summary: 刷新 Token
       tags:
       - 认证
@@ -152,14 +188,14 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/sudooom_im_web_internal_service.RegisterRequest'
+          $ref: '#/definitions/service.RegisterRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/sudooom_im_web_pkg_response.Response'
+            $ref: '#/definitions/response.Response'
       summary: 用户注册
       tags:
       - 认证
@@ -172,7 +208,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/sudooom_im_web_pkg_response.Response'
+            $ref: '#/definitions/response.Response'
       security:
       - BearerAuth: []
       summary: 获取好友列表
@@ -193,7 +229,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/sudooom_im_web_pkg_response.Response'
+            $ref: '#/definitions/response.Response'
       security:
       - BearerAuth: []
       summary: 删除好友
@@ -214,7 +250,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/sudooom_im_web_pkg_response.Response'
+            $ref: '#/definitions/response.Response'
       security:
       - BearerAuth: []
       summary: 接受好友请求
@@ -235,7 +271,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/sudooom_im_web_pkg_response.Response'
+            $ref: '#/definitions/response.Response'
       security:
       - BearerAuth: []
       summary: 拒绝好友请求
@@ -252,14 +288,14 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/sudooom_im_web_internal_service.FriendRequestRequest'
+          $ref: '#/definitions/service.FriendRequestRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/sudooom_im_web_pkg_response.Response'
+            $ref: '#/definitions/response.Response'
       security:
       - BearerAuth: []
       summary: 发送好友请求
@@ -274,7 +310,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/sudooom_im_web_pkg_response.Response'
+            $ref: '#/definitions/response.Response'
       security:
       - BearerAuth: []
       summary: 获取待处理的好友请求
@@ -295,7 +331,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/sudooom_im_web_pkg_response.Response'
+            $ref: '#/definitions/response.Response'
       security:
       - BearerAuth: []
       summary: 获取指定用户信息
@@ -310,7 +346,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/sudooom_im_web_pkg_response.Response'
+            $ref: '#/definitions/response.Response'
       security:
       - BearerAuth: []
       summary: 获取当前用户信息
@@ -326,14 +362,14 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/sudooom_im_web_internal_service.UpdateProfileRequest'
+          $ref: '#/definitions/service.UpdateProfileRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/sudooom_im_web_pkg_response.Response'
+            $ref: '#/definitions/response.Response'
       security:
       - BearerAuth: []
       summary: 更新用户信息
@@ -364,7 +400,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/sudooom_im_web_pkg_response.Response'
+            $ref: '#/definitions/response.Response'
       security:
       - BearerAuth: []
       summary: 搜索用户

@@ -19,26 +19,26 @@ var (
 
 // RegisterRequest 注册请求
 type RegisterRequest struct {
-	Username string `json:"username" binding:"required,min=3,max=50"`
-	Password string `json:"password" binding:"required,min=6,max=50"`
-	Nickname string `json:"nickname" binding:"required,min=1,max=50"`
+	Username string `json:"username" binding:"required,min=3,max=50" example:"zhangsan"` // 用户名
+	Password string `json:"password" binding:"required,min=6,max=50" example:"123456"`   // 密码
+	Nickname string `json:"nickname" binding:"required,min=1,max=50" example:"张三"`       // 昵称
 }
 
 // LoginRequest 登录请求
 type LoginRequest struct {
-	Username string `json:"username" binding:"required"`
-	Password string `json:"password" binding:"required"`
-	DeviceID string `json:"device_id"`
-	Platform string `json:"platform"`
+	Username string `json:"username" binding:"required" example:"zhangsan"`    // 用户名
+	Password string `json:"password" binding:"required" example:"123456"`      // 密码
+	DeviceID string `json:"device_id" example:"device-uuid-123"`               // 设备ID
+	Platform string `json:"platform" example:"pc" enums:"pc,mini_program,app"` // 平台类型
 }
 
 // LoginResponse 登录响应
 type LoginResponse struct {
-	UserID       int64  `json:"user_id"`
-	ObjectCode   string `json:"object_code"`
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
-	ExpiresAt    int64  `json:"expires_at"`
+	UserID       int64  `json:"user_id" example:"1"`                                     // 用户ID
+	ObjectCode   string `json:"object_code" example:"1234567890123456789"`               // 用户唯一标识
+	AccessToken  string `json:"access_token" example:"eyJhbGciOiJIUzI1NiIsInR5cCI6..."`  // 访问令牌
+	RefreshToken string `json:"refresh_token" example:"eyJhbGciOiJIUzI1NiIsInR5cCI6..."` // 刷新令牌
+	ExpiresAt    int64  `json:"expires_at" example:"1702915200"`                         // 过期时间戳
 }
 
 // AuthService 认证服务
@@ -114,7 +114,7 @@ func (s *AuthService) Login(ctx context.Context, req *LoginRequest) (*LoginRespo
 	}
 
 	// 生成 Token
-	tokenPair, err := s.jwtService.GenerateTokenPair(user.ID, req.DeviceID)
+	tokenPair, err := s.jwtService.GenerateTokenPair(user.ID, req.DeviceID, jwt.Platform(req.Platform))
 	if err != nil {
 		return nil, err
 	}
@@ -148,7 +148,7 @@ func (s *AuthService) RefreshToken(ctx context.Context, refreshToken string) (*L
 	}
 
 	// 生成新的 Token Pair
-	tokenPair, err := s.jwtService.GenerateTokenPair(user.ID, claims.DeviceID)
+	tokenPair, err := s.jwtService.GenerateTokenPair(user.ID, claims.DeviceID, claims.Platform)
 	if err != nil {
 		return nil, err
 	}
