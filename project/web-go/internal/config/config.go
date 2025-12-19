@@ -24,9 +24,10 @@ type AppConfig struct {
 }
 
 type JWTConfig struct {
-	SecretKey     string        `mapstructure:"secret_key"`
-	AccessExpire  time.Duration `mapstructure:"access_expire"`
-	RefreshExpire time.Duration `mapstructure:"refresh_expire"`
+	SecretKey          string        `mapstructure:"secret_key"`
+	AccessExpire       time.Duration `mapstructure:"access_expire"`
+	RefreshExpire      time.Duration `mapstructure:"refresh_expire"`
+	AutoRenewThreshold time.Duration `mapstructure:"auto_renew_threshold"`
 }
 
 type DatabaseConfig struct {
@@ -87,6 +88,7 @@ func (c *Config) applyEnv() {
 	c.JWT.SecretKey = sharedConfig.GetEnv("JWT_SECRET", c.JWT.SecretKey)
 	c.JWT.AccessExpire = sharedConfig.GetEnvDuration("JWT_ACCESS_EXPIRE", c.JWT.AccessExpire)
 	c.JWT.RefreshExpire = sharedConfig.GetEnvDuration("JWT_REFRESH_EXPIRE", c.JWT.RefreshExpire)
+	c.JWT.AutoRenewThreshold = sharedConfig.GetEnvDuration("JWT_AUTO_RENEW_THRESHOLD", c.JWT.AutoRenewThreshold)
 
 	// Database
 	c.Database.Host = sharedConfig.GetEnv("POSTGRES_HOST", c.Database.Host)

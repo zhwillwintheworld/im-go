@@ -26,15 +26,14 @@ type RegisterRequest struct {
 
 // LoginRequest 登录请求
 type LoginRequest struct {
-	Username string `json:"username" binding:"required" example:"zhangsan"`    // 用户名
-	Password string `json:"password" binding:"required" example:"123456"`      // 密码
-	DeviceID string `json:"device_id" example:"device-uuid-123"`               // 设备ID
-	Platform string `json:"platform" example:"pc" enums:"pc,mini_program,app"` // 平台类型
+	Username string `json:"username" binding:"required" example:"zhangsan"`                       // 用户名
+	Password string `json:"password" binding:"required" example:"123456"`                         // 密码
+	DeviceID string `json:"device_id" binding:"required" example:"device-uuid-123"`               // 设备ID
+	Platform string `json:"platform" binding:"required" example:"pc" enums:"pc,mini_program,app"` // 平台类型
 }
 
 // LoginResponse 登录响应
 type LoginResponse struct {
-	UserID       int64  `json:"user_id" example:"1"`                                     // 用户ID
 	ObjectCode   string `json:"object_code" example:"1234567890123456789"`               // 用户唯一标识
 	AccessToken  string `json:"access_token" example:"eyJhbGciOiJIUzI1NiIsInR5cCI6..."`  // 访问令牌
 	RefreshToken string `json:"refresh_token" example:"eyJhbGciOiJIUzI1NiIsInR5cCI6..."` // 刷新令牌
@@ -141,7 +140,6 @@ func (s *AuthService) Login(ctx context.Context, req *LoginRequest) (*LoginRespo
 	}
 
 	return &LoginResponse{
-		UserID:       user.ID,
 		ObjectCode:   user.ObjectCode,
 		AccessToken:  tokenPair.AccessToken,
 		RefreshToken: tokenPair.RefreshToken,
@@ -175,10 +173,14 @@ func (s *AuthService) RefreshToken(ctx context.Context, refreshToken string) (*L
 	}
 
 	return &LoginResponse{
-		UserID:       user.ID,
 		ObjectCode:   user.ObjectCode,
 		AccessToken:  tokenPair.AccessToken,
 		RefreshToken: tokenPair.RefreshToken,
 		ExpiresAt:    tokenPair.ExpiresAt,
 	}, nil
+}
+
+// Logout 用户登出
+func (s *AuthService) Logout(ctx context.Context, userID int64, platform, accessToken string) error {
+	return s.tokenRepo.DeleteToken(ctx, userID, platform, accessToken)
 }

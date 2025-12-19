@@ -19,6 +19,7 @@ import (
 
 	"sudooom.im.shared/jwt"
 	"sudooom.im.shared/snowflake"
+	"sudooom.im.web/internal/middleware"
 	"sudooom.im.web/internal/repository"
 	"sudooom.im.web/internal/service"
 	"sudooom.im.web/pkg/response"
@@ -106,6 +107,11 @@ func setupIntegrationTest(t *testing.T) *testDeps {
 	r := gin.New()
 	r.POST("/api/v1/auth/register", authHandler.Register)
 	r.POST("/api/v1/auth/login", authHandler.Login)
+
+	// 需要认证的路由
+	authenticated := r.Group("")
+	authenticated.Use(middleware.TokenAuth(tokenRepo, 24*time.Hour, 4*time.Hour))
+	authenticated.POST("/api/v1/auth/logout", authHandler.Logout)
 
 	return &testDeps{
 		db:          db,
@@ -199,7 +205,6 @@ func TestIntegration_Login_Success(t *testing.T) {
 	err = json.Unmarshal(loginResp.Data, &loginData)
 	require.NoError(t, err)
 
-	assert.NotZero(t, loginData.UserID, "应该返回用户ID")
 	assert.NotEmpty(t, loginData.ObjectCode, "应该返回 object_code")
 	assert.NotEmpty(t, loginData.AccessToken, "应该返回 access_token")
 	assert.NotEmpty(t, loginData.RefreshToken, "应该返回 refresh_token")
@@ -208,11 +213,11 @@ func TestIntegration_Login_Success(t *testing.T) {
 	// 验证 Token 有效性
 	claims, err := deps.jwtService.ValidateAccessToken(loginData.AccessToken)
 	require.NoError(t, err)
-	assert.Equal(t, loginData.UserID, claims.UserID)
+	assert.NotZero(t, claims.UserID, "Token应该包含用户ID")
 	assert.Equal(t, "test-device-001", claims.DeviceID)
 	assert.Equal(t, jwt.Platform("pc"), claims.Platform)
 
-	t.Logf("登录成功! UserID: %d, AccessToken: %s...", loginData.UserID, loginData.AccessToken[:20])
+	t.Logf("登录成功! ObjectCode: %s, AccessToken: %s...", loginData.ObjectCode, loginData.AccessToken[:20])
 }
 
 // TestIntegration_Login_WrongPassword 集成测试: 密码错误
@@ -329,8 +334,110 @@ func TestIntegration_Login_WithExistingUser(t *testing.T) {
 		err = json.Unmarshal(loginResp.Data, &loginData)
 		require.NoError(t, err)
 
-		t.Logf("zhanghua 登录成功! UserID: %d, AccessToken: %s...", loginData.UserID, loginData.AccessToken[:20])
+		t.Logf("zhanghua 登录成功! AccessToken: %s...", loginData.AccessToken[:20])
 	} else {
 		t.Logf("zhanghua 登录失败: code=%d, message=%s (用户可能不存在或密码错误)", loginResp.Code, loginResp.Message)
 	}
+}
+
+// TestIntegration_Logout_Success 集成测试: 登出成功
+// 使用已存在的 zhanghua 账号进行测试
+func TestIntegration_Logout_Success(t *testing.T) {
+	deps := setupIntegrationTest(t)
+	defer deps.teardown()
+
+	// 使用已存在的用户账号
+	testUsername := "zhanghua"
+	testPassword := "123456"
+
+	// Step 1: 登录获取 Token
+	loginBody := map[string]string{
+		"username":  testUsername,
+		"password":  testPassword,
+		"device_id": "test-device-logout-001",
+		"platform":  "pc",
+	}
+	loginJSON, _ := json.Marshal(loginBody)
+
+	loginReq, _ := http.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewBuffer(loginJSON))
+	loginReq.Header.Set("Content-Type", "application/json")
+
+	loginW := httptest.NewRecorder()
+	deps.router.ServeHTTP(loginW, loginReq)
+
+	require.Equal(t, http.StatusOK, loginW.Code)
+
+	var loginResp APIResponse
+	err := json.Unmarshal(loginW.Body.Bytes(), &loginResp)
+	require.NoError(t, err)
+
+	if loginResp.Code != response.CodeSuccess {
+		t.Skipf("跳过测试: 用户 %s 登录失败 (code=%d, msg=%s)，请确保用户存在", testUsername, loginResp.Code, loginResp.Message)
+	}
+
+	var loginData service.LoginResponse
+	err = json.Unmarshal(loginResp.Data, &loginData)
+	require.NoError(t, err)
+
+	// Step 2: 使用 Token 登出
+	logoutReq, _ := http.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil)
+	logoutReq.Header.Set("Authorization", loginData.AccessToken)
+
+	logoutW := httptest.NewRecorder()
+	deps.router.ServeHTTP(logoutW, logoutReq)
+
+	// 验证响应
+	assert.Equal(t, http.StatusOK, logoutW.Code)
+
+	var logoutResp APIResponse
+	err = json.Unmarshal(logoutW.Body.Bytes(), &logoutResp)
+	require.NoError(t, err)
+
+	assert.Equal(t, response.CodeSuccess, logoutResp.Code, "登出应该成功")
+	t.Logf("用户 %s 登出成功!", testUsername)
+}
+
+// TestIntegration_Logout_WithoutToken 集成测试: 无Token登出
+func TestIntegration_Logout_WithoutToken(t *testing.T) {
+	deps := setupIntegrationTest(t)
+	defer deps.teardown()
+
+	// 不带 Token 直接登出
+	logoutReq, _ := http.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil)
+
+	logoutW := httptest.NewRecorder()
+	deps.router.ServeHTTP(logoutW, logoutReq)
+
+	// 验证响应 - 应该返回未授权 (401状态码)
+	assert.Equal(t, http.StatusUnauthorized, logoutW.Code)
+
+	var logoutResp APIResponse
+	err := json.Unmarshal(logoutW.Body.Bytes(), &logoutResp)
+	require.NoError(t, err)
+
+	assert.Equal(t, response.CodeTokenInvalid, logoutResp.Code, "无Token应该返回Token无效")
+	t.Log("无Token登出测试通过!")
+}
+
+// TestIntegration_Logout_InvalidToken 集成测试: 无效Token登出
+func TestIntegration_Logout_InvalidToken(t *testing.T) {
+	deps := setupIntegrationTest(t)
+	defer deps.teardown()
+
+	// 使用无效 Token 登出
+	logoutReq, _ := http.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil)
+	logoutReq.Header.Set("Authorization", "Bearer invalid-token-12345")
+
+	logoutW := httptest.NewRecorder()
+	deps.router.ServeHTTP(logoutW, logoutReq)
+
+	// 验证响应 - 应该返回Token无效
+	assert.Equal(t, http.StatusOK, logoutW.Code)
+
+	var logoutResp APIResponse
+	err := json.Unmarshal(logoutW.Body.Bytes(), &logoutResp)
+	require.NoError(t, err)
+
+	assert.Equal(t, response.CodeTokenInvalid, logoutResp.Code, "无效Token应该返回Token无效")
+	t.Log("无效Token登出测试通过!")
 }

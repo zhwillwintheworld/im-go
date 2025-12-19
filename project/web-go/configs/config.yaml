@@ -1,18 +1,19 @@
 app:
   name: im-web
-  port: 8080
+  port: 8082
   mode: debug  # debug, release, test
 
 jwt:
   secret_key: "your-secret-key-change-in-production"
   access_expire: 168h   # 7 days
   refresh_expire: 720h  # 30 days
+  auto_renew_threshold: 4h  # 剩余时间小于此值时自动续期
 
 database:
   host: localhost
   port: 5432
   user: postgres
-  password: postgres
+  password: password
   name: im_db
   max_open_conns: 100
   max_idle_conns: 10

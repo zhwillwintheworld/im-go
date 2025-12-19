@@ -5,7 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"sudooom.im.shared/jwt"
+	"sudooom.im.web/internal/middleware"
 	"sudooom.im.web/internal/repository"
 	"sudooom.im.web/internal/service"
 	"sudooom.im.web/pkg/response"
@@ -99,42 +99,14 @@ func (h *AuthHandler) Login(c *gin.Context) {
 // @Success      200  {object}  response.Response
 // @Router       /auth/logout [post]
 func (h *AuthHandler) Logout(c *gin.Context) {
-	// TODO: 将 Token 加入黑名单
-	response.Success(c, nil)
-}
+	userID := middleware.GetUserID(c)
+	platform := middleware.GetPlatform(c)
+	accessToken := middleware.GetAccessToken(c)
 
-// RefreshToken 刷新 Token
-// @Summary      刷新 Token
-// @Description  使用 refresh_token 获取新的 access_token
-// @Tags         认证
-// @Accept       json
-// @Produce      json
-// @Param        request body object{refresh_token=string} true "刷新 Token"
-// @Success      200  {object}  response.Response{data=service.LoginResponse}
-// @Failure      200  {object}  response.Response
-// @Router       /auth/refresh [post]
-func (h *AuthHandler) RefreshToken(c *gin.Context) {
-	var req struct {
-		RefreshToken string `json:"refresh_token" binding:"required"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.ErrorWithMsg(c, response.CodeInvalidParams, err.Error())
-		return
-	}
-
-	resp, err := h.authService.RefreshToken(c.Request.Context(), req.RefreshToken)
-	if err != nil {
-		if errors.Is(err, jwt.ErrTokenInvalid) {
-			response.Error(c, response.CodeTokenInvalid)
-			return
-		}
-		if errors.Is(err, jwt.ErrTokenExpired) {
-			response.Error(c, response.CodeTokenExpired)
-			return
-		}
+	if err := h.authService.Logout(c.Request.Context(), userID, platform, accessToken); err != nil {
 		response.Error(c, response.CodeServerError)
 		return
 	}
 
-	response.Success(c, resp)
+	response.Success(c, nil)
 }

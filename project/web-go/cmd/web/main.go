@@ -63,7 +63,12 @@ func main() {
 
 	// 连接 Redis
 	redisClient := connectRedis(cfg.Redis)
-	defer redisClient.Close()
+	defer func(redisClient *redis.Client) {
+		err := redisClient.Close()
+		if err != nil {
+			logger.Error("Failed to close Redis", "error", err)
+		}
+	}(redisClient)
 	logger.Info("Connected to Redis", "host", cfg.Redis.Host)
 
 	// 初始化 JWT 服务
@@ -73,7 +78,7 @@ func main() {
 		cfg.JWT.RefreshExpire,
 	)
 
-	// 初始化雪花ID生成器
+	// 初始化 雪花ID生成器
 	sfNode, err := snowflake.NewNode(1)
 	if err != nil {
 		logger.Error("Failed to create snowflake node", "error", err)
@@ -96,7 +101,7 @@ func main() {
 	friendHandler := handler.NewFriendHandler(friendService)
 
 	// 设置路由
-	r := router.SetupRouter(cfg, jwtService, authHandler, userHandler, friendHandler)
+	r := router.SetupRouter(cfg, tokenRepo, authHandler, userHandler, friendHandler)
 
 	// 启动服务器
 	addr := fmt.Sprintf(":%d", cfg.App.Port)

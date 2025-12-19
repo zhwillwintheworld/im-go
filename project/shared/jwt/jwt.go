@@ -146,3 +146,19 @@ func (s *Service) validateToken(tokenString string, expectedType TokenType) (*Cl
 
 	return claims, nil
 }
+
+// ParseTokenExpireTime 解析 Token 获取过期时间（不验证签名，用于快速获取过期时间）
+func ParseTokenExpireTime(tokenString string) (time.Time, error) {
+	// 使用 ParseUnverified 不验证签名，只解析 claims
+	token, _, err := jwt.NewParser().ParseUnverified(tokenString, &Claims{})
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	claims, ok := token.Claims.(*Claims)
+	if !ok || claims.ExpiresAt == nil {
+		return time.Time{}, ErrTokenInvalid
+	}
+
+	return claims.ExpiresAt.Time, nil
+}

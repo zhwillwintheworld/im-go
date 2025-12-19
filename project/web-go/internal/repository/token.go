@@ -113,11 +113,9 @@ func (r *TokenRepository) GetUserInfoByToken(ctx context.Context, accessToken st
 
 // DeleteToken 删除Token（登出时使用）
 func (r *TokenRepository) DeleteToken(ctx context.Context, userID int64, platform, accessToken string) error {
-	userTokenKey := buildUserTokenKey(userID, platform)
 	tokenInfoKey := buildTokenInfoKey(accessToken)
 
 	pipe := r.rdb.Pipeline()
-	pipe.Del(ctx, userTokenKey)
 	pipe.Del(ctx, tokenInfoKey)
 	_, err := pipe.Exec(ctx)
 	return err
@@ -139,4 +137,26 @@ func (r *TokenRepository) DeleteOldToken(ctx context.Context, userID int64, plat
 	// 删除旧Token的用户信息
 	oldTokenInfoKey := buildTokenInfoKey(oldToken)
 	return r.rdb.Del(ctx, oldTokenInfoKey).Err()
+}
+
+// GetTokenTTL 获取Token的剩余过期时间
+func (r *TokenRepository) GetTokenTTL(ctx context.Context, accessToken string) (time.Duration, error) {
+	key := buildTokenInfoKey(accessToken)
+	ttl, err := r.rdb.TTL(ctx, key).Result()
+	if err != nil {
+		return 0, err
+	}
+	return ttl, nil
+}
+
+// RefreshTokenExpire 刷新Token的过期时间
+func (r *TokenRepository) RefreshTokenExpire(ctx context.Context, userInfo *UserTokenInfo, accessToken string, expiration time.Duration) error {
+	userTokenKey := buildUserTokenKey(userInfo.UserID, userInfo.Platform)
+	tokenInfoKey := buildTokenInfoKey(accessToken)
+
+	pipe := r.rdb.Pipeline()
+	pipe.Expire(ctx, userTokenKey, expiration)
+	pipe.Expire(ctx, tokenInfoKey, expiration)
+	_, err := pipe.Exec(ctx)
+	return err
 }

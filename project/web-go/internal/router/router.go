@@ -5,16 +5,16 @@ import (
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 
-	"sudooom.im.shared/jwt"
 	"sudooom.im.web/internal/config"
 	"sudooom.im.web/internal/handler"
 	"sudooom.im.web/internal/middleware"
+	"sudooom.im.web/internal/repository"
 )
 
 // SetupRouter 设置路由
 func SetupRouter(
 	cfg *config.Config,
-	jwtService *jwt.Service,
+	tokenRepo *repository.TokenRepository,
 	authHandler *handler.AuthHandler,
 	userHandler *handler.UserHandler,
 	friendHandler *handler.FriendHandler,
@@ -43,12 +43,11 @@ func SetupRouter(
 		{
 			auth.POST("/register", authHandler.Register)
 			auth.POST("/login", authHandler.Login)
-			auth.POST("/refresh", authHandler.RefreshToken)
 		}
 
 		// 需要认证的接口
 		authenticated := v1.Group("")
-		authenticated.Use(middleware.JWTAuth(jwtService))
+		authenticated.Use(middleware.TokenAuth(tokenRepo, cfg.JWT.AccessExpire, cfg.JWT.AutoRenewThreshold))
 		{
 			// 登出
 			authenticated.POST("/auth/logout", authHandler.Logout)
