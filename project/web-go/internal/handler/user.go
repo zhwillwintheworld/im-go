@@ -28,7 +28,7 @@ func NewUserHandler(userService *service.UserService) *UserHandler {
 // @Tags         用户
 // @Produce      json
 // @Security     BearerAuth
-// @Success      200  {object}  response.Response{data=object{id=int64,object_code=string,username=string,nickname=string,avatar=string,status=int,create_at=time.Time}}
+// @Success      200  {object}  response.Response{data=object{id=int64,username=string,nickname=string,avatar=string,status=int,create_at=time.Time}}
 // @Failure      200  {object}  response.Response
 // @Router       /user/profile [get]
 func (h *UserHandler) GetProfile(c *gin.Context) {
@@ -45,13 +45,12 @@ func (h *UserHandler) GetProfile(c *gin.Context) {
 	}
 
 	response.Success(c, gin.H{
-		"id":          user.ID,
-		"object_code": user.ObjectCode,
-		"username":    user.Username,
-		"nickname":    user.Nickname,
-		"avatar":      user.Avatar,
-		"status":      user.Status,
-		"create_at":   user.CreateAt,
+		"id":        user.ID,
+		"username":  user.Username,
+		"nickname":  user.Nickname,
+		"avatar":    user.Avatar,
+		"status":    user.Status,
+		"create_at": user.CreateAt,
 	})
 }
 

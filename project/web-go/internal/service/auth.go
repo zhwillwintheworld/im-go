@@ -34,7 +34,7 @@ type LoginRequest struct {
 
 // LoginResponse 登录响应
 type LoginResponse struct {
-	ObjectCode   string `json:"object_code" example:"1234567890123456789"`               // 用户唯一标识
+	UserID       int64  `json:"user_id" example:"1234567890123456789"`                   // 用户ID
 	AccessToken  string `json:"access_token" example:"eyJhbGciOiJIUzI1NiIsInR5cCI6..."`  // 访问令牌
 	RefreshToken string `json:"refresh_token" example:"eyJhbGciOiJIUzI1NiIsInR5cCI6..."` // 刷新令牌
 	ExpiresAt    int64  `json:"expires_at" example:"1702915200"`                         // 过期时间戳
@@ -76,10 +76,10 @@ func (s *AuthService) Register(ctx context.Context, req *RegisterRequest) (*mode
 	}
 
 	// 生成雪花ID
-	objectCode := s.snowflake.Generate().String()
+	userID := s.snowflake.Generate().Int64()
 
 	user := &model.User{
-		ObjectCode:   objectCode,
+		ID:           userID,
 		Username:     req.Username,
 		PasswordHash: string(passwordHash),
 		Nickname:     req.Nickname,
@@ -127,20 +127,19 @@ func (s *AuthService) Login(ctx context.Context, req *LoginRequest) (*LoginRespo
 
 	// 存储Token到Redis
 	userTokenInfo := &repository.UserTokenInfo{
-		UserID:     user.ID,
-		ObjectCode: user.ObjectCode,
-		Username:   user.Username,
-		Nickname:   user.Nickname,
-		Avatar:     user.Avatar,
-		DeviceID:   req.DeviceID,
-		Platform:   req.Platform,
+		UserID:   user.ID,
+		Username: user.Username,
+		Nickname: user.Nickname,
+		Avatar:   user.Avatar,
+		DeviceID: req.DeviceID,
+		Platform: req.Platform,
 	}
 	if err := s.tokenRepo.SaveToken(ctx, userTokenInfo, tokenPair.AccessToken, s.jwtService.GetAccessExpire()); err != nil {
 		return nil, err
 	}
 
 	return &LoginResponse{
-		ObjectCode:   user.ObjectCode,
+		UserID:       user.ID,
 		AccessToken:  tokenPair.AccessToken,
 		RefreshToken: tokenPair.RefreshToken,
 		ExpiresAt:    tokenPair.ExpiresAt,
@@ -173,7 +172,7 @@ func (s *AuthService) RefreshToken(ctx context.Context, refreshToken string) (*L
 	}
 
 	return &LoginResponse{
-		ObjectCode:   user.ObjectCode,
+		UserID:       user.ID,
 		AccessToken:  tokenPair.AccessToken,
 		RefreshToken: tokenPair.RefreshToken,
 		ExpiresAt:    tokenPair.ExpiresAt,

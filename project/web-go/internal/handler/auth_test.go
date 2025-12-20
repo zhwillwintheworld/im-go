@@ -46,7 +46,7 @@ type APIResponse struct {
 func TestAuthHandler_Login_Success(t *testing.T) {
 	// 准备测试数据
 	expectedResp := &service.LoginResponse{
-		ObjectCode:   "1234567890123456789",
+		UserID:       1234567890123456789,
 		AccessToken:  "test-access-token",
 		RefreshToken: "test-refresh-token",
 		ExpiresAt:    1702915200,
@@ -126,7 +126,7 @@ func TestAuthHandler_Login_Success(t *testing.T) {
 	err = json.Unmarshal(resp.Data, &loginResp)
 	require.NoError(t, err)
 
-	assert.Equal(t, expectedResp.ObjectCode, loginResp.ObjectCode)
+	assert.Equal(t, expectedResp.UserID, loginResp.UserID)
 	assert.Equal(t, expectedResp.AccessToken, loginResp.AccessToken)
 	assert.Equal(t, expectedResp.RefreshToken, loginResp.RefreshToken)
 	assert.Equal(t, expectedResp.ExpiresAt, loginResp.ExpiresAt)

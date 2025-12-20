@@ -29,59 +29,30 @@ func NewGroupRepository(db *pgxpool.Pool) *GroupRepository {
 // Create 创建群组
 func (r *GroupRepository) Create(ctx context.Context, group *model.Group) error {
 	query := `
-		INSERT INTO groups (object_code, name, owner_id, avatar, description, max_members, status, create_at, update_at)
+		INSERT INTO groups (id, name, owner_id, avatar, description, max_members, status, create_at, update_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
-		RETURNING id, create_at, update_at
+		RETURNING create_at, update_at
 	`
 	return r.db.QueryRow(ctx, query,
-		group.ObjectCode,
+		group.ID,
 		group.Name,
 		group.OwnerID,
 		group.Avatar,
 		group.Description,
 		group.MaxMembers,
 		group.Status,
-	).Scan(&group.ID, &group.CreateAt, &group.UpdateAt)
+	).Scan(&group.CreateAt, &group.UpdateAt)
 }
 
 // GetByID 通过 ID 获取群组
 func (r *GroupRepository) GetByID(ctx context.Context, id int64) (*model.Group, error) {
 	query := `
-		SELECT id, object_code, name, owner_id, avatar, description, max_members, status, create_at, update_at
+		SELECT id, name, owner_id, avatar, description, max_members, status, create_at, update_at
 		FROM groups WHERE id = $1 AND deleted = 0
 	`
 	group := &model.Group{}
 	err := r.db.QueryRow(ctx, query, id).Scan(
 		&group.ID,
-		&group.ObjectCode,
-		&group.Name,
-		&group.OwnerID,
-		&group.Avatar,
-		&group.Description,
-		&group.MaxMembers,
-		&group.Status,
-		&group.CreateAt,
-		&group.UpdateAt,
-	)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrGroupNotFound
-		}
-		return nil, err
-	}
-	return group, nil
-}
-
-// GetByObjectCode 通过 ObjectCode 获取群组
-func (r *GroupRepository) GetByObjectCode(ctx context.Context, objectCode string) (*model.Group, error) {
-	query := `
-		SELECT id, object_code, name, owner_id, avatar, description, max_members, status, create_at, update_at
-		FROM groups WHERE object_code = $1 AND deleted = 0
-	`
-	group := &model.Group{}
-	err := r.db.QueryRow(ctx, query, objectCode).Scan(
-		&group.ID,
-		&group.ObjectCode,
 		&group.Name,
 		&group.OwnerID,
 		&group.Avatar,
@@ -145,7 +116,7 @@ func (r *GroupRepository) GetMemberCount(ctx context.Context, groupID int64) (in
 // GetUserGroups 获取用户加入的群组列表
 func (r *GroupRepository) GetUserGroups(ctx context.Context, userID int64) ([]*model.GroupWithMemberCount, error) {
 	query := `
-		SELECT g.id, g.object_code, g.name, g.owner_id, g.avatar, g.description, g.max_members, g.status, g.create_at, g.update_at,
+		SELECT g.id, g.name, g.owner_id, g.avatar, g.description, g.max_members, g.status, g.create_at, g.update_at,
 		       (SELECT COUNT(*) FROM group_members gm WHERE gm.group_id = g.id AND gm.deleted = 0) as member_count
 		FROM groups g
 		JOIN group_members m ON g.id = m.group_id
@@ -163,7 +134,6 @@ func (r *GroupRepository) GetUserGroups(ctx context.Context, userID int64) ([]*m
 		g := &model.GroupWithMemberCount{}
 		err := rows.Scan(
 			&g.ID,
-			&g.ObjectCode,
 			&g.Name,
 			&g.OwnerID,
 			&g.Avatar,
@@ -185,18 +155,18 @@ func (r *GroupRepository) GetUserGroups(ctx context.Context, userID int64) ([]*m
 // AddMember 添加群成员
 func (r *GroupRepository) AddMember(ctx context.Context, member *model.GroupMember) error {
 	query := `
-		INSERT INTO group_members (object_code, group_id, user_id, role, nickname, create_at, update_at)
+		INSERT INTO group_members (id, group_id, user_id, role, nickname, create_at, update_at)
 		VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
 		ON CONFLICT (group_id, user_id) DO NOTHING
-		RETURNING id, create_at, update_at
+		RETURNING create_at, update_at
 	`
 	err := r.db.QueryRow(ctx, query,
-		member.ObjectCode,
+		member.ID,
 		member.GroupID,
 		member.UserID,
 		member.Role,
 		member.Nickname,
-	).Scan(&member.ID, &member.CreateAt, &member.UpdateAt)
+	).Scan(&member.CreateAt, &member.UpdateAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrAlreadyGroupMember
@@ -222,13 +192,12 @@ func (r *GroupRepository) RemoveMember(ctx context.Context, groupID, userID int6
 // GetMember 获取群成员信息
 func (r *GroupRepository) GetMember(ctx context.Context, groupID, userID int64) (*model.GroupMember, error) {
 	query := `
-		SELECT id, object_code, group_id, user_id, role, nickname, create_at, update_at
+		SELECT id, group_id, user_id, role, nickname, create_at, update_at
 		FROM group_members WHERE group_id = $1 AND user_id = $2 AND deleted = 0
 	`
 	member := &model.GroupMember{}
 	err := r.db.QueryRow(ctx, query, groupID, userID).Scan(
 		&member.ID,
-		&member.ObjectCode,
 		&member.GroupID,
 		&member.UserID,
 		&member.Role,
@@ -248,7 +217,7 @@ func (r *GroupRepository) GetMember(ctx context.Context, groupID, userID int64) 
 // GetMembers 获取群成员列表
 func (r *GroupRepository) GetMembers(ctx context.Context, groupID int64) ([]*model.GroupMemberWithUser, error) {
 	query := `
-		SELECT gm.id, gm.object_code, gm.group_id, gm.user_id, gm.role, gm.nickname, gm.create_at, gm.update_at,
+		SELECT gm.id, gm.group_id, gm.user_id, gm.role, gm.nickname, gm.create_at, gm.update_at,
 		       u.username, u.nickname as user_nickname, u.avatar
 		FROM group_members gm
 		JOIN users u ON gm.user_id = u.id
@@ -264,9 +233,9 @@ func (r *GroupRepository) GetMembers(ctx context.Context, groupID int64) ([]*mod
 	var members []*model.GroupMemberWithUser
 	for rows.Next() {
 		m := &model.GroupMemberWithUser{}
+		var userNickname string
 		err := rows.Scan(
 			&m.ID,
-			&m.ObjectCode,
 			&m.GroupID,
 			&m.UserID,
 			&m.Role,
@@ -274,12 +243,13 @@ func (r *GroupRepository) GetMembers(ctx context.Context, groupID int64) ([]*mod
 			&m.CreateAt,
 			&m.UpdateAt,
 			&m.Username,
-			&m.Nickname,
+			&userNickname,
 			&m.Avatar,
 		)
 		if err != nil {
 			return nil, err
 		}
+		// 注意：Nickname 字段是群内昵称，需要额外存储用户昵称
 		members = append(members, m)
 	}
 	return members, nil

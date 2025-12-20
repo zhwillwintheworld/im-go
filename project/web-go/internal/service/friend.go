@@ -68,7 +68,7 @@ func (s *FriendService) SendRequest(ctx context.Context, userID int64, req *Frie
 
 	// 创建好友请求
 	request := &model.FriendRequest{
-		ObjectCode: s.snowflake.Generate().String(),
+		ID:         s.snowflake.Generate().Int64(),
 		FromUserID: userID,
 		ToUserID:   req.FriendID,
 		Message:    req.Message,
@@ -100,10 +100,10 @@ func (s *FriendService) AcceptRequest(ctx context.Context, userID, requestID int
 		return err
 	}
 
-	// 创建好友关系（双向，需要两个 object_code）
-	userObjectCode := s.snowflake.Generate().String()
-	friendObjectCode := s.snowflake.Generate().String()
-	return s.friendRepo.CreateFriendship(ctx, userObjectCode, friendObjectCode, userID, request.FromUserID)
+	// 创建好友关系（双向，需要两个 ID）
+	userFriendID := s.snowflake.Generate().Int64()
+	friendFriendID := s.snowflake.Generate().Int64()
+	return s.friendRepo.CreateFriendship(ctx, userFriendID, friendFriendID, userID, request.FromUserID)
 }
 
 // RejectRequest 拒绝好友请求

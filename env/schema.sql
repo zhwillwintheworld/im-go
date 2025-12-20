@@ -30,12 +30,11 @@ SET client_encoding = 'UTF8';
 -- ============================================
 -- 建表规范:
 -- 1. 每个表必须包含以下标准字段:
---    - id: BIGSERIAL PRIMARY KEY (内部自增主键，不对外暴露)
---    - object_code: VARCHAR(32) 雪花ID (对外唯一标识，必须建索引)
+--    - id: BIGINT PRIMARY KEY (雪花ID，对外唯一标识)
 --    - create_at: TIMESTAMP WITH TIME ZONE (创建时间)
 --    - update_at: TIMESTAMP WITH TIME ZONE (更新时间)
 --    - deleted: INT (逻辑删除: 0=正常, 1=已删除)
--- 2. 对外接口只使用 object_code，不暴露 id
+-- 2. id 使用雪花算法生成，由应用层负责生成，不使用自增
 -- 3. 不使用外键约束，数据完整性在应用层保证
 -- 4. 每个字段必须有字段描述
 -- 5. 字符串字段设置 NOT NULL 且默认值为空字符串
@@ -53,8 +52,7 @@ DROP TABLE IF EXISTS users CASCADE;
 
 -- 1. 用户表
 CREATE TABLE users (
-    id BIGSERIAL PRIMARY KEY,                                           -- 主键ID，内部使用不对外暴露
-    object_code VARCHAR(32) NOT NULL UNIQUE,                            -- 雪花ID，对外唯一标识
+    id BIGINT PRIMARY KEY,                                              -- 雪花ID，主键
     username VARCHAR(64) NOT NULL UNIQUE,                               -- 用户名，唯一
     password_hash VARCHAR(256) NOT NULL DEFAULT '',                     -- 密码哈希值
     nickname VARCHAR(128) NOT NULL DEFAULT '',                          -- 用户昵称
@@ -65,12 +63,10 @@ CREATE TABLE users (
     deleted INT NOT NULL DEFAULT 0                                      -- 逻辑删除: 0=正常, 1=已删除
 );
 
-CREATE INDEX idx_users_object_code ON users(object_code);
 CREATE INDEX idx_users_username ON users(username);
 
 COMMENT ON TABLE users IS '用户表';
-COMMENT ON COLUMN users.id IS '主键ID，内部使用不对外暴露';
-COMMENT ON COLUMN users.object_code IS '雪花ID，对外唯一标识';
+COMMENT ON COLUMN users.id IS '雪花ID，主键';
 COMMENT ON COLUMN users.username IS '用户名，唯一';
 COMMENT ON COLUMN users.password_hash IS '密码哈希值';
 COMMENT ON COLUMN users.nickname IS '用户昵称';
@@ -82,8 +78,7 @@ COMMENT ON COLUMN users.deleted IS '逻辑删除: 0=正常, 1=已删除';
 
 -- 2. 好友邀请表
 CREATE TABLE friend_requests (
-    id BIGSERIAL PRIMARY KEY,                                           -- 主键ID，内部使用不对外暴露
-    object_code VARCHAR(32) NOT NULL UNIQUE,                            -- 雪花ID，对外唯一标识
+    id BIGINT PRIMARY KEY,                                              -- 雪花ID，主键
     from_user_id BIGINT NOT NULL,                                       -- 发起者用户ID，关联users.id
     to_user_id BIGINT NOT NULL,                                         -- 接收者用户ID，关联users.id
     message VARCHAR(256) NOT NULL DEFAULT '',                           -- 邀请附言
@@ -93,13 +88,11 @@ CREATE TABLE friend_requests (
     deleted INT NOT NULL DEFAULT 0                                      -- 逻辑删除: 0=正常, 1=已删除
 );
 
-CREATE INDEX idx_friend_requests_object_code ON friend_requests(object_code);
 CREATE INDEX idx_friend_requests_from_user ON friend_requests(from_user_id);
 CREATE INDEX idx_friend_requests_to_user ON friend_requests(to_user_id);
 
 COMMENT ON TABLE friend_requests IS '好友邀请表';
-COMMENT ON COLUMN friend_requests.id IS '主键ID，内部使用不对外暴露';
-COMMENT ON COLUMN friend_requests.object_code IS '雪花ID，对外唯一标识';
+COMMENT ON COLUMN friend_requests.id IS '雪花ID，主键';
 COMMENT ON COLUMN friend_requests.from_user_id IS '发起者用户ID，关联users.id';
 COMMENT ON COLUMN friend_requests.to_user_id IS '接收者用户ID，关联users.id';
 COMMENT ON COLUMN friend_requests.message IS '邀请附言';
@@ -110,8 +103,7 @@ COMMENT ON COLUMN friend_requests.deleted IS '逻辑删除: 0=正常, 1=已删�
 
 -- 3. 好友关系表（只存储已确认的好友关系）
 CREATE TABLE friends (
-    id BIGSERIAL PRIMARY KEY,                                           -- 主键ID，内部使用不对外暴露
-    object_code VARCHAR(32) NOT NULL UNIQUE,                            -- 雪花ID，对外唯一标识
+    id BIGINT PRIMARY KEY,                                              -- 雪花ID，主键
     user_id BIGINT NOT NULL,                                            -- 用户ID，关联users.id
     friend_id BIGINT NOT NULL,                                          -- 好友用户ID，关联users.id
     remark VARCHAR(128) NOT NULL DEFAULT '',                            -- 好友备注
@@ -121,24 +113,21 @@ CREATE TABLE friends (
     UNIQUE(user_id, friend_id)
 );
 
-CREATE INDEX idx_friends_object_code ON friends(object_code);
 CREATE INDEX idx_friends_user ON friends(user_id);
 CREATE INDEX idx_friends_friend ON friends(friend_id);
 
 COMMENT ON TABLE friends IS '好友关系表（只存储已确认的好友关系）';
-COMMENT ON COLUMN friends.id IS '主键ID，内部使用不对外暴露';
-COMMENT ON COLUMN friends.object_code IS '雪花ID，对外唯一标识';
+COMMENT ON COLUMN friends.id IS '雪花ID，主键';
 COMMENT ON COLUMN friends.user_id IS '用户ID，关联users.id';
 COMMENT ON COLUMN friends.friend_id IS '好友用户ID，关联users.id';
 COMMENT ON COLUMN friends.remark IS '好友备注';
 COMMENT ON COLUMN friends.create_at IS '创建时间';
-COMMENT ON COLUMN friends.update_at IS '更新时间';
+COMMENT ON COLUMN friends.update_at IS '更建时间';
 COMMENT ON COLUMN friends.deleted IS '逻辑删除: 0=正常, 1=已删除';
 
 -- 4. 消息表
 CREATE TABLE messages (
-    id BIGSERIAL PRIMARY KEY,                                           -- 主键ID，内部使用不对外暴露
-    object_code VARCHAR(32) NOT NULL UNIQUE,                            -- 雪花ID，对外唯一标识
+    id BIGINT PRIMARY KEY,                                              -- 雪花ID，主键
     client_msg_id VARCHAR(64) NOT NULL DEFAULT '',                      -- 客户端消息ID，用于去重
     from_user_id BIGINT NOT NULL,                                       -- 发送者用户ID，关联users.id
     to_user_id BIGINT,                                                  -- 接收者用户ID，私聊时使用，关联users.id
@@ -151,15 +140,13 @@ CREATE TABLE messages (
     deleted INT NOT NULL DEFAULT 0                                      -- 逻辑删除: 0=正常, 1=已删除
 );
 
-CREATE INDEX idx_messages_object_code ON messages(object_code);
 CREATE INDEX idx_messages_from_user ON messages(from_user_id, create_at DESC);
 CREATE INDEX idx_messages_to_user ON messages(to_user_id, create_at DESC) WHERE to_user_id IS NOT NULL;
 CREATE INDEX idx_messages_to_group ON messages(to_group_id, create_at DESC) WHERE to_group_id IS NOT NULL;
 CREATE INDEX idx_messages_client_msg_id ON messages(client_msg_id);
 
 COMMENT ON TABLE messages IS '消息表';
-COMMENT ON COLUMN messages.id IS '主键ID，内部使用不对外暴露';
-COMMENT ON COLUMN messages.object_code IS '雪花ID，对外唯一标识';
+COMMENT ON COLUMN messages.id IS '雪花ID，主键';
 COMMENT ON COLUMN messages.client_msg_id IS '客户端消息ID，用于去重';
 COMMENT ON COLUMN messages.from_user_id IS '发送者用户ID，关联users.id';
 COMMENT ON COLUMN messages.to_user_id IS '接收者用户ID，私聊时使用，关联users.id';
@@ -173,8 +160,7 @@ COMMENT ON COLUMN messages.deleted IS '逻辑删除: 0=正常, 1=已删除';
 
 -- 5. 群组表
 CREATE TABLE groups (
-    id BIGSERIAL PRIMARY KEY,                                           -- 主键ID，内部使用不对外暴露
-    object_code VARCHAR(32) NOT NULL UNIQUE,                            -- 雪花ID，对外唯一标识
+    id BIGINT PRIMARY KEY,                                              -- 雪花ID，主键
     name VARCHAR(128) NOT NULL DEFAULT '',                              -- 群组名称
     owner_id BIGINT NOT NULL,                                           -- 群主用户ID，关联users.id
     avatar VARCHAR(512) NOT NULL DEFAULT '',                            -- 群头像URL
@@ -186,12 +172,10 @@ CREATE TABLE groups (
     deleted INT NOT NULL DEFAULT 0                                      -- 逻辑删除: 0=正常, 1=已删除
 );
 
-CREATE INDEX idx_groups_object_code ON groups(object_code);
 CREATE INDEX idx_groups_owner ON groups(owner_id);
 
 COMMENT ON TABLE groups IS '群组表';
-COMMENT ON COLUMN groups.id IS '主键ID，内部使用不对外暴露';
-COMMENT ON COLUMN groups.object_code IS '雪花ID，对外唯一标识';
+COMMENT ON COLUMN groups.id IS '雪花ID，主键';
 COMMENT ON COLUMN groups.name IS '群组名称';
 COMMENT ON COLUMN groups.owner_id IS '群主用户ID，关联users.id';
 COMMENT ON COLUMN groups.avatar IS '群头像URL';
@@ -204,8 +188,7 @@ COMMENT ON COLUMN groups.deleted IS '逻辑删除: 0=正常, 1=已删除';
 
 -- 6. 群成员表
 CREATE TABLE group_members (
-    id BIGSERIAL PRIMARY KEY,                                           -- 主键ID，内部使用不对外暴露
-    object_code VARCHAR(32) NOT NULL UNIQUE,                            -- 雪花ID，对外唯一标识
+    id BIGINT PRIMARY KEY,                                              -- 雪花ID，主键
     group_id BIGINT NOT NULL,                                           -- 群组ID，关联groups.id
     user_id BIGINT NOT NULL,                                            -- 用户ID，关联users.id
     role INT NOT NULL DEFAULT 0,                                        -- 角色: 0=成员, 1=管理员, 2=群主
@@ -216,13 +199,11 @@ CREATE TABLE group_members (
     UNIQUE(group_id, user_id)
 );
 
-CREATE INDEX idx_group_members_object_code ON group_members(object_code);
 CREATE INDEX idx_group_members_user ON group_members(user_id);
 CREATE INDEX idx_group_members_group ON group_members(group_id);
 
 COMMENT ON TABLE group_members IS '群成员表';
-COMMENT ON COLUMN group_members.id IS '主键ID，内部使用不对外暴露';
-COMMENT ON COLUMN group_members.object_code IS '雪花ID，对外唯一标识';
+COMMENT ON COLUMN group_members.id IS '雪花ID，主键';
 COMMENT ON COLUMN group_members.group_id IS '群组ID，关联groups.id';
 COMMENT ON COLUMN group_members.user_id IS '用户ID，关联users.id';
 COMMENT ON COLUMN group_members.role IS '角色: 0=成员, 1=管理员, 2=群主';
@@ -233,8 +214,7 @@ COMMENT ON COLUMN group_members.deleted IS '逻辑删除: 0=正常, 1=已删除'
 
 -- 7. 离线消息表
 CREATE TABLE offline_messages (
-    id BIGSERIAL PRIMARY KEY,                                           -- 主键ID，内部使用不对外暴露
-    object_code VARCHAR(32) NOT NULL UNIQUE,                            -- 雪花ID，对外唯一标识
+    id BIGINT PRIMARY KEY,                                              -- 雪花ID，主键
     user_id BIGINT NOT NULL,                                            -- 用户ID，关联users.id
     message_id BIGINT NOT NULL,                                         -- 消息ID，关联messages.id
     create_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),          -- 创建时间
@@ -243,12 +223,10 @@ CREATE TABLE offline_messages (
     UNIQUE(user_id, message_id)
 );
 
-CREATE INDEX idx_offline_messages_object_code ON offline_messages(object_code);
 CREATE INDEX idx_offline_messages_user ON offline_messages(user_id, create_at ASC);
 
 COMMENT ON TABLE offline_messages IS '离线消息表';
-COMMENT ON COLUMN offline_messages.id IS '主键ID，内部使用不对外暴露';
-COMMENT ON COLUMN offline_messages.object_code IS '雪花ID，对外唯一标识';
+COMMENT ON COLUMN offline_messages.id IS '雪花ID，主键';
 COMMENT ON COLUMN offline_messages.user_id IS '用户ID，关联users.id';
 COMMENT ON COLUMN offline_messages.message_id IS '消息ID，关联messages.id';
 COMMENT ON COLUMN offline_messages.create_at IS '创建时间';

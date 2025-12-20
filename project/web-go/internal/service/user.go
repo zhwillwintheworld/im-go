@@ -28,11 +28,6 @@ func (s *UserService) GetByID(ctx context.Context, userID int64) (*model.User, e
 	return s.userRepo.GetByID(ctx, userID)
 }
 
-// GetByObjectCode 通过 ObjectCode 获取用户
-func (s *UserService) GetByObjectCode(ctx context.Context, objectCode string) (*model.User, error) {
-	return s.userRepo.GetByObjectCode(ctx, objectCode)
-}
-
 // UpdateProfile 更新用户资料
 func (s *UserService) UpdateProfile(ctx context.Context, userID int64, req *UpdateProfileRequest) error {
 	user, err := s.userRepo.GetByID(ctx, userID)

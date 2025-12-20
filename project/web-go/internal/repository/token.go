@@ -18,13 +18,12 @@ const (
 
 // UserTokenInfo 存储在Redis中的用户信息
 type UserTokenInfo struct {
-	UserID     int64  `json:"user_id"`
-	ObjectCode string `json:"object_code"`
-	Username   string `json:"username"`
-	Nickname   string `json:"nickname"`
-	Avatar     string `json:"avatar"`
-	DeviceID   string `json:"device_id"`
-	Platform   string `json:"platform"`
+	UserID   int64  `json:"user_id"`
+	Username string `json:"username"`
+	Nickname string `json:"nickname"`
+	Avatar   string `json:"avatar"`
+	DeviceID string `json:"device_id"`
+	Platform string `json:"platform"`
 }
 
 // TokenRepository Token 数据访问层

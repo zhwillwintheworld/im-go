@@ -30,55 +30,28 @@ func NewFriendRepository(db *pgxpool.Pool) *FriendRepository {
 // CreateRequest 创建好友请求
 func (r *FriendRepository) CreateRequest(ctx context.Context, request *model.FriendRequest) error {
 	query := `
-		INSERT INTO friend_requests (object_code, from_user_id, to_user_id, message, status, create_at, update_at)
+		INSERT INTO friend_requests (id, from_user_id, to_user_id, message, status, create_at, update_at)
 		VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
-		RETURNING id, create_at, update_at
+		RETURNING create_at, update_at
 	`
 	return r.db.QueryRow(ctx, query,
-		request.ObjectCode,
+		request.ID,
 		request.FromUserID,
 		request.ToUserID,
 		request.Message,
 		request.Status,
-	).Scan(&request.ID, &request.CreateAt, &request.UpdateAt)
+	).Scan(&request.CreateAt, &request.UpdateAt)
 }
 
 // GetRequestByID 通过 ID 获取好友请求
 func (r *FriendRepository) GetRequestByID(ctx context.Context, id int64) (*model.FriendRequest, error) {
 	query := `
-		SELECT id, object_code, from_user_id, to_user_id, message, status, create_at, update_at
+		SELECT id, from_user_id, to_user_id, message, status, create_at, update_at
 		FROM friend_requests WHERE id = $1 AND deleted = 0
 	`
 	req := &model.FriendRequest{}
 	err := r.db.QueryRow(ctx, query, id).Scan(
 		&req.ID,
-		&req.ObjectCode,
-		&req.FromUserID,
-		&req.ToUserID,
-		&req.Message,
-		&req.Status,
-		&req.CreateAt,
-		&req.UpdateAt,
-	)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrFriendRequestNotFound
-		}
-		return nil, err
-	}
-	return req, nil
-}
-
-// GetRequestByObjectCode 通过 ObjectCode 获取好友请求
-func (r *FriendRepository) GetRequestByObjectCode(ctx context.Context, objectCode string) (*model.FriendRequest, error) {
-	query := `
-		SELECT id, object_code, from_user_id, to_user_id, message, status, create_at, update_at
-		FROM friend_requests WHERE object_code = $1 AND deleted = 0
-	`
-	req := &model.FriendRequest{}
-	err := r.db.QueryRow(ctx, query, objectCode).Scan(
-		&req.ID,
-		&req.ObjectCode,
 		&req.FromUserID,
 		&req.ToUserID,
 		&req.Message,
@@ -98,14 +71,13 @@ func (r *FriendRepository) GetRequestByObjectCode(ctx context.Context, objectCod
 // GetPendingRequest 获取待处理的好友请求
 func (r *FriendRepository) GetPendingRequest(ctx context.Context, fromUserID, toUserID int64) (*model.FriendRequest, error) {
 	query := `
-		SELECT id, object_code, from_user_id, to_user_id, message, status, create_at, update_at
+		SELECT id, from_user_id, to_user_id, message, status, create_at, update_at
 		FROM friend_requests
 		WHERE from_user_id = $1 AND to_user_id = $2 AND status = $3 AND deleted = 0
 	`
 	req := &model.FriendRequest{}
 	err := r.db.QueryRow(ctx, query, fromUserID, toUserID, model.FriendRequestStatusPending).Scan(
 		&req.ID,
-		&req.ObjectCode,
 		&req.FromUserID,
 		&req.ToUserID,
 		&req.Message,
@@ -138,7 +110,7 @@ func (r *FriendRepository) UpdateRequestStatus(ctx context.Context, id int64, st
 // GetPendingRequestsForUser 获取用户待处理的好友请求
 func (r *FriendRepository) GetPendingRequestsForUser(ctx context.Context, userID int64) ([]*model.FriendRequestWithUser, error) {
 	query := `
-		SELECT fr.id, fr.object_code, fr.from_user_id, fr.to_user_id, fr.message, fr.status, fr.create_at, fr.update_at,
+		SELECT fr.id, fr.from_user_id, fr.to_user_id, fr.message, fr.status, fr.create_at, fr.update_at,
 		       u.username, u.nickname, u.avatar
 		FROM friend_requests fr
 		JOIN users u ON fr.from_user_id = u.id
@@ -156,7 +128,6 @@ func (r *FriendRepository) GetPendingRequestsForUser(ctx context.Context, userID
 		req := &model.FriendRequestWithUser{}
 		err := rows.Scan(
 			&req.ID,
-			&req.ObjectCode,
 			&req.FromUserID,
 			&req.ToUserID,
 			&req.Message,
@@ -176,7 +147,7 @@ func (r *FriendRepository) GetPendingRequestsForUser(ctx context.Context, userID
 }
 
 // CreateFriendship 创建好友关系（双向）
-func (r *FriendRepository) CreateFriendship(ctx context.Context, userObjectCode, friendObjectCode string, userID, friendID int64) error {
+func (r *FriendRepository) CreateFriendship(ctx context.Context, userFriendID, friendFriendID, userID, friendID int64) error {
 	tx, err := r.db.Begin(ctx)
 	if err != nil {
 		return err
@@ -184,16 +155,16 @@ func (r *FriendRepository) CreateFriendship(ctx context.Context, userObjectCode,
 	defer tx.Rollback(ctx)
 
 	query := `
-		INSERT INTO friends (object_code, user_id, friend_id, create_at, update_at)
+		INSERT INTO friends (id, user_id, friend_id, create_at, update_at)
 		VALUES ($1, $2, $3, NOW(), NOW())
 		ON CONFLICT (user_id, friend_id) DO NOTHING
 	`
 
 	// 添加双向好友关系
-	if _, err := tx.Exec(ctx, query, userObjectCode, userID, friendID); err != nil {
+	if _, err := tx.Exec(ctx, query, userFriendID, userID, friendID); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx, query, friendObjectCode, friendID, userID); err != nil {
+	if _, err := tx.Exec(ctx, query, friendFriendID, friendID, userID); err != nil {
 		return err
 	}
 
@@ -231,7 +202,7 @@ func (r *FriendRepository) IsFriend(ctx context.Context, userID, friendID int64)
 // GetFriends 获取好友列表
 func (r *FriendRepository) GetFriends(ctx context.Context, userID int64) ([]*model.FriendWithUser, error) {
 	query := `
-		SELECT f.id, f.object_code, f.user_id, f.friend_id, f.remark, f.create_at, f.update_at,
+		SELECT f.id, f.user_id, f.friend_id, f.remark, f.create_at, f.update_at,
 		       u.username, u.nickname, u.avatar
 		FROM friends f
 		JOIN users u ON f.friend_id = u.id
@@ -249,7 +220,6 @@ func (r *FriendRepository) GetFriends(ctx context.Context, userID int64) ([]*mod
 		f := &model.FriendWithUser{}
 		err := rows.Scan(
 			&f.ID,
-			&f.ObjectCode,
 			&f.UserID,
 			&f.FriendID,
 			&f.Remark,

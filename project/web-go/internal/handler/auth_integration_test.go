@@ -205,7 +205,7 @@ func TestIntegration_Login_Success(t *testing.T) {
 	err = json.Unmarshal(loginResp.Data, &loginData)
 	require.NoError(t, err)
 
-	assert.NotEmpty(t, loginData.ObjectCode, "应该返回 object_code")
+	assert.NotZero(t, loginData.UserID, "应该返回 user_id")
 	assert.NotEmpty(t, loginData.AccessToken, "应该返回 access_token")
 	assert.NotEmpty(t, loginData.RefreshToken, "应该返回 refresh_token")
 	assert.NotZero(t, loginData.ExpiresAt, "应该返回过期时间")
@@ -217,7 +217,7 @@ func TestIntegration_Login_Success(t *testing.T) {
 	assert.Equal(t, "test-device-001", claims.DeviceID)
 	assert.Equal(t, jwt.Platform("pc"), claims.Platform)
 
-	t.Logf("登录成功! ObjectCode: %s, AccessToken: %s...", loginData.ObjectCode, loginData.AccessToken[:20])
+	t.Logf("登录成功! UserID: %d, AccessToken: %s...", loginData.UserID, loginData.AccessToken[:20])
 }
 
 // TestIntegration_Login_WrongPassword 集成测试: 密码错误

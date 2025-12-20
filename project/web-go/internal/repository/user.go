@@ -28,57 +28,29 @@ func NewUserRepository(db *pgxpool.Pool) *UserRepository {
 // Create 创建用户
 func (r *UserRepository) Create(ctx context.Context, user *model.User) error {
 	query := `
-		INSERT INTO users (object_code, username, password_hash, nickname, avatar, status, create_at, update_at)
+		INSERT INTO users (id, username, password_hash, nickname, avatar, status, create_at, update_at)
 		VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
-		RETURNING id, create_at, update_at
+		RETURNING create_at, update_at
 	`
 	return r.db.QueryRow(ctx, query,
-		user.ObjectCode,
+		user.ID,
 		user.Username,
 		user.PasswordHash,
 		user.Nickname,
 		user.Avatar,
 		user.Status,
-	).Scan(&user.ID, &user.CreateAt, &user.UpdateAt)
+	).Scan(&user.CreateAt, &user.UpdateAt)
 }
 
 // GetByID 通过 ID 获取用户
 func (r *UserRepository) GetByID(ctx context.Context, id int64) (*model.User, error) {
 	query := `
-		SELECT id, object_code, username, password_hash, nickname, avatar, status, create_at, update_at
+		SELECT id, username, password_hash, nickname, avatar, status, create_at, update_at
 		FROM users WHERE id = $1 AND deleted = 0
 	`
 	user := &model.User{}
 	err := r.db.QueryRow(ctx, query, id).Scan(
 		&user.ID,
-		&user.ObjectCode,
-		&user.Username,
-		&user.PasswordHash,
-		&user.Nickname,
-		&user.Avatar,
-		&user.Status,
-		&user.CreateAt,
-		&user.UpdateAt,
-	)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrUserNotFound
-		}
-		return nil, err
-	}
-	return user, nil
-}
-
-// GetByObjectCode 通过 ObjectCode 获取用户
-func (r *UserRepository) GetByObjectCode(ctx context.Context, objectCode string) (*model.User, error) {
-	query := `
-		SELECT id, object_code, username, password_hash, nickname, avatar, status, create_at, update_at
-		FROM users WHERE object_code = $1 AND deleted = 0
-	`
-	user := &model.User{}
-	err := r.db.QueryRow(ctx, query, objectCode).Scan(
-		&user.ID,
-		&user.ObjectCode,
 		&user.Username,
 		&user.PasswordHash,
 		&user.Nickname,
@@ -99,13 +71,12 @@ func (r *UserRepository) GetByObjectCode(ctx context.Context, objectCode string)
 // GetByUsername 通过用户名获取用户
 func (r *UserRepository) GetByUsername(ctx context.Context, username string) (*model.User, error) {
 	query := `
-		SELECT id, object_code, username, password_hash, nickname, avatar, status, create_at, update_at
+		SELECT id, username, password_hash, nickname, avatar, status, create_at, update_at
 		FROM users WHERE username = $1 AND deleted = 0
 	`
 	user := &model.User{}
 	err := r.db.QueryRow(ctx, query, username).Scan(
 		&user.ID,
-		&user.ObjectCode,
 		&user.Username,
 		&user.PasswordHash,
 		&user.Nickname,
@@ -154,7 +125,7 @@ func (r *UserRepository) Update(ctx context.Context, user *model.User) error {
 // Search 搜索用户
 func (r *UserRepository) Search(ctx context.Context, keyword string, limit, offset int) ([]*model.User, error) {
 	query := `
-		SELECT id, object_code, username, nickname, avatar, status, create_at, update_at
+		SELECT id, username, nickname, avatar, status, create_at, update_at
 		FROM users
 		WHERE (username ILIKE $1 OR nickname ILIKE $1) AND deleted = 0
 		ORDER BY id DESC
@@ -171,7 +142,6 @@ func (r *UserRepository) Search(ctx context.Context, keyword string, limit, offs
 		user := &model.User{}
 		err := rows.Scan(
 			&user.ID,
-			&user.ObjectCode,
 			&user.Username,
 			&user.Nickname,
 			&user.Avatar,
