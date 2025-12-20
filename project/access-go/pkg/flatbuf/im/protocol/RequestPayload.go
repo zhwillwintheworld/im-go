@@ -7,27 +7,30 @@ import "strconv"
 type RequestPayload int8
 
 const (
-	RequestPayloadNONE         RequestPayload = 0
-	RequestPayloadChatSendReq  RequestPayload = 1
-	RequestPayloadGameReq      RequestPayload = 2
-	RequestPayloadHeartbeatReq RequestPayload = 3
-	RequestPayloadRoomReq      RequestPayload = 4
+	RequestPayloadNONE                RequestPayload = 0
+	RequestPayloadChatSendReq         RequestPayload = 1
+	RequestPayloadGameReq             RequestPayload = 2
+	RequestPayloadHeartbeatReq        RequestPayload = 3
+	RequestPayloadRoomReq             RequestPayload = 4
+	RequestPayloadConversationReadReq RequestPayload = 5
 )
 
 var EnumNamesRequestPayload = map[RequestPayload]string{
-	RequestPayloadNONE:         "NONE",
-	RequestPayloadChatSendReq:  "ChatSendReq",
-	RequestPayloadGameReq:      "GameReq",
-	RequestPayloadHeartbeatReq: "HeartbeatReq",
-	RequestPayloadRoomReq:      "RoomReq",
+	RequestPayloadNONE:                "NONE",
+	RequestPayloadChatSendReq:         "ChatSendReq",
+	RequestPayloadGameReq:             "GameReq",
+	RequestPayloadHeartbeatReq:        "HeartbeatReq",
+	RequestPayloadRoomReq:             "RoomReq",
+	RequestPayloadConversationReadReq: "ConversationReadReq",
 }
 
 var EnumValuesRequestPayload = map[string]RequestPayload{
-	"NONE":         RequestPayloadNONE,
-	"ChatSendReq":  RequestPayloadChatSendReq,
-	"GameReq":      RequestPayloadGameReq,
-	"HeartbeatReq": RequestPayloadHeartbeatReq,
-	"RoomReq":      RequestPayloadRoomReq,
+	"NONE":                RequestPayloadNONE,
+	"ChatSendReq":         RequestPayloadChatSendReq,
+	"GameReq":             RequestPayloadGameReq,
+	"HeartbeatReq":        RequestPayloadHeartbeatReq,
+	"RoomReq":             RequestPayloadRoomReq,
+	"ConversationReadReq": RequestPayloadConversationReadReq,
 }
 
 func (v RequestPayload) String() string {

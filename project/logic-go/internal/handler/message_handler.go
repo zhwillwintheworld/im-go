@@ -10,12 +10,13 @@ import (
 
 // MessageHandler 消息处理器实现
 type MessageHandler struct {
-	messageBatcher *service.MessageBatcher // 改用批量写入器
-	messageService *service.MessageService // 保留用于查询
-	userService    *service.UserService
-	groupService   *service.GroupService
-	routerService  *service.RouterService
-	logger         *slog.Logger
+	messageBatcher      *service.MessageBatcher // 批量写入器
+	messageService      *service.MessageService // 保留用于查询
+	userService         *service.UserService
+	groupService        *service.GroupService
+	routerService       *service.RouterService
+	conversationService *service.ConversationService // 会话服务
+	logger              *slog.Logger
 }
 
 // NewMessageHandler 创建消息处理器
@@ -25,14 +26,16 @@ func NewMessageHandler(
 	userService *service.UserService,
 	groupService *service.GroupService,
 	routerService *service.RouterService,
+	conversationService *service.ConversationService,
 ) *MessageHandler {
 	return &MessageHandler{
-		messageBatcher: messageBatcher,
-		messageService: messageService,
-		userService:    userService,
-		groupService:   groupService,
-		routerService:  routerService,
-		logger:         slog.Default(),
+		messageBatcher:      messageBatcher,
+		messageService:      messageService,
+		userService:         userService,
+		groupService:        groupService,
+		routerService:       routerService,
+		conversationService: conversationService,
+		logger:              slog.Default(),
 	}
 }
 
@@ -56,6 +59,12 @@ func (h *MessageHandler) HandleUserMessage(ctx context.Context, msg *proto.UserM
 		if err := h.routerService.RouteMessage(ctx, msg.ToUserId, msg, serverMsgId); err != nil {
 			h.logger.Error("Failed to route message to user", "toUserId", msg.ToUserId, "error", err)
 		}
+
+		// 更新发送者会话
+		h.conversationService.UpdateConversationForSender(ctx, msg.FromUserId, msg.ToUserId, 0, serverMsgId)
+		// 更新接收者会话
+		h.conversationService.UpdateConversationForReceiver(ctx, msg.ToUserId, msg.FromUserId, 0, serverMsgId)
+
 	} else if msg.ToGroupId > 0 {
 		// 群聊消息
 		members, err := h.groupService.GetGroupMembers(ctx, msg.ToGroupId)
@@ -68,12 +77,23 @@ func (h *MessageHandler) HandleUserMessage(ctx context.Context, msg *proto.UserM
 		if err := h.routerService.RouteToMultiple(ctx, filteredMembers, msg, serverMsgId); err != nil {
 			h.logger.Error("Failed to route message to group", "groupId", msg.ToGroupId, "error", err)
 		}
+
+		// 更新所有群成员会话
+		h.conversationService.UpdateConversationForGroupMembers(ctx, members, msg.FromUserId, msg.ToGroupId, serverMsgId)
 	}
 
 	// 4. 多端同步：同步消息给发送者的其他设备
 	if err := h.routerService.SyncToSenderOtherDevices(ctx, platform, msg.FromUserId, msg, serverMsgId); err != nil {
 		h.logger.Error("Failed to sync to sender other devices", "error", err)
 	}
+}
+
+// HandleConversationRead 处理会话已读
+func (h *MessageHandler) HandleConversationRead(ctx context.Context, event *proto.ConversationRead) {
+	if err := h.conversationService.MarkRead(ctx, event.UserId, event.PeerID, event.GroupID, event.LastReadMsgID); err != nil {
+		h.logger.Error("Failed to mark conversation read", "userId", event.UserId, "error", err)
+	}
+	h.logger.Debug("Conversation marked read", "userId", event.UserId, "peerId", event.PeerID, "groupId", event.GroupID)
 }
 
 // HandleUserOnline 处理用户上线

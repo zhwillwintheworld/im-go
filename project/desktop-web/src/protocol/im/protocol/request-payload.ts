@@ -7,5 +7,7 @@ export enum RequestPayload {
   ChatSendReq = 1,
   GameReq = 2,
   HeartbeatReq = 3,
-  RoomReq = 4
+  RoomReq = 4,
+  ConversationReadReq = 5
 }
+

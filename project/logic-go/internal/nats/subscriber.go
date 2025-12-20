@@ -16,6 +16,7 @@ type MessageHandler interface {
 	HandleUserMessage(ctx context.Context, msg *proto.UserMessage, accessNodeId string, platform string)
 	HandleUserOnline(ctx context.Context, event *proto.UserOnline, accessNodeId string)
 	HandleUserOffline(ctx context.Context, event *proto.UserOffline, accessNodeId string)
+	HandleConversationRead(ctx context.Context, event *proto.ConversationRead)
 }
 
 // SubscriberConfig Worker Pool 配置
@@ -129,6 +130,8 @@ func (s *MessageSubscriber) handleUpstreamMessage(ctx context.Context, data []by
 		s.handler.HandleUserOnline(ctx, message.UserOnline, accessNodeId)
 	case message.UserOffline != nil:
 		s.handler.HandleUserOffline(ctx, message.UserOffline, accessNodeId)
+	case message.ConversationRead != nil:
+		s.handler.HandleConversationRead(ctx, message.ConversationRead)
 	}
 }
 

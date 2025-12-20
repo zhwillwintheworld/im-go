@@ -235,6 +235,8 @@ func (h *Handler) handleClientRequest(ctx context.Context, conn *connection.Conn
 		h.handleRoomRequest(ctx, conn, stream, reqID, payload)
 	case im_protocol.RequestPayloadGameReq:
 		h.handleGameRequest(ctx, conn, stream, reqID, payload)
+	case im_protocol.RequestPayloadConversationReadReq:
+		h.handleConversationRead(ctx, conn, stream, reqID, payload)
 	default:
 		h.logger.Warn("Unknown payload type", "payload_type", payloadType)
 		h.sendClientResponse(stream, reqID, im_protocol.ErrorCodeUNKNOWN_ERROR, "unknown payload type", im_protocol.ResponsePayloadNONE, nil)
@@ -339,6 +341,45 @@ func (h *Handler) handleGameRequest(ctx context.Context, conn *connection.Connec
 		"game_type", gameType.String())
 
 	// TODO: 转发到 Logic 处理
+}
+
+// handleConversationRead 处理会话已读请求
+func (h *Handler) handleConversationRead(ctx context.Context, conn *connection.Connection, stream *webtransport.Stream, reqID string, payload []byte) {
+	h.logger.Debug("ConversationReadReq received", "conn_id", conn.ID())
+
+	// 解析 ConversationReadReq
+	readReq := im_protocol.GetRootAsConversationReadReq(payload, 0)
+
+	// 解析 ID
+	peerIdStr := string(readReq.PeerId())
+	groupIdStr := string(readReq.GroupId())
+	lastReadMsgIdStr := string(readReq.LastReadMsgId())
+
+	peerId, _ := strconv.ParseInt(peerIdStr, 10, 64)
+	groupId, _ := strconv.ParseInt(groupIdStr, 10, 64)
+	lastReadMsgId, _ := strconv.ParseInt(lastReadMsgIdStr, 10, 64)
+
+	// 封装上行消息到 Logic
+	msg := &proto.UpstreamMessage{
+		AccessNodeId: h.nodeID,
+		ConversationRead: &proto.ConversationRead{
+			UserId:        conn.UserID(),
+			PeerID:        peerId,
+			GroupID:       groupId,
+			LastReadMsgID: lastReadMsgId,
+		},
+	}
+
+	data, _ := json.Marshal(msg)
+	if err := h.natsClient.Publish(sharedNats.SubjectLogicUpstream, data); err != nil {
+		h.logger.Error("Failed to publish conversation read to NATS", "error", err)
+		h.sendClientResponse(stream, reqID, im_protocol.ErrorCodeUNKNOWN_ERROR, "internal error", im_protocol.ResponsePayloadNONE, nil)
+		return
+	}
+
+	// 返回成功
+	h.sendClientResponse(stream, reqID, im_protocol.ErrorCodeSUCCESS, "", im_protocol.ResponsePayloadNONE, nil)
+	h.logger.Debug("Conversation read forwarded to logic", "userId", conn.UserID(), "peerId", peerId, "groupId", groupId)
 }
 
 func (h *Handler) sendUserOnlineToLogic(conn *connection.Connection, sessInfo *connection.SessionInfo) {

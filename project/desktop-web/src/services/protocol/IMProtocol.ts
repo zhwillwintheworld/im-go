@@ -4,6 +4,7 @@ import { ClientRequest } from '../../protocol/im/protocol/client-request.js';
 import { ClientResponse } from '../../protocol/im/protocol/client-response.js';
 import { HeartbeatReq } from '../../protocol/im/protocol/heartbeat-req.js';
 import { ChatSendReq } from '../../protocol/im/protocol/chat-send-req.js';
+import { ConversationReadReq } from '../../protocol/im/protocol/conversation-read-req.js';
 import { Platform } from '../../protocol/im/protocol/platform.js';
 import { RequestPayload } from '../../protocol/im/protocol/request-payload.js';
 import { ResponsePayload } from '../../protocol/im/protocol/response-payload.js';
@@ -195,6 +196,60 @@ export class IMProtocol {
         };
     }
 
+    /**
+     * 创建会话已读请求帧
+     * @param peerId 私聊对方ID（与 groupId 二选一）
+     * @param groupId 群聊ID（与 peerId 二选一）
+     * @param lastReadMsgId 最后已读消息ID
+     */
+    static createConversationReadRequest(
+        peerId: string | null,
+        groupId: string | null,
+        lastReadMsgId: string
+    ): { frame: Uint8Array; reqId: string } {
+        const reqId = generateReqId();
+
+        console.log('[IMProtocol] Creating ConversationReadRequest:', {
+            reqId,
+            peerId,
+            groupId,
+            lastReadMsgId
+        });
+
+        // 1. 构建 ConversationReadReq payload
+        const payloadBuilder = new flatbuffers.Builder(256);
+        const peerIdOffset = peerId ? payloadBuilder.createString(peerId) : 0;
+        const groupIdOffset = groupId ? payloadBuilder.createString(groupId) : 0;
+        const lastReadMsgIdOffset = payloadBuilder.createString(lastReadMsgId);
+
+        ConversationReadReq.startConversationReadReq(payloadBuilder);
+        if (peerIdOffset) ConversationReadReq.addPeerId(payloadBuilder, peerIdOffset);
+        if (groupIdOffset) ConversationReadReq.addGroupId(payloadBuilder, groupIdOffset);
+        ConversationReadReq.addLastReadMsgId(payloadBuilder, lastReadMsgIdOffset);
+        const readReqOffset = ConversationReadReq.endConversationReadReq(payloadBuilder);
+        payloadBuilder.finish(readReqOffset);
+        const payloadBytes = payloadBuilder.asUint8Array();
+
+        // 2. 构建 ClientRequest
+        const builder = new flatbuffers.Builder(512);
+        const reqIdOffset = builder.createString(reqId);
+        const payloadOffset = ClientRequest.createPayloadVector(builder, payloadBytes);
+
+        const clientReqOffset = ClientRequest.createClientRequest(
+            builder,
+            reqIdOffset,
+            BigInt(Date.now()),
+            RequestPayload.ConversationReadReq,
+            payloadOffset
+        );
+        builder.finish(clientReqOffset);
+
+        return {
+            frame: this.buildFrame(FrameType.Request, builder.asUint8Array()),
+            reqId,
+        };
+    }
+
     // =========================================================================
     // 响应解析
     // =========================================================================
@@ -221,3 +276,4 @@ export class IMProtocol {
         };
     }
 }
+

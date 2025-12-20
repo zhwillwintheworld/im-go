@@ -81,6 +81,9 @@ func main() {
 	})
 	messageBatcher.Start(ctx)
 
+	// 创建会话服务
+	conversationService := service.NewConversationService(redisClient)
+
 	// 创建消息处理器
 	msgHandler := handler.NewMessageHandler(
 		messageBatcher,
@@ -88,6 +91,7 @@ func main() {
 		userService,
 		groupService,
 		routerService,
+		conversationService,
 	)
 
 	// 启动订阅者

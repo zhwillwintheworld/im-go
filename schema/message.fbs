@@ -82,7 +82,8 @@ enum RequestPayload : byte {
     ChatSendReq = 1,
     GameReq = 2,
     HeartbeatReq = 3,
-    RoomReq = 4
+    RoomReq = 4,
+    ConversationReadReq = 5
 }
 
 // ClientRequest 普通业务请求包装（FrameType=2）
@@ -133,6 +134,13 @@ table GameReq {
 // 心跳请求
 table HeartbeatReq {
     client_time: int64;
+}
+
+// 会话已读请求
+table ConversationReadReq {
+    peer_id: string;         // 私聊对方ID
+    group_id: string;        // 群聊ID（与 peer_id 二选一）
+    last_read_msg_id: string; // 最后已读消息ID
 }
 
 // 认证请求 - 使用独立帧类型 (FrameType=1)，不通过 ClientRequest 包装
