@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"strconv"
 	"strings"
 	"time"
 
@@ -218,12 +219,12 @@ func (h *Handler) handleClientRequest(ctx context.Context, conn *connection.Conn
 	reqID := string(clientReq.ReqId())
 	payloadType := clientReq.PayloadType()
 	payload := clientReq.PayloadBytes()
-
-	h.logger.Debug("ClientRequest received",
-		"conn_id", conn.ID(),
-		"req_id", reqID,
-		"payload_type", payloadType.String())
-
+	if payloadType != im_protocol.RequestPayloadHeartbeatReq {
+		h.logger.Debug("ClientRequest received",
+			"conn_id", conn.ID(),
+			"req_id", reqID,
+			"payload_type", payloadType.String())
+	}
 	// 根据 PayloadType 分发
 	switch payloadType {
 	case im_protocol.RequestPayloadHeartbeatReq:
@@ -242,13 +243,12 @@ func (h *Handler) handleClientRequest(ctx context.Context, conn *connection.Conn
 
 // handleHeartbeat 处理心跳请求
 func (h *Handler) handleHeartbeat(ctx context.Context, conn *connection.Connection, stream *webtransport.Stream, reqID string, payload []byte) {
-	h.logger.Debug("Heartbeat received", "conn_id", conn.ID())
-
 	// 刷新用户位置 TTL
 	if conn.UserID() > 0 {
-		h.redisClient.RefreshUserLocation(ctx, conn.UserID(), conn.Platform())
+		if err := h.redisClient.RefreshUserLocation(ctx, conn.UserID(), conn.Platform()); err != nil {
+			h.logger.Error("Failed to refresh user location", "error", err)
+		}
 	}
-
 	// 构建 HeartbeatResp payload
 	builder := flatbuffers.NewBuilder(64)
 	im_protocol.HeartbeatRespStart(builder)
@@ -267,13 +267,16 @@ func (h *Handler) handleChatSend(ctx context.Context, conn *connection.Connectio
 	// 解析 ChatSendReq
 	chatReq := im_protocol.GetRootAsChatSendReq(payload, 0)
 
+	// 解析 targetId 为 int64
+	targetIdStr := string(chatReq.TargetId())
+	targetId, _ := strconv.ParseInt(targetIdStr, 10, 64)
+
 	// 封装上行消息到 Logic
 	msg := &proto.UpstreamMessage{
 		AccessNodeId: h.nodeID,
 		UserMessage: &proto.UserMessage{
 			FromUserId:  conn.UserID(),
 			ClientMsgId: reqID,
-			ToUserId:    0, // TODO: 从 chatReq.TargetId() 解析
 			MsgType:     int32(chatReq.MsgType()),
 			Content:     chatReq.Content(),
 			Timestamp:   0, // Logic 层会处理
@@ -283,18 +286,22 @@ func (h *Handler) handleChatSend(ctx context.Context, conn *connection.Connectio
 	// 根据 ChatType 设置目标
 	switch chatReq.ChatType() {
 	case im_protocol.ChatTypePRIVATE:
-		// 私聊：targetId 是用户 ID
-		// TODO: 解析 targetId 为 int64
+		msg.UserMessage.ToUserId = targetId
 	case im_protocol.ChatTypeGROUP:
-		// 群聊：targetId 是群组 ID
-		// TODO: 解析 targetId 为群组 ID
+		msg.UserMessage.ToGroupId = targetId
 	}
 
-	data, _ := json.Marshal(msg)
-	h.natsClient.Publish(sharedNats.SubjectLogicUpstream, data)
+	h.logger.Debug("Forwarding ChatSendReq to logic",
+		"from", conn.UserID(),
+		"to", targetId,
+		"chatType", chatReq.ChatType().String())
 
-	// 发送 ACK（实际 ACK 由 Logic 返回后再发送）
-	h.logger.Debug("ChatSendReq forwarded to logic", "req_id", reqID)
+	data, _ := json.Marshal(msg)
+	if err := h.natsClient.Publish(sharedNats.SubjectLogicUpstream, data); err != nil {
+		h.logger.Error("Failed to publish to NATS", "error", err)
+		return
+	}
+	h.logger.Debug("Message published to NATS successfully", "subject", sharedNats.SubjectLogicUpstream)
 }
 
 // handleRoomRequest 处理房间请求

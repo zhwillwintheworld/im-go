@@ -52,6 +52,7 @@ func (s *MessageSubscriber) Start(ctx context.Context) error {
 // handleUpstreamMessage 处理上行消息
 func (s *MessageSubscriber) handleUpstreamMessage(ctx context.Context, data []byte) {
 	var message proto.UpstreamMessage
+	s.logger.Info("Received message", "subject", sharedNats.SubjectLogicUpstream)
 	if err := json.Unmarshal(data, &message); err != nil {
 		s.logger.Error("Failed to unmarshal message", "error", err)
 		return

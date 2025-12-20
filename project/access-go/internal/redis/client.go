@@ -3,6 +3,7 @@ package redis
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -114,7 +115,7 @@ func (c *Client) RefreshUserLocation(ctx context.Context, userId int64, platform
 func (c *Client) GetUserLocation(ctx context.Context, userId int64, platform string) (string, error) {
 	key := buildLocationKey(userId, platform)
 	nodeId, err := c.client.Get(ctx, key).Result()
-	if err == redis.Nil {
+	if errors.Is(err, redis.Nil) {
 		return "", nil
 	}
 	return nodeId, err
@@ -124,7 +125,7 @@ func (c *Client) GetUserLocation(ctx context.Context, userId int64, platform str
 func (c *Client) GetUserInfoByToken(ctx context.Context, token string) (*UserTokenInfo, error) {
 	key := tokenInfoPrefix + token
 	data, err := c.client.Get(ctx, key).Result()
-	if err == redis.Nil {
+	if errors.Is(err, redis.Nil) {
 		return nil, nil // token 不存在
 	}
 	if err != nil {
@@ -148,7 +149,7 @@ func buildUserTokenKey(userId int64, platform string) string {
 func (c *Client) GetCurrentToken(ctx context.Context, userId int64, platform string) (string, error) {
 	key := buildUserTokenKey(userId, platform)
 	token, err := c.client.Get(ctx, key).Result()
-	if err == redis.Nil {
+	if errors.Is(err, redis.Nil) {
 		return "", nil
 	}
 	return token, err

@@ -7,30 +7,10 @@
 
 -- 插入测试用户
 -- 密码: 123456 (bcrypt hash)
-INSERT INTO users (id, username, password_hash, nickname, avatar, status) VALUES
-(1000000000000001, 'alice', '$2a$10$N9qo8uLOic8dMIPhF0eveOKXyzv1W5GW.JpJgvzYsXnw7aEXQXnWe', 'Alice', 'https://api.dicebear.com/7.x/avataaars/svg?seed=alice', 0),
-(1000000000000002, 'bob', '$2a$10$N9qo8uLOic8dMIPhF0eveOKXyzv1W5GW.JpJgvzYsXnw7aEXQXnWe', 'Bob', 'https://api.dicebear.com/7.x/avataaars/svg?seed=bob', 0),
-(1000000000000003, 'charlie', '$2a$10$N9qo8uLOic8dMIPhF0eveOKXyzv1W5GW.JpJgvzYsXnw7aEXQXnWe', 'Charlie', 'https://api.dicebear.com/7.x/avataaars/svg?seed=charlie', 0),
-(1000000000000004, 'david', '$2a$10$N9qo8uLOic8dMIPhF0eveOKXyzv1W5GW.JpJgvzYsXnw7aEXQXnWe', 'David', 'https://api.dicebear.com/7.x/avataaars/svg?seed=david', 0),
-(1000000000000005, 'eve', '$2a$10$N9qo8uLOic8dMIPhF0eveOKXyzv1W5GW.JpJgvzYsXnw7aEXQXnWe', 'Eve', 'https://api.dicebear.com/7.x/avataaars/svg?seed=eve', 0);
+INSERT INTO public.users (id, username, password_hash, nickname, avatar, status, create_at, update_at, deleted) VALUES (260591601036824576, 'zhanghua', '$2a$10$vyKNfgSV0FyEYGST3mN.lOsnzZq0bOXDgQW2EaAp5zdAkvfKXENMe', '张华', 'https://example.com/avatar.png', 0, '2025-12-20 02:17:59.290889 +00:00', '2025-12-20 02:26:36.419043 +00:00', 0);
+INSERT INTO public.users (id, username, password_hash, nickname, avatar, status, create_at, update_at, deleted) VALUES (260707671999516672, 'xuxinyuan', '$2a$10$IKmKIOQPf.9iK1CAnUuCGObpebWtEYRHF/1aiRpfQ/yed8WAp/hP2', '许馨元', '', 0, '2025-12-20 09:59:14.888078 +00:00', '2025-12-20 09:59:14.888078 +00:00', 0);
 
 -- 插入好友关系 (双向)
--- Alice(1000000000000001) <-> Bob(1000000000000002), Charlie(1000000000000003), Eve(1000000000000005)
--- Bob(1000000000000002) <-> Charlie(1000000000000003), David(1000000000000004)
--- Charlie(1000000000000003) <-> David(1000000000000004)
-INSERT INTO friends (id, user_id, friend_id, remark) VALUES
--- Alice 的好友
-(2000000000000001, 1000000000000001, 1000000000000002, 'Bob'),
-(2000000000000002, 1000000000000002, 1000000000000001, 'Alice'),
-(2000000000000003, 1000000000000001, 1000000000000003, 'Charlie'),
-(2000000000000004, 1000000000000003, 1000000000000001, 'Alice'),
-(2000000000000005, 1000000000000001, 1000000000000005, 'Eve'),
-(2000000000000006, 1000000000000005, 1000000000000001, 'Alice'),
--- Bob 的好友
-(2000000000000007, 1000000000000002, 1000000000000003, ''),
-(2000000000000008, 1000000000000003, 1000000000000002, ''),
-(2000000000000009, 1000000000000002, 1000000000000004, 'Dave'),
-(2000000000000010, 1000000000000004, 1000000000000002, 'Bob'),
--- Charlie 和 David
-(2000000000000011, 1000000000000003, 1000000000000004, ''),
-(2000000000000012, 1000000000000004, 1000000000000003, '');
+INSERT INTO public.friends (id, user_id, friend_id, remark, create_at, update_at, deleted) VALUES (260708772584886272, 260591601036824576, 260707671999516672, '', '2025-12-20 10:03:37.293028 +00:00', '2025-12-20 10:03:37.293028 +00:00', 0);
+INSERT INTO public.friends (id, user_id, friend_id, remark, create_at, update_at, deleted) VALUES (260708772584886273, 260707671999516672, 260591601036824576, '', '2025-12-20 10:03:37.293028 +00:00', '2025-12-20 10:03:37.293028 +00:00', 0);
+
