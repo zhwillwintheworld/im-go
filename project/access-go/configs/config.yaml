@@ -22,13 +22,13 @@ nats:
 
 redis:
   addr: "localhost:6379"
-  password: ""
+  password: "xhxxygwl"
   db: 0
   pool_size: 50
 
 auth:
-  token_secret: "your-secret-key"
-  token_expire: 24h
+  token_secret: "8Z9X7s2kQ8a9b7d6f5g4h3j2k1l0p9o8i7u6y5t4b8n9m0l1k2j3h4g5f6d7s8a9s7d6f5g4h3j2k="
+  token_expire: 168h
 
 logging:
   level: "info"

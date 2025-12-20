@@ -44,7 +44,9 @@ definitions:
         example: zhangsan
         type: string
     required:
+    - device_id
     - password
+    - platform
     - username
     type: object
   service.LoginResponse:
@@ -57,17 +59,13 @@ definitions:
         description: 过期时间戳
         example: 1702915200
         type: integer
-      object_code:
-        description: 用户唯一标识
-        example: "1234567890123456789"
-        type: string
       refresh_token:
         description: 刷新令牌
         example: eyJhbGciOiJIUzI1NiIsInR5cCI6...
         type: string
       user_id:
         description: 用户ID
-        example: 1
+        example: 1234567890123456789
         type: integer
     type: object
   service.RegisterRequest:
@@ -150,31 +148,6 @@ paths:
       security:
       - BearerAuth: []
       summary: 用户登出
-      tags:
-      - 认证
-  /auth/refresh:
-    post:
-      consumes:
-      - application/json
-      description: 使用 refresh_token 获取新的 access_token
-      parameters:
-      - description: 刷新 Token
-        in: body
-        name: request
-        required: true
-        schema:
-          properties:
-            refresh_token:
-              type: string
-          type: object
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/response.Response'
-      summary: 刷新 Token
       tags:
       - 认证
   /auth/register:

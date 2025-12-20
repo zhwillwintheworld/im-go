@@ -6,6 +6,7 @@ import { useChatStore } from '@/stores/chatStore';
 import { useMessageStore } from '@/stores/messageStore';
 import { transportManager } from '@/services/transport/WebTransportManager';
 import { IMProtocol } from '@/services/protocol/IMProtocol';
+import { config } from '@/config';
 import styles from './Chat.module.css';
 
 const { Sider, Content } = Layout;
@@ -29,8 +30,8 @@ function Chat() {
 
         const connect = async () => {
             try {
-                // 开发环境自签名证书需要 Chrome 启动参数 --origin-to-force-quic-on=localhost:8443
-                await transportManager.connect('https://localhost:8443/webtransport');
+                // 开发环境自签名证书需要 Chrome 启动参数 --origin-to-force-quic-on=<host>:<port>
+                await transportManager.connect(config.webTransportUrl);
 
                 // 检查组件是否仍然挂载 (React Strict Mode 会导致双重挂载/卸载)
                 if (!isMounted) {

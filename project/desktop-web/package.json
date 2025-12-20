@@ -3,8 +3,12 @@
     "version": "1.0.0",
     "type": "module",
     "scripts": {
-        "dev": "vite",
-        "build": "tsc && vite build",
+        "dev": "vite --mode development",
+        "dev:test": "vite --mode test",
+        "dev:prod": "vite --mode production",
+        "build": "tsc && vite build --mode production",
+        "build:test": "tsc && vite build --mode test",
+        "build:prod": "tsc && vite build --mode production",
         "preview": "vite preview",
         "lint": "eslint . --ext ts,tsx",
         "flatc": "flatc --ts -o src/protocol ../../schema/message.fbs"

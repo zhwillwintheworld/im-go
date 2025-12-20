@@ -77,45 +77,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/auth/refresh": {
-            "post": {
-                "description": "使用 refresh_token 获取新的 access_token",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "认证"
-                ],
-                "summary": "刷新 Token",
-                "parameters": [
-                    {
-                        "description": "刷新 Token",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "type": "object",
-                            "properties": {
-                                "refresh_token": {
-                                    "type": "string"
-                                }
-                            }
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/response.Response"
-                        }
-                    }
-                }
-            }
-        },
         "/auth/register": {
             "post": {
                 "description": "创建新用户账号",
@@ -520,7 +481,9 @@ const docTemplate = `{
         "service.LoginRequest": {
             "type": "object",
             "required": [
+                "device_id",
                 "password",
+                "platform",
                 "username"
             ],
             "properties": {
@@ -564,11 +527,6 @@ const docTemplate = `{
                     "type": "integer",
                     "example": 1702915200
                 },
-                "object_code": {
-                    "description": "用户唯一标识",
-                    "type": "string",
-                    "example": "1234567890123456789"
-                },
                 "refresh_token": {
                     "description": "刷新令牌",
                     "type": "string",
@@ -577,7 +535,7 @@ const docTemplate = `{
                 "user_id": {
                     "description": "用户ID",
                     "type": "integer",
-                    "example": 1
+                    "example": 1234567890123456789
                 }
             }
         },

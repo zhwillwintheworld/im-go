@@ -6,6 +6,7 @@
 CONTAINER_NAME="redis-dev"
 REDIS_IMAGE="redis:8.4-alpine"
 REDIS_PORT=6379
+REDIS_PASSWORD="xhxxygwl"
 
 # 颜色输出
 RED='\033[0;31m'
@@ -55,7 +56,8 @@ create_container() {
     podman run -d \
         --name "${CONTAINER_NAME}" \
         -p "${REDIS_PORT}:6379" \
-        "${REDIS_IMAGE}"
+        "${REDIS_IMAGE}" \
+        redis-server --requirepass "${REDIS_PASSWORD}"
 
     if [ $? -eq 0 ]; then
         log_info "Redis 容器创建成功"
@@ -87,6 +89,7 @@ main() {
     echo "连接信息:"
     echo "  Host: localhost"
     echo "  Port: ${REDIS_PORT}"
+    echo "  Password: ${REDIS_PASSWORD}"
     echo "=========================================="
 }
 
