@@ -97,7 +97,7 @@ func (s *Server) Start(ctx context.Context) error {
 		func(conn *connection.Connection) {
 			// 超时回调：清理用户位置并通知 Logic
 			if conn.UserID() > 0 {
-				s.redisClient.UnregisterUserLocation(ctx, conn.UserID(), conn.ID())
+				s.redisClient.UnregisterUserLocation(ctx, conn.UserID(), conn.Platform())
 				s.handler.SendUserOfflineToLogic(conn)
 			}
 		},
@@ -118,7 +118,7 @@ func (s *Server) handleSession(ctx context.Context, session *webtransport.Sessio
 	defer func() {
 		// 连接关闭时清理用户位置
 		if c.UserID() > 0 {
-			s.redisClient.UnregisterUserLocation(ctx, c.UserID(), c.ID())
+			s.redisClient.UnregisterUserLocation(ctx, c.UserID(), c.Platform())
 			s.handler.SendUserOfflineToLogic(c)
 		}
 		s.connMgr.Remove(c.ID())
@@ -126,7 +126,21 @@ func (s *Server) handleSession(ctx context.Context, session *webtransport.Sessio
 
 	s.logger.Info("New WebTransport session", "conn_id", c.ID())
 
-	// 处理传入的双向流
+	// 首个 stream 必须是认证请求
+	firstStream, err := session.AcceptStream(ctx)
+	if err != nil {
+		s.logger.Debug("Session closed before auth", "conn_id", c.ID())
+		return
+	}
+
+	// 处理首包认证
+	if err := s.handler.HandleFirstStream(ctx, c, firstStream); err != nil {
+		s.logger.Warn("Auth failed, closing session", "conn_id", c.ID(), "error", err)
+		session.CloseWithError(4001, "auth failed")
+		return
+	}
+
+	// 认证成功，继续处理后续的双向流
 	for {
 		stream, err := session.AcceptStream(ctx)
 		if err != nil {

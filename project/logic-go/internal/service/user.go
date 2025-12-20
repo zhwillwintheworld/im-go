@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"log/slog"
-	"time"
 
 	"github.com/redis/go-redis/v9"
 	sharedModel "sudooom.im.shared/model"
@@ -24,58 +23,7 @@ func NewUserService(redisClient *redis.Client) *UserService {
 	}
 }
 
-// RegisterUserLocation 注册用户位置
-func (s *UserService) RegisterUserLocation(ctx context.Context, userId int64, accessNodeId string, connId int64, deviceId string, platform string) error {
-	location := &sharedModel.UserLocation{
-		UserId:       userId,
-		AccessNodeId: accessNodeId,
-		ConnId:       connId,
-		DeviceId:     deviceId,
-		Platform:     platform,
-		LoginTime:    time.Now(),
-	}
-
-	key := sharedRedis.BuildUserLocationKey(userId)
-	field := sharedRedis.BuildUserLocationField(accessNodeId, connId)
-
-	value, err := sharedRedis.SerializeUserLocation(location)
-	if err != nil {
-		return err
-	}
-
-	pipe := s.redisClient.Pipeline()
-	pipe.HSet(ctx, key, field, value)
-	pipe.Expire(ctx, key, sharedRedis.LocationTTL)
-	_, err = pipe.Exec(ctx)
-
-	if err == nil {
-		s.logger.Info("User location registered",
-			"userId", userId,
-			"accessNodeId", accessNodeId,
-			"connId", connId,
-			"platform", platform)
-	}
-
-	return err
-}
-
-// UnregisterUserLocation 移除用户位置
-func (s *UserService) UnregisterUserLocation(ctx context.Context, userId int64, connId int64, accessNodeId string) error {
-	key := sharedRedis.BuildUserLocationKey(userId)
-	field := sharedRedis.BuildUserLocationField(accessNodeId, connId)
-
-	err := s.redisClient.HDel(ctx, key, field).Err()
-
-	if err == nil {
-		s.logger.Info("User location unregistered",
-			"userId", userId,
-			"connId", connId)
-	}
-
-	return err
-}
-
-// GetUserLocations 获取用户所有位置
+// GetUserLocations 获取用户所有位置（读取 access-go 写入的数据）
 func (s *UserService) GetUserLocations(ctx context.Context, userId int64) ([]sharedModel.UserLocation, error) {
 	key := sharedRedis.BuildUserLocationKey(userId)
 

@@ -70,21 +70,13 @@ func (h *MessageHandler) HandleUserMessage(ctx context.Context, msg *proto.UserM
 
 // HandleUserOnline 处理用户上线
 func (h *MessageHandler) HandleUserOnline(ctx context.Context, event *proto.UserOnline, accessNodeId string) {
-	err := h.userService.RegisterUserLocation(ctx, event.UserId, accessNodeId, event.ConnId, event.DeviceId, event.Platform)
-	if err != nil {
-		h.logger.Error("Failed to register user location", "userId", event.UserId, "error", err)
-		return
-	}
-	h.logger.Info("User online", "userId", event.UserId, "accessNodeId", accessNodeId)
+	// location 由 access-go 管理，这里只记录日志
+	h.logger.Info("User online", "userId", event.UserId, "accessNodeId", accessNodeId, "platform", event.Platform)
 }
 
 // HandleUserOffline 处理用户下线
 func (h *MessageHandler) HandleUserOffline(ctx context.Context, event *proto.UserOffline, accessNodeId string) {
-	err := h.userService.UnregisterUserLocation(ctx, event.UserId, event.ConnId, accessNodeId)
-	if err != nil {
-		h.logger.Error("Failed to unregister user location", "userId", event.UserId, "error", err)
-		return
-	}
+	// location 由 access-go 管理，这里只记录日志
 	h.logger.Info("User offline", "userId", event.UserId, "accessNodeId", accessNodeId)
 }
 

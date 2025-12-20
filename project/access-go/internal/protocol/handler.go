@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"strings"
 	"time"
 
 	flatbuffers "github.com/google/flatbuffers/go"
@@ -88,7 +89,8 @@ func (h *Handler) HandleStream(ctx context.Context, conn *connection.Connection,
 func (h *Handler) dispatch(ctx context.Context, conn *connection.Connection, stream *webtransport.Stream, frameType byte, body []byte) {
 	switch frameType {
 	case FrameTypeAuth:
-		h.handleAuth(ctx, conn, stream, body)
+		// 认证请求在正常流程中不应该出现（已通过 HandleFirstStream 处理）
+		h.logger.Warn("Unexpected auth request after authentication", "conn_id", conn.ID())
 	case FrameTypeRequest:
 		h.handleClientRequest(ctx, conn, stream, body)
 	default:
@@ -96,8 +98,44 @@ func (h *Handler) dispatch(ctx context.Context, conn *connection.Connection, str
 	}
 }
 
-// handleAuth 处理认证请求
-func (h *Handler) handleAuth(ctx context.Context, conn *connection.Connection, stream *webtransport.Stream, body []byte) {
+// HandleFirstStream 处理首个数据流，必须是认证请求
+// 返回 error 表示认证失败，调用方应关闭连接
+func (h *Handler) HandleFirstStream(ctx context.Context, conn *connection.Connection, stream *webtransport.Stream) error {
+	defer stream.Close()
+
+	// 读取帧头
+	header := make([]byte, FrameHeaderSize)
+	if _, err := io.ReadFull(stream, header); err != nil {
+		h.logger.Debug("Failed to read header", "error", err)
+		return fmt.Errorf("failed to read header: %w", err)
+	}
+
+	length := binary.BigEndian.Uint32(header[:4])
+	frameType := header[4]
+
+	// 检查首包必须是 Auth 请求
+	if frameType != FrameTypeAuth {
+		h.logger.Warn("First frame must be auth request", "conn_id", conn.ID(), "frameType", frameType)
+		h.sendClientResponse(stream, "", im_protocol.ErrorCodeAUTH_FAILED, "auth required", im_protocol.ResponsePayloadNONE, nil)
+		return fmt.Errorf("first frame is not auth request")
+	}
+
+	// 读取消息体
+	body := make([]byte, length)
+	if _, err := io.ReadFull(stream, body); err != nil {
+		h.logger.Error("Failed to read body", "error", err)
+		return fmt.Errorf("failed to read body: %w", err)
+	}
+
+	// 更新活跃时间
+	conn.UpdateActive()
+
+	// 处理认证
+	return h.handleAuth(ctx, conn, stream, body)
+}
+
+// handleAuth 处理认证请求，返回 error 表示认证失败
+func (h *Handler) handleAuth(ctx context.Context, conn *connection.Connection, stream *webtransport.Stream, body []byte) error {
 	h.logger.Debug("Auth request received", "conn_id", conn.ID())
 
 	// 解析 FlatBuffers AuthRequest
@@ -107,26 +145,57 @@ func (h *Handler) handleAuth(ctx context.Context, conn *connection.Connection, s
 	deviceID := string(authReq.DeviceId())
 	platform := authReq.Platform()
 
-	// TODO: 验证 token
+	// 从 Redis 获取 token 对应的用户信息
+	userInfo, err := h.redisClient.GetUserInfoByToken(ctx, token)
+	if err != nil {
+		h.logger.Error("Failed to get user info from Redis", "error", err)
+		h.sendClientResponse(stream, "", im_protocol.ErrorCodeUNKNOWN_ERROR, "internal error", im_protocol.ResponsePayloadNONE, nil)
+		return fmt.Errorf("redis error: %w", err)
+	}
+
+	// 验证 token 是否存在
+	if userInfo == nil {
+		h.logger.Warn("Token not found", "conn_id", conn.ID())
+		h.sendClientResponse(stream, "", im_protocol.ErrorCodeAUTH_FAILED, "invalid token", im_protocol.ResponsePayloadNONE, nil)
+		return fmt.Errorf("token not found")
+	}
+
+	// 比对 deviceId
+	if userInfo.DeviceID != deviceID {
+		h.logger.Warn("DeviceID mismatch", "conn_id", conn.ID(), "expected", userInfo.DeviceID, "got", deviceID)
+		h.sendClientResponse(stream, "", im_protocol.ErrorCodeAUTH_FAILED, "device mismatch", im_protocol.ResponsePayloadNONE, nil)
+		return fmt.Errorf("device mismatch")
+	}
+
+	// 比对 platform（不区分大小写，FlatBuffers 返回大写，Redis 存储小写）
+	if !strings.EqualFold(userInfo.Platform, platform.String()) {
+		h.logger.Warn("Platform mismatch", "conn_id", conn.ID(), "expected", userInfo.Platform, "got", platform.String())
+		h.sendClientResponse(stream, "", im_protocol.ErrorCodeAUTH_FAILED, "platform mismatch", im_protocol.ResponsePayloadNONE, nil)
+		return fmt.Errorf("platform mismatch")
+	}
+
+	// 构建 sessInfo 使用 Redis 中的用户信息
 	sessInfo := &connection.SessionInfo{
-		UserID:   1, // TODO: 从 token 解析
+		UserID:   userInfo.UserID,
 		DeviceID: deviceID,
 		Platform: platform.String(),
 	}
-	_ = token
 	conn.BindSession(sessInfo)
 	h.connMgr.BindUser(conn.ID(), sessInfo.UserID)
 
 	// 注册用户位置到 Redis
-	if err := h.redisClient.RegisterUserLocation(ctx, sessInfo.UserID, conn.ID(), sessInfo.DeviceID, sessInfo.Platform); err != nil {
+	if err := h.redisClient.RegisterUserLocation(ctx, sessInfo.UserID, sessInfo.Platform); err != nil {
 		h.logger.Error("Failed to register user location", "error", err)
 	}
 
 	// 发送上线通知到 Logic
 	h.sendUserOnlineToLogic(conn, sessInfo)
 
-	// 使用 ClientResponse 构建认证响应
+	// 发送认证成功响应
 	h.sendClientResponse(stream, "", im_protocol.ErrorCodeSUCCESS, "success", im_protocol.ResponsePayloadNONE, nil)
+	h.logger.Info("User authenticated", "conn_id", conn.ID(), "user_id", userInfo.UserID)
+
+	return nil
 }
 
 // handleClientRequest 处理 ClientRequest 统一包装的请求
@@ -164,7 +233,7 @@ func (h *Handler) handleHeartbeat(ctx context.Context, conn *connection.Connecti
 
 	// 刷新用户位置 TTL
 	if conn.UserID() > 0 {
-		h.redisClient.RefreshUserLocation(ctx, conn.UserID())
+		h.redisClient.RefreshUserLocation(ctx, conn.UserID(), conn.Platform())
 	}
 
 	// 构建 HeartbeatResp payload
