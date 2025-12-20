@@ -19,6 +19,8 @@ const (
 	locationTTL           = 2 * time.Minute // 2 分钟 TTL，心跳续期
 	// token 信息存储 key 前缀（与 web-go 一致）
 	tokenInfoPrefix = "token:info:"
+	// 用户 token key 前缀: user:token:{userId}:{platform} -> accessToken
+	tokenUserPrefix = "user:token:"
 )
 
 // UserTokenInfo 存储在 Redis 中的用户 Token 信息（与 web-go 一致）
@@ -135,6 +137,30 @@ func (c *Client) GetUserInfoByToken(ctx context.Context, token string) (*UserTok
 	}
 
 	return &userInfo, nil
+}
+
+// buildUserTokenKey 构建用户 token key: user:token:{userId}:{platform}
+func buildUserTokenKey(userId int64, platform string) string {
+	return fmt.Sprintf("%s%d:%s", tokenUserPrefix, userId, strings.ToLower(platform))
+}
+
+// GetCurrentToken 获取用户在该 platform 的当前有效 token
+func (c *Client) GetCurrentToken(ctx context.Context, userId int64, platform string) (string, error) {
+	key := buildUserTokenKey(userId, platform)
+	token, err := c.client.Get(ctx, key).Result()
+	if err == redis.Nil {
+		return "", nil
+	}
+	return token, err
+}
+
+// IsTokenCurrent 检查传入的 token 是否是该用户该 platform 当前有效的 token
+func (c *Client) IsTokenCurrent(ctx context.Context, userId int64, platform, token string) (bool, error) {
+	currentToken, err := c.GetCurrentToken(ctx, userId, platform)
+	if err != nil {
+		return false, err
+	}
+	return currentToken == token, nil
 }
 
 // Ping 检查 Redis 连接

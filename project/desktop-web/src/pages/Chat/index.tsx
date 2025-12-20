@@ -1,11 +1,11 @@
-
-import { Layout, Avatar, Input, Button } from 'antd';
-import { SendOutlined } from '@ant-design/icons';
+import { Layout, Avatar, Input, Button, Tabs, Empty } from 'antd';
+import { SendOutlined, MessageOutlined, TeamOutlined } from '@ant-design/icons';
 import { useState, useMemo, useEffect } from 'react';
 import { useChatStore } from '@/stores/chatStore';
 import { useMessageStore } from '@/stores/messageStore';
 import { useIMStore } from '@/stores/imStore';
 import { messageDispatcher, ResponsePayload } from '@/services/messageDispatcher';
+import FriendList from '@/components/FriendList';
 import styles from './Chat.module.css';
 
 const { Sider, Content } = Layout;
@@ -15,6 +15,7 @@ const EMPTY_MESSAGES: never[] = [];
 
 function Chat() {
     const [inputValue, setInputValue] = useState('');
+    const [activeTab, setActiveTab] = useState<string>('chats');
     const conversations = useChatStore((state) => state.conversations);
     const activeConversationId = useChatStore((state) => state.activeConversationId);
     const setActiveConversation = useChatStore((state) => state.setActiveConversation);
@@ -67,58 +68,125 @@ function Chat() {
         setInputValue('');
     };
 
+    // 选择好友开始聊天后切换到会话 tab
+    const handleStartChat = () => {
+        setActiveTab('chats');
+    };
+
+    // 渲染会话列表
+    const renderConversationList = () => {
+        if (conversations.length === 0) {
+            return (
+                <div className={styles.emptyList}>
+                    <Empty
+                        description="暂无会话"
+                        image={Empty.PRESENTED_IMAGE_SIMPLE}
+                    >
+                        <Button type="link" onClick={() => setActiveTab('friends')}>
+                            去添加好友开始聊天
+                        </Button>
+                    </Empty>
+                </div>
+            );
+        }
+
+        return (
+            <div className={styles.convList}>
+                {conversations.map((conv) => (
+                    <div
+                        key={conv.id}
+                        className={`${styles.convItem} ${conv.id === activeConversationId ? styles.active : ''}`}
+                        onClick={() => setActiveConversation(conv.id)}
+                    >
+                        <Avatar src={conv.avatar} className={styles.convAvatar} />
+                        <div className={styles.convInfo}>
+                            <div className={styles.convName}>{conv.name}</div>
+                            <div className={styles.convLastMsg}>{conv.lastMessage || '暂无消息'}</div>
+                        </div>
+                        {conv.unreadCount > 0 && (
+                            <span className={styles.unreadBadge}>{conv.unreadCount}</span>
+                        )}
+                    </div>
+                ))}
+            </div>
+        );
+    };
+
+    const tabItems = [
+        {
+            key: 'chats',
+            label: (
+                <span>
+                    <MessageOutlined />
+                    会话
+                </span>
+            ),
+            children: renderConversationList(),
+        },
+        {
+            key: 'friends',
+            label: (
+                <span>
+                    <TeamOutlined />
+                    好友
+                </span>
+            ),
+            children: <FriendList onStartChat={handleStartChat} />,
+        },
+    ];
+
     return (
         <Layout className={styles.container}>
             <Sider width={300} className={styles.sider}>
                 <div className={styles.siderHeader}>
-                    <h3>会话</h3>
                     <span className={styles.status}>
-                        {imStatus === 'authenticated' ? '🟢' : '🔴'} {'正常'}
+                        {imStatus === 'authenticated' ? '🟢' : '🔴'} {imStatus === 'authenticated' ? '在线' : '离线'}
                     </span>
                 </div>
-                <div className={styles.convList}>
-                    {conversations.map((conv) => (
-                        <div
-                            key={conv.id}
-                            className={`${styles.convItem} ${conv.id === activeConversationId ? styles.active : ''}`}
-                            onClick={() => setActiveConversation(conv.id)}
-                        >
-                            <Avatar src={conv.avatar} className={styles.convAvatar} />
-                            <div className={styles.convInfo}>
-                                <div className={styles.convName}>{conv.name}</div>
-                                <div className={styles.convLastMsg}>{conv.lastMessage}</div>
-                            </div>
-                        </div>
-                    ))}
-                </div>
+                <Tabs
+                    activeKey={activeTab}
+                    onChange={setActiveTab}
+                    items={tabItems}
+                    centered
+                    destroyOnHidden
+                    className={styles.tabs}
+                />
             </Sider>
             <Content className={styles.content}>
-                <div className={styles.messageList}>
-                    {messages.map((msg) => (
-                        <div key={msg.id} className={`${styles.message} ${msg.isSelf ? styles.self : ''}`}>
-                            <div className={styles.bubble}>{msg.content}</div>
+                {activeConversationId ? (
+                    <>
+                        <div className={styles.messageList}>
+                            {messages.map((msg) => (
+                                <div key={msg.id} className={`${styles.message} ${msg.isSelf ? styles.self : ''}`}>
+                                    <div className={styles.bubble}>{msg.content}</div>
+                                </div>
+                            ))}
                         </div>
-                    ))}
-                </div>
-                <div className={styles.inputArea}>
-                    <Input
-                        value={inputValue}
-                        onChange={(e) => setInputValue(e.target.value)}
-                        onPressEnter={handleSend}
-                        placeholder="输入消息..."
-                        size="large"
-                        disabled={imStatus !== 'authenticated'}
-                    />
-                    <Button
-                        type="primary"
-                        icon={<SendOutlined />}
-                        onClick={handleSend}
-                        size="large"
-                        disabled={imStatus !== 'authenticated'}
-                    >
-                        发送
-                    </Button>
-                </div>
+                        <div className={styles.inputArea}>
+                            <Input
+                                value={inputValue}
+                                onChange={(e) => setInputValue(e.target.value)}
+                                onPressEnter={handleSend}
+                                placeholder="输入消息..."
+                                size="large"
+                                disabled={imStatus !== 'authenticated'}
+                            />
+                            <Button
+                                type="primary"
+                                icon={<SendOutlined />}
+                                onClick={handleSend}
+                                size="large"
+                                disabled={imStatus !== 'authenticated'}
+                            >
+                                发送
+                            </Button>
+                        </div>
+                    </>
+                ) : (
+                    <div className={styles.noConversation}>
+                        <Empty description="选择一个会话开始聊天" />
+                    </div>
+                )}
             </Content>
         </Layout>
     );

@@ -174,6 +174,19 @@ func (h *Handler) handleAuth(ctx context.Context, conn *connection.Connection, s
 		return fmt.Errorf("platform mismatch")
 	}
 
+	// 验证 token 是否是该用户该 platform 当前有效的 token（被下线的 token 不能连接）
+	isCurrent, err := h.redisClient.IsTokenCurrent(ctx, userInfo.UserID, userInfo.Platform, token)
+	if err != nil {
+		h.logger.Error("Failed to check token validity", "error", err)
+		h.sendClientResponse(stream, "", im_protocol.ErrorCodeUNKNOWN_ERROR, "internal error", im_protocol.ResponsePayloadNONE, nil)
+		return fmt.Errorf("redis error: %w", err)
+	}
+	if !isCurrent {
+		h.logger.Warn("Token is not current", "conn_id", conn.ID(), "user_id", userInfo.UserID)
+		h.sendClientResponse(stream, "", im_protocol.ErrorCodeAUTH_FAILED, "token expired or replaced", im_protocol.ResponsePayloadNONE, nil)
+		return fmt.Errorf("token is not current")
+	}
+
 	// 构建 sessInfo 使用 Redis 中的用户信息
 	sessInfo := &connection.SessionInfo{
 		UserID:   userInfo.UserID,
