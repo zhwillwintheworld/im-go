@@ -13,6 +13,7 @@ type Config struct {
 	NATS     NATSConfig     `mapstructure:"nats"`
 	Database DatabaseConfig `mapstructure:"database"`
 	Redis    RedisConfig    `mapstructure:"redis"`
+	Batch    BatchConfig    `mapstructure:"batch"`
 }
 
 type AppConfig struct {
@@ -24,6 +25,8 @@ type NATSConfig struct {
 	URL           string        `mapstructure:"url"`
 	MaxReconnects int           `mapstructure:"max_reconnects"`
 	ReconnectWait time.Duration `mapstructure:"reconnect_wait"`
+	WorkerCount   int           `mapstructure:"worker_count"` // Worker Pool 并发数
+	BufferSize    int           `mapstructure:"buffer_size"`  // 消息缓冲区大小
 }
 
 type DatabaseConfig struct {
@@ -43,6 +46,11 @@ type RedisConfig struct {
 	Password string `mapstructure:"password"`
 	DB       int    `mapstructure:"db"`
 	PoolSize int    `mapstructure:"pool_size"`
+}
+
+type BatchConfig struct {
+	Size          int           `mapstructure:"size"`           // 批量大小阈值
+	FlushInterval time.Duration `mapstructure:"flush_interval"` // 强制刷新间隔
 }
 
 // Load 从指定路径加载配置
@@ -74,6 +82,8 @@ func (c *Config) applyEnv() {
 	c.NATS.URL = sharedConfig.GetEnv("NATS_URL", c.NATS.URL)
 	c.NATS.MaxReconnects = sharedConfig.GetEnvInt("NATS_MAX_RECONNECTS", c.NATS.MaxReconnects)
 	c.NATS.ReconnectWait = sharedConfig.GetEnvDuration("NATS_RECONNECT_WAIT", c.NATS.ReconnectWait)
+	c.NATS.WorkerCount = sharedConfig.GetEnvInt("NATS_WORKER_COUNT", c.NATS.WorkerCount)
+	c.NATS.BufferSize = sharedConfig.GetEnvInt("NATS_BUFFER_SIZE", c.NATS.BufferSize)
 
 	// Database
 	c.Database.Host = sharedConfig.GetEnv("POSTGRES_HOST", c.Database.Host)
@@ -90,4 +100,8 @@ func (c *Config) applyEnv() {
 	c.Redis.Password = sharedConfig.GetEnv("REDIS_PASSWORD", c.Redis.Password)
 	c.Redis.DB = sharedConfig.GetEnvInt("REDIS_DB", c.Redis.DB)
 	c.Redis.PoolSize = sharedConfig.GetEnvInt("REDIS_POOL_SIZE", c.Redis.PoolSize)
+
+	// Batch
+	c.Batch.Size = sharedConfig.GetEnvInt("BATCH_SIZE", c.Batch.Size)
+	c.Batch.FlushInterval = sharedConfig.GetEnvDuration("BATCH_FLUSH_INTERVAL", c.Batch.FlushInterval)
 }

@@ -118,7 +118,11 @@ func (s *Server) handleSession(ctx context.Context, session *webtransport.Sessio
 	defer func() {
 		// 连接关闭时清理用户位置
 		if c.UserID() > 0 {
-			s.redisClient.UnregisterUserLocation(ctx, c.UserID(), c.Platform())
+			err := s.redisClient.UnregisterUserLocation(ctx, c.UserID(), c.Platform())
+			if err != nil {
+				s.logger.Error("Failed to unregister user location", "error", err)
+				return
+			}
 			s.handler.SendUserOfflineToLogic(c)
 		}
 		s.connMgr.Remove(c.ID())
@@ -136,7 +140,11 @@ func (s *Server) handleSession(ctx context.Context, session *webtransport.Sessio
 	// 处理首包认证
 	if err := s.handler.HandleFirstStream(ctx, c, firstStream); err != nil {
 		s.logger.Warn("Auth failed, closing session", "conn_id", c.ID(), "error", err)
-		session.CloseWithError(4001, "auth failed")
+		err := session.CloseWithError(4001, "auth failed")
+		if err != nil {
+			s.logger.Error("Failed to close session", "conn_id", c.ID(), "error", err)
+			return
+		}
 		return
 	}
 

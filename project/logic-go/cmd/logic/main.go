@@ -16,6 +16,7 @@ import (
 	"sudooom.im.logic/internal/handler"
 	imNats "sudooom.im.logic/internal/nats"
 	"sudooom.im.logic/internal/service"
+	"sudooom.im.shared/snowflake"
 )
 
 func main() {
@@ -59,6 +60,13 @@ func main() {
 	defer db.Close()
 	logger.Info("Connected to PostgreSQL", "host", cfg.Database.Host)
 
+	// 初始化雪花ID生成器
+	sfNode, err := snowflake.NewNode(1)
+	if err != nil {
+		logger.Error("Failed to create snowflake node", "error", err)
+		os.Exit(1)
+	}
+
 	// 初始化服务
 	publisher := imNats.NewMessagePublisher(natsClient.Conn())
 	routerService := service.NewRouterService(redisClient, publisher)
@@ -66,8 +74,16 @@ func main() {
 	groupService := service.NewGroupService(db)
 	messageService := service.NewMessageService(db)
 
+	// 创建消息批量写入器
+	messageBatcher := service.NewMessageBatcher(db, sfNode, service.MessageBatcherConfig{
+		BatchSize:     cfg.Batch.Size,
+		FlushInterval: cfg.Batch.FlushInterval,
+	})
+	messageBatcher.Start(ctx)
+
 	// 创建消息处理器
 	msgHandler := handler.NewMessageHandler(
+		messageBatcher,
 		messageService,
 		userService,
 		groupService,
@@ -75,7 +91,10 @@ func main() {
 	)
 
 	// 启动订阅者
-	subscriber := imNats.NewMessageSubscriber(natsClient.Conn(), msgHandler)
+	subscriber := imNats.NewMessageSubscriber(natsClient.Conn(), msgHandler, imNats.SubscriberConfig{
+		WorkerCount: cfg.NATS.WorkerCount,
+		BufferSize:  cfg.NATS.BufferSize,
+	})
 	if err := subscriber.Start(ctx); err != nil {
 		logger.Error("Failed to start subscriber", "error", err)
 		os.Exit(1)
@@ -91,6 +110,7 @@ func main() {
 	logger.Info("Shutting down...")
 	cancel()
 	subscriber.Stop()
+	messageBatcher.Stop()
 	logger.Info("Logic service stopped")
 }
 

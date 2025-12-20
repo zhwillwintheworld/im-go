@@ -34,22 +34,74 @@ func NewRouterService(redisClient *redis.Client, publisher *nats.MessagePublishe
 	}
 }
 
-// GetUserLocations 获取用户所在的 Access 节点
-func (s *RouterService) GetUserLocations(ctx context.Context, userId int64) ([]sharedModel.UserLocation, error) {
-	key := sharedRedis.BuildUserLocationKey(userId)
+// AllPlatforms 支持的所有平台列表
+var AllPlatforms = []string{"android", "ios", "web", "desktop", "wechat"}
 
-	entries, err := s.redisClient.HGetAll(ctx, key).Result()
+// GetUserLocations 获取用户所在的所有 Access 节点（遍历所有平台）
+func (s *RouterService) GetUserLocations(ctx context.Context, userId int64) ([]sharedModel.UserLocation, error) {
+	locations := make([]sharedModel.UserLocation, 0, len(AllPlatforms))
+
+	// 构建所有平台的 key
+	keys := make([]string, len(AllPlatforms))
+	for i, platform := range AllPlatforms {
+		keys[i] = sharedRedis.BuildUserLocationKeyWithPlatform(userId, platform)
+	}
+
+	// 批量获取
+	results, err := s.redisClient.MGet(ctx, keys...).Result()
 	if err != nil {
 		return nil, err
 	}
 
-	locations := make([]sharedModel.UserLocation, 0, len(entries))
-	for _, value := range entries {
-		loc, err := sharedRedis.ParseUserLocation(value)
-		if err != nil {
+	for i, result := range results {
+		if result == nil {
 			continue
 		}
-		locations = append(locations, *loc)
+		accessNodeId, ok := result.(string)
+		if !ok || accessNodeId == "" {
+			continue
+		}
+		locations = append(locations, sharedModel.UserLocation{
+			UserId:       userId,
+			AccessNodeId: accessNodeId,
+			Platform:     AllPlatforms[i],
+		})
+	}
+
+	return locations, nil
+}
+
+// GetUserLocationsByPlatforms 获取用户在指定平台的位置
+func (s *RouterService) GetUserLocationsByPlatforms(ctx context.Context, userId int64, platforms []string) ([]sharedModel.UserLocation, error) {
+	if len(platforms) == 0 {
+		return nil, nil
+	}
+
+	locations := make([]sharedModel.UserLocation, 0, len(platforms))
+
+	keys := make([]string, len(platforms))
+	for i, platform := range platforms {
+		keys[i] = sharedRedis.BuildUserLocationKeyWithPlatform(userId, platform)
+	}
+
+	results, err := s.redisClient.MGet(ctx, keys...).Result()
+	if err != nil {
+		return nil, err
+	}
+
+	for i, result := range results {
+		if result == nil {
+			continue
+		}
+		accessNodeId, ok := result.(string)
+		if !ok || accessNodeId == "" {
+			continue
+		}
+		locations = append(locations, sharedModel.UserLocation{
+			UserId:       userId,
+			AccessNodeId: accessNodeId,
+			Platform:     platforms[i],
+		})
 	}
 
 	return locations, nil
@@ -75,6 +127,75 @@ func (s *RouterService) SendAckToUser(ctx context.Context, userId int64, clientM
 		}
 		if err := s.publisher.PublishToAccess(loc.AccessNodeId, ackMsg); err != nil {
 			s.logger.Warn("Failed to send ack to user", "userId", userId, "accessNodeId", loc.AccessNodeId, "error", err)
+		}
+	}
+
+	return nil
+}
+
+// SendAckToUserDirect 直接发送 ACK 到指定的 Access 节点（用于回复发送者，避免 Redis 查询）
+func (s *RouterService) SendAckToUserDirect(ctx context.Context, accessNodeId string, userId int64, clientMsgId string, serverMsgId int64) error {
+	ackMsg := &proto.DownstreamMessage{
+		Payload: proto.DownstreamPayload{
+			MessageAck: &proto.MessageAck{
+				ClientMsgId: clientMsgId,
+				ServerMsgId: serverMsgId,
+				ToUserId:    userId,
+				Timestamp:   time.Now().UnixMilli(),
+			},
+		},
+	}
+	if err := s.publisher.PublishToAccess(accessNodeId, ackMsg); err != nil {
+		s.logger.Warn("Failed to send ack to user", "userId", userId, "accessNodeId", accessNodeId, "error", err)
+		return err
+	}
+	return nil
+}
+
+// SyncToSenderOtherDevices 同步消息给发送者的其他设备（多端同步）
+// excludePlatform: 发送消息的平台，排除该平台
+func (s *RouterService) SyncToSenderOtherDevices(ctx context.Context, excludePlatform string, userId int64, msg *proto.UserMessage, serverMsgId int64) error {
+	// 获取除发送平台外的其他平台
+	otherPlatforms := make([]string, 0, len(AllPlatforms)-1)
+	for _, p := range AllPlatforms {
+		if p != excludePlatform {
+			otherPlatforms = append(otherPlatforms, p)
+		}
+	}
+
+	// 获取其他平台的位置
+	locations, err := s.GetUserLocationsByPlatforms(ctx, userId, otherPlatforms)
+	if err != nil {
+		return err
+	}
+
+	// 没有其他设备在线
+	if len(locations) == 0 {
+		return nil
+	}
+
+	// 发送给其他设备
+	for _, loc := range locations {
+		syncMsg := &proto.DownstreamMessage{
+			Payload: proto.DownstreamPayload{
+				PushMessage: &proto.PushMessage{
+					ServerMsgId: serverMsgId,
+					FromUserId:  msg.FromUserId,
+					ToUserId:    msg.ToUserId,
+					ToGroupId:   msg.ToGroupId,
+					MsgType:     msg.MsgType,
+					Content:     msg.Content,
+					Timestamp:   time.Now().UnixMilli(),
+				},
+			},
+		}
+		if err := s.publisher.PublishToAccess(loc.AccessNodeId, syncMsg); err != nil {
+			s.logger.Warn("Failed to sync message to sender's other device",
+				"userId", userId,
+				"platform", loc.Platform,
+				"accessNodeId", loc.AccessNodeId,
+				"error", err,
+			)
 		}
 	}
 

@@ -17,14 +17,15 @@ const (
 	LocationTTL = 24 * time.Hour
 )
 
-// BuildUserLocationKey 构建用户位置 Key
+// BuildUserLocationKey 构建用户位置 Key（旧版，用于 Hash 模式）
 func BuildUserLocationKey(userId int64) string {
 	return fmt.Sprintf("%s%d", UserLocationKeyPrefix, userId)
 }
 
-// BuildUserLocationField 构建用户位置 Field
-func BuildUserLocationField(accessNodeId string, connId int64) string {
-	return fmt.Sprintf("%s:%d", accessNodeId, connId)
+// BuildUserLocationKeyWithPlatform 构建用户位置 Key（按平台）
+// Key: im:user:location:{userId}:{platform}
+func BuildUserLocationKeyWithPlatform(userId int64, platform string) string {
+	return fmt.Sprintf("%s%d:%s", UserLocationKeyPrefix, userId, platform)
 }
 
 // UserLocationStore 用户位置存储接口
@@ -42,13 +43,4 @@ func ParseUserLocation(data string) (*model.UserLocation, error) {
 		return nil, err
 	}
 	return &loc, nil
-}
-
-// SerializeUserLocation 序列化用户位置为 JSON
-func SerializeUserLocation(location *model.UserLocation) (string, error) {
-	data, err := json.Marshal(location)
-	if err != nil {
-		return "", err
-	}
-	return string(data), nil
 }

@@ -4,7 +4,7 @@
 # 用于在本地开发环境中启动 NATS 容器
 
 CONTAINER_NAME="nats-dev"
-NATS_IMAGE="nats:latest"
+NATS_IMAGE="nats:2.12.3-alpine"
 NATS_PORT=4222
 NATS_HTTP_PORT=8222
 

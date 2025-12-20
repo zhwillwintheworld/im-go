@@ -274,6 +274,7 @@ func (h *Handler) handleChatSend(ctx context.Context, conn *connection.Connectio
 	// 封装上行消息到 Logic
 	msg := &proto.UpstreamMessage{
 		AccessNodeId: h.nodeID,
+		Platform:     conn.Platform(), // 发送消息的平台
 		UserMessage: &proto.UserMessage{
 			FromUserId:  conn.UserID(),
 			ClientMsgId: reqID,

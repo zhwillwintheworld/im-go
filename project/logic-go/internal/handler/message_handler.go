@@ -10,7 +10,8 @@ import (
 
 // MessageHandler 消息处理器实现
 type MessageHandler struct {
-	messageService *service.MessageService
+	messageBatcher *service.MessageBatcher // 改用批量写入器
+	messageService *service.MessageService // 保留用于查询
 	userService    *service.UserService
 	groupService   *service.GroupService
 	routerService  *service.RouterService
@@ -19,12 +20,14 @@ type MessageHandler struct {
 
 // NewMessageHandler 创建消息处理器
 func NewMessageHandler(
+	messageBatcher *service.MessageBatcher,
 	messageService *service.MessageService,
 	userService *service.UserService,
 	groupService *service.GroupService,
 	routerService *service.RouterService,
 ) *MessageHandler {
 	return &MessageHandler{
+		messageBatcher: messageBatcher,
 		messageService: messageService,
 		userService:    userService,
 		groupService:   groupService,
@@ -34,16 +37,16 @@ func NewMessageHandler(
 }
 
 // HandleUserMessage 处理用户消息
-func (h *MessageHandler) HandleUserMessage(ctx context.Context, msg *proto.UserMessage, accessNodeId string) {
-	// 1. 消息存储
-	serverMsgId, err := h.messageService.SaveMessage(ctx, msg)
+func (h *MessageHandler) HandleUserMessage(ctx context.Context, msg *proto.UserMessage, accessNodeId string, platform string) {
+	// 1. 异步批量消息存储（立即返回 serverMsgId）
+	serverMsgId, err := h.messageBatcher.SaveMessage(msg)
 	if err != nil {
-		h.logger.Error("Failed to save message", "error", err)
+		h.logger.Error("Failed to queue message for saving", "error", err)
 		return
 	}
 
-	// 2. 发送 ACK 给发送者
-	if err := h.routerService.SendAckToUser(ctx, msg.FromUserId, msg.ClientMsgId, serverMsgId); err != nil {
+	// 2. 发送 ACK 给发送者（直接回复到消息来源的 access 节点）
+	if err := h.routerService.SendAckToUserDirect(ctx, accessNodeId, msg.FromUserId, msg.ClientMsgId, serverMsgId); err != nil {
 		h.logger.Error("Failed to send ack", "error", err)
 	}
 
@@ -65,6 +68,11 @@ func (h *MessageHandler) HandleUserMessage(ctx context.Context, msg *proto.UserM
 		if err := h.routerService.RouteToMultiple(ctx, filteredMembers, msg, serverMsgId); err != nil {
 			h.logger.Error("Failed to route message to group", "groupId", msg.ToGroupId, "error", err)
 		}
+	}
+
+	// 4. 多端同步：同步消息给发送者的其他设备
+	if err := h.routerService.SyncToSenderOtherDevices(ctx, platform, msg.FromUserId, msg, serverMsgId); err != nil {
+		h.logger.Error("Failed to sync to sender other devices", "error", err)
 	}
 }
 

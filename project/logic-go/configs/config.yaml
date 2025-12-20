@@ -13,6 +13,8 @@ nats:
   #     - nats://nats-3:4222
   max_reconnects: -1  # 无限重连
   reconnect_wait: 2s
+  worker_count: 100    # Worker Pool 并发数
+  buffer_size: 10000   # 消息缓冲区大小
 
 # PostgreSQL
 database:
@@ -37,3 +39,8 @@ redis:
   #     - redis-1:6379
   #     - redis-2:6379
   #     - redis-3:6379
+
+# 批量写入配置
+batch:
+  size: 100           # 批量大小阈值
+  flush_interval: 10s # 强制刷新间隔
