@@ -24,9 +24,12 @@ const (
 type Platform string
 
 const (
-	PlatformPC          Platform = "pc"           // PC 客户端
-	PlatformMiniProgram Platform = "mini_program" // 小程序
-	PlatformApp         Platform = "app"          // 移动端 App
+	PlatformUnknown Platform = "unknown" // 未知
+	PlatformAndroid Platform = "android" // Android
+	PlatformIOS     Platform = "ios"     // iOS
+	PlatformWeb     Platform = "web"     // Web 网页
+	PlatformDesktop Platform = "desktop" // 桌面应用
+	PlatformWechat  Platform = "wechat"  // 微信小程序
 )
 
 // Claims JWT 声明

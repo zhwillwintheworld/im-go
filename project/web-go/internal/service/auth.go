@@ -26,10 +26,10 @@ type RegisterRequest struct {
 
 // LoginRequest 登录请求
 type LoginRequest struct {
-	Username string `json:"username" binding:"required" example:"zhangsan"`                       // 用户名
-	Password string `json:"password" binding:"required" example:"123456"`                         // 密码
-	DeviceID string `json:"device_id" binding:"required" example:"device-uuid-123"`               // 设备ID
-	Platform string `json:"platform" binding:"required" example:"pc" enums:"pc,mini_program,app"` // 平台类型
+	Username string `json:"username" binding:"required" example:"zhangsan"`                                           // 用户名
+	Password string `json:"password" binding:"required" example:"123456"`                                             // 密码
+	DeviceID string `json:"device_id" binding:"required" example:"device-uuid-123"`                                   // 设备ID
+	Platform string `json:"platform" binding:"required" example:"web" enums:"unknown,android,ios,web,desktop,wechat"` // 平台类型
 }
 
 // LoginResponse 登录响应

@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Suspense, lazy } from 'react';
 import { Spin } from 'antd';
+import { IMProvider } from './components/IMProvider';
 
 const Login = lazy(() => import('./pages/Login'));
 const Chat = lazy(() => import('./pages/Chat'));
@@ -13,13 +14,15 @@ const Loading = () => (
 
 function App() {
     return (
-        <Suspense fallback={<Loading />}>
-            <Routes>
-                <Route path="/login" element={<Login />} />
-                <Route path="/chat" element={<Chat />} />
-                <Route path="*" element={<Navigate to="/login" replace />} />
-            </Routes>
-        </Suspense>
+        <IMProvider>
+            <Suspense fallback={<Loading />}>
+                <Routes>
+                    <Route path="/login" element={<Login />} />
+                    <Route path="/chat" element={<Chat />} />
+                    <Route path="*" element={<Navigate to="/login" replace />} />
+                </Routes>
+            </Suspense>
+        </IMProvider>
     );
 }
 

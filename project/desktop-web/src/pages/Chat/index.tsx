@@ -4,9 +4,8 @@ import { SendOutlined } from '@ant-design/icons';
 import { useState, useMemo, useEffect } from 'react';
 import { useChatStore } from '@/stores/chatStore';
 import { useMessageStore } from '@/stores/messageStore';
-import { transportManager } from '@/services/transport/WebTransportManager';
-import { IMProtocol } from '@/services/protocol/IMProtocol';
-import { config } from '@/config';
+import { useIMStore } from '@/stores/imStore';
+import { messageDispatcher, ResponsePayload } from '@/services/messageDispatcher';
 import styles from './Chat.module.css';
 
 const { Sider, Content } = Layout;
@@ -20,49 +19,35 @@ function Chat() {
     const activeConversationId = useChatStore((state) => state.activeConversationId);
     const setActiveConversation = useChatStore((state) => state.setActiveConversation);
 
+    // IM 连接状态
+    const imStatus = useIMStore((state) => state.status);
+
     // 从 store 获取消息 Map
     const messagesMap = useMessageStore((state) => state.messages);
-    const initListener = useMessageStore((state) => state.initListener);
+    const addMessage = useMessageStore((state) => state.addMessage);
 
-    // 初始化连接
+    // 注册消息处理器
     useEffect(() => {
-        let isMounted = true;
-
-        const connect = async () => {
-            try {
-                // 开发环境自签名证书需要 Chrome 启动参数 --origin-to-force-quic-on=<host>:<port>
-                await transportManager.connect(config.webTransportUrl);
-
-                // 检查组件是否仍然挂载 (React Strict Mode 会导致双重挂载/卸载)
-                if (!isMounted) {
-                    console.log('[Chat] Component unmounted during connect, aborting');
-                    return;
-                }
-
-                // 发送认证请求 - 使用新的 FlatBuffers 协议
-                const authFrame = IMProtocol.createAuthRequest(
-                    'mock-token',
-                    'device-1',
-                    '1.0.0'
-                );
-                await transportManager.send(authFrame);
-
-                console.log('Connected and Authenticated');
-                initListener();
-            } catch (err) {
-                if (isMounted) {
-                    console.error('Failed to connect:', err);
-                }
+        const handleChatPush = (payload: Uint8Array | null, _reqId: string | null) => {
+            if (payload) {
+                // TODO: 解析 ChatPush payload 并添加消息
+                console.log('[Chat] Received ChatPush');
             }
         };
 
-        connect();
+        const handleChatSendAck = (payload: Uint8Array | null, reqId: string | null) => {
+            console.log('[Chat] ChatSendAck for reqId:', reqId);
+            // TODO: 更新消息状态
+        };
+
+        messageDispatcher.register(ResponsePayload.ChatPush, handleChatPush);
+        messageDispatcher.register(ResponsePayload.ChatSendAck, handleChatSendAck);
 
         return () => {
-            isMounted = false;
-            transportManager.disconnect();
+            messageDispatcher.unregister(ResponsePayload.ChatPush, handleChatPush);
+            messageDispatcher.unregister(ResponsePayload.ChatSendAck, handleChatSendAck);
         };
-    }, [initListener]);
+    }, [addMessage]);
 
     // 使用 useMemo 计算当前会话的消息，避免 selector 返回新引用
     const messages = useMemo(() => {
@@ -74,6 +59,10 @@ function Chat() {
 
     const handleSend = () => {
         if (!inputValue.trim() || !activeConversationId) return;
+        if (imStatus !== 'authenticated') {
+            console.warn('[Chat] IM not authenticated, cannot send message');
+            return;
+        }
         sendMessage(activeConversationId, inputValue);
         setInputValue('');
     };
@@ -83,6 +72,9 @@ function Chat() {
             <Sider width={300} className={styles.sider}>
                 <div className={styles.siderHeader}>
                     <h3>会话</h3>
+                    <span className={styles.status}>
+                        {imStatus === 'authenticated' ? '🟢' : '🔴'} {'正常'}
+                    </span>
                 </div>
                 <div className={styles.convList}>
                     {conversations.map((conv) => (
@@ -115,12 +107,14 @@ function Chat() {
                         onPressEnter={handleSend}
                         placeholder="输入消息..."
                         size="large"
+                        disabled={imStatus !== 'authenticated'}
                     />
                     <Button
                         type="primary"
                         icon={<SendOutlined />}
                         onClick={handleSend}
                         size="large"
+                        disabled={imStatus !== 'authenticated'}
                     >
                         发送
                     </Button>

@@ -28,7 +28,7 @@ redis:
 
 cors:
   allowed_origins:
-    - "http://localhost:8082"
+    - "http://localhost:8083"
     - "https://im.sudooom.com"
   allowed_methods:
     - GET
