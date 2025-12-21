@@ -17,9 +17,9 @@ const (
 
 // Group 群组
 type Group struct {
-	ID          int64     `json:"id" db:"id"`
+	ID          int64     `json:"id,string" db:"id"`
 	Name        string    `json:"name" db:"name"`
-	OwnerID     int64     `json:"owner_id" db:"owner_id"`
+	OwnerID     int64     `json:"owner_id,string" db:"owner_id"`
 	Avatar      string    `json:"avatar" db:"avatar"`
 	Description string    `json:"description" db:"description"`
 	MaxMembers  int       `json:"max_members" db:"max_members"`
@@ -31,9 +31,9 @@ type Group struct {
 
 // GroupMember 群成员
 type GroupMember struct {
-	ID       int64     `json:"id" db:"id"`
-	GroupID  int64     `json:"group_id" db:"group_id"`
-	UserID   int64     `json:"user_id" db:"user_id"`
+	ID       int64     `json:"id,string" db:"id"`
+	GroupID  int64     `json:"group_id,string" db:"group_id"`
+	UserID   int64     `json:"user_id,string" db:"user_id"`
 	Role     int       `json:"role" db:"role"`
 	Nickname string    `json:"nickname" db:"nickname"`
 	CreateAt time.Time `json:"create_at" db:"create_at"`

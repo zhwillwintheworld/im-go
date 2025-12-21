@@ -30,6 +30,7 @@ cors:
   allowed_origins:
     - "http://localhost:8083"
     - "https://im.sudooom.com"
+    - "*"  # 允许局域网设备访问
   allowed_methods:
     - GET
     - POST

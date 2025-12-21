@@ -43,8 +43,8 @@ func (h *FriendHandler) GetFriendList(c *gin.Context) {
 	var result []gin.H
 	for _, f := range friends {
 		result = append(result, gin.H{
-			"id":        f.ID,
-			"friend_id": f.FriendID,
+			"id":        strconv.FormatInt(f.ID, 10),
+			"friend_id": strconv.FormatInt(f.FriendID, 10),
 			"username":  f.Username,
 			"nickname":  f.Nickname,
 			"avatar":    f.Avatar,
@@ -122,8 +122,8 @@ func (h *FriendHandler) GetPendingRequests(c *gin.Context) {
 	var result []gin.H
 	for _, r := range requests {
 		result = append(result, gin.H{
-			"id":            r.ID,
-			"from_user_id":  r.FromUserID,
+			"id":            strconv.FormatInt(r.ID, 10),
+			"from_user_id":  strconv.FormatInt(r.FromUserID, 10),
 			"from_username": r.FromUsername,
 			"from_nickname": r.FromNickname,
 			"from_avatar":   r.FromAvatar,

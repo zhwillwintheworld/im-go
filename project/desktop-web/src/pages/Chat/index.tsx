@@ -4,7 +4,6 @@ import { useState, useMemo, useEffect } from 'react';
 import { useChatStore } from '@/stores/chatStore';
 import { useMessageStore } from '@/stores/messageStore';
 import { useIMStore } from '@/stores/imStore';
-import { messageDispatcher, ResponsePayload } from '@/services/messageDispatcher';
 import FriendList from '@/components/FriendList';
 import styles from './Chat.module.css';
 
@@ -25,30 +24,12 @@ function Chat() {
 
     // 从 store 获取消息 Map
     const messagesMap = useMessageStore((state) => state.messages);
-    const addMessage = useMessageStore((state) => state.addMessage);
+    const initListener = useMessageStore((state) => state.initListener);
 
-    // 注册消息处理器
+    // 初始化消息监听器
     useEffect(() => {
-        const handleChatPush = (payload: Uint8Array | null, _reqId: string | null) => {
-            if (payload) {
-                // TODO: 解析 ChatPush payload 并添加消息
-                console.log('[Chat] Received ChatPush');
-            }
-        };
-
-        const handleChatSendAck = (payload: Uint8Array | null, reqId: string | null) => {
-            console.log('[Chat] ChatSendAck for reqId:', reqId);
-            // TODO: 更新消息状态
-        };
-
-        messageDispatcher.register(ResponsePayload.ChatPush, handleChatPush);
-        messageDispatcher.register(ResponsePayload.ChatSendAck, handleChatSendAck);
-
-        return () => {
-            messageDispatcher.unregister(ResponsePayload.ChatPush, handleChatPush);
-            messageDispatcher.unregister(ResponsePayload.ChatSendAck, handleChatSendAck);
-        };
-    }, [addMessage]);
+        initListener();
+    }, [initListener]);
 
     // 使用 useMemo 计算当前会话的消息，避免 selector 返回新引用
     const messages = useMemo(() => {
@@ -57,6 +38,7 @@ function Chat() {
     }, [messagesMap, activeConversationId]);
 
     const sendMessage = useMessageStore((state) => state.sendMessage);
+
 
     const handleSend = () => {
         if (!inputValue.trim() || !activeConversationId) return;

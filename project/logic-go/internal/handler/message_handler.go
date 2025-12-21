@@ -60,10 +60,11 @@ func (h *MessageHandler) HandleUserMessage(ctx context.Context, msg *proto.UserM
 			h.logger.Error("Failed to route message to user", "toUserId", msg.ToUserId, "error", err)
 		}
 
-		// 更新发送者会话
-		h.conversationService.UpdateConversationForSender(ctx, msg.FromUserId, msg.ToUserId, 0, serverMsgId)
-		// 更新接收者会话
-		h.conversationService.UpdateConversationForReceiver(ctx, msg.ToUserId, msg.FromUserId, 0, serverMsgId)
+		// 异步更新会话（非关键路径）
+		go func() {
+			h.conversationService.UpdateConversationForSender(context.Background(), msg.FromUserId, msg.ToUserId, 0, serverMsgId)
+			h.conversationService.UpdateConversationForReceiver(context.Background(), msg.ToUserId, msg.FromUserId, 0, serverMsgId)
+		}()
 
 	} else if msg.ToGroupId > 0 {
 		// 群聊消息
@@ -78,14 +79,18 @@ func (h *MessageHandler) HandleUserMessage(ctx context.Context, msg *proto.UserM
 			h.logger.Error("Failed to route message to group", "groupId", msg.ToGroupId, "error", err)
 		}
 
-		// 更新所有群成员会话
-		h.conversationService.UpdateConversationForGroupMembers(ctx, members, msg.FromUserId, msg.ToGroupId, serverMsgId)
+		// 异步更新所有群成员会话（非关键路径）
+		go func() {
+			h.conversationService.UpdateConversationForGroupMembers(context.Background(), members, msg.FromUserId, msg.ToGroupId, serverMsgId)
+		}()
 	}
 
-	// 4. 多端同步：同步消息给发送者的其他设备
-	if err := h.routerService.SyncToSenderOtherDevices(ctx, platform, msg.FromUserId, msg, serverMsgId); err != nil {
-		h.logger.Error("Failed to sync to sender other devices", "error", err)
-	}
+	// 4. 异步多端同步：同步消息给发送者的其他设备（非关键路径）
+	go func() {
+		if err := h.routerService.SyncToSenderOtherDevices(context.Background(), platform, msg.FromUserId, msg, serverMsgId); err != nil {
+			h.logger.Error("Failed to sync to sender other devices", "error", err)
+		}
+	}()
 }
 
 // HandleConversationRead 处理会话已读

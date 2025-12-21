@@ -34,7 +34,7 @@ type LoginRequest struct {
 
 // LoginResponse 登录响应
 type LoginResponse struct {
-	UserID       int64  `json:"user_id" example:"1234567890123456789"`                   // 用户ID
+	UserID       int64  `json:"user_id,string" example:"1234567890123456789"`            // 用户ID (使用string传输防止JS精度丢失)
 	AccessToken  string `json:"access_token" example:"eyJhbGciOiJIUzI1NiIsInR5cCI6..."`  // 访问令牌
 	RefreshToken string `json:"refresh_token" example:"eyJhbGciOiJIUzI1NiIsInR5cCI6..."` // 刷新令牌
 	ExpiresAt    int64  `json:"expires_at" example:"1702915200"`                         // 过期时间戳

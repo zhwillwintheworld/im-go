@@ -7,8 +7,8 @@ export const config = {
     /** 当前环境 */
     env: import.meta.env.VITE_ENV || 'development',
 
-    /** Web API 基础地址 */
-    apiBaseUrl: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8082',
+    /** Web API 基础地址（空字符串表示使用相对路径，走 Vite 代理） */
+    apiBaseUrl: import.meta.env.VITE_API_BASE_URL || '',
 
     /** Access 服务地址 (WebTransport) */
     accessUrl: import.meta.env.VITE_ACCESS_URL || 'https://localhost:8081',

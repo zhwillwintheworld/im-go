@@ -28,7 +28,7 @@ interface ApiResponse<T> {
 interface LoginResponse {
     access_token: string;
     refresh_token: string;
-    user_id: number;
+    user_id: string;  // 使用 string 防止大整数精度丢失
     expires_at: number;
 }
 

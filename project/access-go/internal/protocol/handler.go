@@ -412,7 +412,6 @@ func (h *Handler) SendUserOfflineToLogic(conn *connection.Connection) {
 	}
 	data, _ := json.Marshal(msg)
 	h.natsClient.Publish(sharedNats.SubjectLogicUpstream, data)
-	h.logger.Debug("Sent user offline to logic", "userId", conn.UserID())
 }
 
 // HandleDownstream 处理下行消息（从 Logic 推送到客户端）
@@ -448,7 +447,7 @@ func (h *Handler) handlePushMessage(pushMsg *proto.PushMessage) {
 	msgIdOffset := builder.CreateString(fmt.Sprintf("%d", pushMsg.ServerMsgId))
 	senderIdOffset := builder.CreateString(fmt.Sprintf("%d", pushMsg.FromUserId))
 	targetIdOffset := builder.CreateString(fmt.Sprintf("%d", pushMsg.ToUserId))
-	contentOffset := builder.CreateByteVector(pushMsg.Content)
+	contentOffset := builder.CreateString(string(pushMsg.Content)) // content 是 string 类型
 
 	im_protocol.ChatPushStart(builder)
 	im_protocol.ChatPushAddMsgId(builder, msgIdOffset)
@@ -466,7 +465,11 @@ func (h *Handler) handlePushMessage(pushMsg *proto.PushMessage) {
 	// 构建 ClientResponse 并发送
 	for _, conn := range conns {
 		respFrame := h.buildClientResponseFrame("", im_protocol.ErrorCodeSUCCESS, "", im_protocol.ResponsePayloadChatPush, payload)
-		conn.Send(respFrame)
+		err := conn.Send(respFrame)
+		if err != nil {
+			h.logger.Error("Failed to send push message to user", "userId", conn.UserID(), "error", err)
+			continue // 继续发送给其他连接
+		}
 	}
 
 	h.logger.Debug("Pushed message to users",

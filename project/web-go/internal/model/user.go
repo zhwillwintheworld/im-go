@@ -4,7 +4,7 @@ import "time"
 
 // User 用户模型
 type User struct {
-	ID           int64     `json:"id" db:"id"`
+	ID           int64     `json:"id,string" db:"id"`
 	Username     string    `json:"username" db:"username"`
 	PasswordHash string    `json:"-" db:"password_hash"`
 	Nickname     string    `json:"nickname" db:"nickname"`
