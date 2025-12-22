@@ -7,7 +7,10 @@ require (
 	github.com/nats-io/nats.go v1.47.0
 	github.com/redis/go-redis/v9 v9.7.3
 	github.com/spf13/viper v1.20.1
+	sudooom.im.shared v0.0.0
 )
+
+replace sudooom.im.shared => ../shared
 
 require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
