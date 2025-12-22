@@ -24,16 +24,16 @@ Access Layer（接入层）是 IM 系统的网关层，负责处理客户端连�
 ┌─────────────────────────────────────────────────────────┐
 │                    技术栈                                │
 ├─────────────────┬───────────────────────────────────────┤
-│ 语言            │ Go 1.25.5                             │
+│ 语言            │ Go 1.25                               │
 │ 序列化协议      │ FlatBuffers                           │
-│ 客户端传输      │ QUIC (quic-go)                        │
+│ 客户端传输      │ WebTransport (quic-go) + QUIC         │
 │ 内部通信        │ NATS (nats.go)                        │
-│ 配置中心        │ etcd / Apollo                         │
+│ 用户位置存储    │ Redis                                 │
 └─────────────────┴───────────────────────────────────────┘
 ```
 
 > [!TIP]
-> **为什么选择 NATS**：延迟更低 (~0.3ms vs gRPC ~1ms)，内置负载均衡，无需额外服务发现。
+> **为什么选择 WebTransport**：基于 QUIC 协议，支持浏览器原生访问，同时兼容非浏览器客户端。
 
 ### 1.3 为什么选择 QUIC
 
@@ -159,37 +159,28 @@ graph TB
 ### 3.1 项目目录结构
 
 ```
-im-access/
+access-go/
 ├── cmd/
 │   └── access/
 │       └── main.go              # 入口
 ├── internal/
-│   ├── server/
-│   │   ├── server.go            # 服务器核心
-│   │   └── quic_server.go       # QUIC 监听
+│   ├── config/
+│   │   └── config.go            # 配置加载
 │   ├── connection/
-│   │   ├── manager.go           # 连接管理器
 │   │   ├── connection.go        # 连接抽象
+│   │   ├── manager.go           # 连接管理器
 │   │   └── session.go           # 会话状态
-│   ├── protocol/
-│   │   ├── codec.go             # 编解码器
-│   │   ├── handler.go           # 协议处理
-│   │   └── dispatcher.go        # 消息分发
-│   ├── router/
-│   │   ├── router.go            # 消息路由
-│   │   └── upstream.go          # 上游服务通信
 │   ├── nats/
-│   │   ├── client.go            # NATS 客户端
-│   │   ├── publisher.go         # 发布者
-│   │   └── subscriber.go        # 订阅者
-│   ├── auth/
-│   │   └── authenticator.go     # 认证模块
-│   └── metrics/
-│       └── collector.go         # 指标收集
+│   │   └── subscriber.go        # NATS 订阅器
+│   ├── protocol/
+│   │   └── dispatcher.go        # 消息分发
+│   ├── redis/
+│   │   └── user_location.go     # 用户位置管理
+│   └── server/
+│       ├── quic.go              # QUIC 服务器
+│       └── webtransport.go      # WebTransport 服务器
 ├── pkg/
-│   ├── flatbuf/                 # FlatBuffers 生成代码
-│   │   └── message/
-│   └── utils/
+│   └── flatbuf/                 # FlatBuffers 生成代码
 ├── schema/
 │   └── message.fbs              # FlatBuffers Schema
 ├── configs/
@@ -197,6 +188,9 @@ im-access/
 ├── go.mod
 └── go.sum
 ```
+
+> [!IMPORTANT]
+> **用户位置管理**：Access 层直接管理用户连接位置，存储在 Redis 中。Logic 层仅读取位置信息进行消息路由。
 
 ### 3.2 核心模块详解
 

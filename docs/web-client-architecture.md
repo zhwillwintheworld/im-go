@@ -97,63 +97,43 @@ graph TB
 ### 3.1 项目目录结构
 
 ```
-im-web/
-├── public/
-│   └── favicon.ico
+desktop-web/
 ├── src/
 │   ├── main.tsx                      # 入口
 │   ├── App.tsx                       # 根组件
 │   ├── vite-env.d.ts
-│   ├── assets/                       # 静态资源
-│   │   ├── images/
-│   │   └── fonts/
 │   ├── components/                   # 通用组件
-│   │   ├── Avatar/
-│   │   ├── MessageBubble/
-│   │   ├── ChatInput/
-│   │   └── VirtualList/
+│   ├── config/                       # 配置
+│   │   └── env.ts
 │   ├── pages/                        # 页面组件
 │   │   ├── Login/
 │   │   ├── Chat/
 │   │   ├── Contacts/
 │   │   └── Settings/
-│   ├── hooks/                        # 自定义 Hooks
-│   │   ├── useWebTransport.ts
-│   │   ├── useMessage.ts
-│   │   └── useAuth.ts
-│   ├── stores/                       # 状态管理
+│   ├── stores/                       # Zustand 状态管理
 │   │   ├── authStore.ts
 │   │   ├── chatStore.ts
-│   │   ├── messageStore.ts
-│   │   └── uiStore.ts
+│   │   ├── connectionStore.ts
+│   │   ├── conversationStore.ts
+│   │   └── messageStore.ts
 │   ├── services/                     # 业务服务
 │   │   ├── transport/
-│   │   │   ├── WebTransportManager.ts
-│   │   │   └── MessageHandler.ts
+│   │   │   └── WebTransportManager.ts
 │   │   ├── api/
-│   │   │   ├── client.ts
-│   │   │   └── endpoints.ts
+│   │   │   └── client.ts
 │   │   └── storage/
 │   │       └── IndexedDBService.ts
 │   ├── protocol/                     # FlatBuffers 生成代码
-│   │   ├── message_generated.ts
-│   │   └── codec.ts
-│   ├── utils/                        # 工具函数
-│   │   ├── format.ts
-│   │   └── crypto.ts
 │   ├── types/                        # 类型定义
 │   │   └── index.ts
 │   └── styles/                       # 全局样式
-│       ├── variables.css
 │       └── global.css
-├── schema/                           # FlatBuffers Schema (共享)
-│   └── message.fbs
 ├── index.html
 ├── vite.config.ts
 ├── tsconfig.json
 ├── tsconfig.node.json
 ├── package.json
-└── pnpm-lock.yaml
+└── package-lock.json
 ```
 
 ### 3.2 核心模块详解
@@ -429,7 +409,7 @@ export default defineConfig({
 
 ```json
 {
-    "name": "im-web",
+    "name": "im-desktop-web",
     "version": "1.0.0",
     "type": "module",
     "scripts": {

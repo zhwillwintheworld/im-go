@@ -4,6 +4,8 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+
+	sharedErrors "sudooom.im.shared/errors"
 )
 
 // Response 统一响应结构
@@ -13,33 +15,33 @@ type Response struct {
 	Data    interface{} `json:"data"`
 }
 
-// 错误码定义
+// 错误码常量（使用 shared/errors 包的定义）
 const (
-	CodeSuccess = 0
+	CodeSuccess = sharedErrors.CodeSuccess
 
 	// 认证相关 10000-10999
-	CodeUsernameExists     = 10001
-	CodeInvalidCredentials = 10002
-	CodeTokenInvalid       = 10003
-	CodeTokenExpired       = 10004
-	CodeUserDisabled       = 10005
+	CodeUsernameExists     = sharedErrors.CodeUsernameExists
+	CodeInvalidCredentials = sharedErrors.CodeInvalidCredentials
+	CodeTokenInvalid       = sharedErrors.CodeTokenInvalid
+	CodeTokenExpired       = sharedErrors.CodeTokenExpired
+	CodeUserDisabled       = sharedErrors.CodeUserDisabled
 
 	// 用户相关 11000-11999
-	CodeUserNotFound  = 11001
-	CodeInvalidParams = 11002
+	CodeUserNotFound  = sharedErrors.CodeUserNotFound
+	CodeInvalidParams = sharedErrors.CodeInvalidParams
 
 	// 好友相关 12000-12999
-	CodeFriendRequestNotFound = 12001
-	CodeAlreadyFriends        = 12002
-	CodeCannotAddSelf         = 12003
-	CodeRequestPending        = 12004
+	CodeFriendRequestNotFound = sharedErrors.CodeFriendRequestNotFound
+	CodeAlreadyFriends        = sharedErrors.CodeAlreadyFriends
+	CodeCannotAddSelf         = sharedErrors.CodeCannotAddSelf
+	CodeRequestPending        = sharedErrors.CodeRequestPending
 
 	// 系统错误 50000-50999
-	CodeServerError = 50001
-	CodeDBError     = 50002
+	CodeServerError = sharedErrors.CodeServerError
+	CodeDBError     = sharedErrors.CodeDBError
 )
 
-// 错误信息
+// 错误信息（保留用于向后兼容）
 var codeMessages = map[int]string{
 	CodeSuccess:               "success",
 	CodeUsernameExists:        "用户名已存在",
@@ -88,6 +90,17 @@ func ErrorWithMsg(c *gin.Context, code int, message string) {
 	})
 }
 
+// ErrorFromAppError 从 AppError 生成错误响应
+func ErrorFromAppError(c *gin.Context, err error) {
+	code := sharedErrors.GetCode(err)
+	message := sharedErrors.GetMessage(err)
+	c.JSON(http.StatusOK, Response{
+		Code:    code,
+		Message: message,
+		Data:    nil,
+	})
+}
+
 // Unauthorized 未认证
 func Unauthorized(c *gin.Context) {
 	c.JSON(http.StatusUnauthorized, Response{
@@ -100,7 +113,7 @@ func Unauthorized(c *gin.Context) {
 // TooManyRequests 请求过多
 func TooManyRequests(c *gin.Context) {
 	c.JSON(http.StatusTooManyRequests, Response{
-		Code:    50003,
+		Code:    sharedErrors.CodeTooManyReqest,
 		Message: "请求过于频繁，请稍后再试",
 		Data:    nil,
 	})

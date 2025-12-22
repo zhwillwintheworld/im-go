@@ -124,84 +124,105 @@ logic-go/
 ├── internal/
 │   ├── config/
 │   │   └── config.go               # 配置加载
+│   ├── handler/
+│   │   └── message_handler.go      # 消息处理器
+│   ├── model/
+│   │   ├── conversation.go         # 会话模型
+│   │   └── message.go              # 消息模型
 │   ├── nats/
 │   │   ├── client.go               # NATS 客户端
 │   │   ├── subscriber.go           # 消息订阅器
 │   │   └── publisher.go            # 消息发布器
-│   ├── service/
-│   │   ├── message.go              # 消息业务
-│   │   ├── user.go                 # 用户业务
-│   │   ├── group.go                # 群组业务
-│   │   └── router.go               # 路由服务
 │   ├── repository/
-│   │   ├── message.go
-│   │   ├── user.go
-│   │   └── group.go
-│   └── model/
-│       ├── message.go
-│       ├── user.go
-│       └── group.go
-├── pkg/
-│   └── proto/                      # Protobuf 生成的代码
+│   │   └── message.go              # 消息数据访问
+│   └── service/
+│       ├── conversation.go         # 会话服务
+│       ├── group.go                # 群组业务
+│       ├── message.go              # 消息业务
+│       ├── message_batcher.go      # 消息批量写入器
+│       └── router.go               # 路由服务
 ├── go.mod
 └── go.sum
 ```
 
 ### 3.2 核心模块详解
 
-#### 3.2.1 NATS 消息服务
+#### 3.2.1 消息处理器
+
+```mermaid
+classDiagram
+    class MessageHandler {
+        -messageBatcher: *MessageBatcher
+        -messageService: *MessageService
+        -groupService: *GroupService
+        -routerService: *RouterService
+        -conversationService: *ConversationService
+        +HandleUserMessage(ctx, msg, accessNodeId, platform)
+        +HandleConversationRead(ctx, event)
+        +HandleUserOnline(ctx, event, accessNodeId)
+        +HandleUserOffline(ctx, event, accessNodeId)
+    }
+
+    class MessageBatcher {
+        -db: *pgxpool.Pool
+        -sfNode: *snowflake.Node
+        -msgChan: chan *MessageItem
+        +Start(ctx)
+        +Stop()
+        +SaveMessage(msg) (int64, error)
+    }
+
+    class ConversationService {
+        -redisClient: *redis.Client
+        +UpdateConversationForSender(ctx, ...)
+        +UpdateConversationForReceiver(ctx, ...)
+        +UpdateConversationForGroupMembers(ctx, ...)
+        +MarkRead(ctx, ...)
+    }
+
+    MessageHandler --> MessageBatcher
+    MessageHandler --> ConversationService
+```
+
+#### 3.2.2 NATS 消息服务
 
 ```mermaid
 classDiagram
     class MessageSubscriber {
         -nc: *nats.Conn
-        -messageService: *MessageService
-        -routerService: *RouterService
-        +Start()
+        -handler: *MessageHandler
+        +Start(ctx)
+        +Stop()
         +handleUpstreamMessage(data []byte)
     }
 
     class MessagePublisher {
         -nc: *nats.Conn
-        +PublishToAccess(accessNodeId string, message *pb.DownstreamMessage)
-        +Broadcast(message *pb.DownstreamMessage)
+        +PublishToAccess(accessNodeId string, message *proto.DownstreamMessage)
     }
 
-    class RouterService {
-        -redisClient: *redis.Client
-        -publisher: *MessagePublisher
-        +GetUserLocations(userId int64) []UserLocation
-        +RouteMessage(userId int64, message *pb.PushMessage)
-        +RouteToMultiple(userIds []int64, message *pb.PushMessage)
-    }
-
-    MessageSubscriber --> RouterService
-    RouterService --> MessagePublisher
+    MessageSubscriber --> MessageHandler
 ```
 
-#### 3.2.2 消息路由服务
+#### 3.2.3 消息路由服务
 
 ```mermaid
 classDiagram
     class RouterService {
         -redisClient: *redis.Client
         -publisher: *MessagePublisher
-        +GetUserLocation(userId int64) []UserLocation
-        +RouteMessage(userId int64, message *pb.PushMessage)
-        +RouteToMultiple(userIds []int64, message *pb.PushMessage)
+        +GetUserLocations(ctx, userId) []UserLocation
+        +RouteMessage(ctx, userId, msg, serverMsgId)
+        +RouteToMultiple(ctx, userIds, msg, serverMsgId)
+        +SendAckToUserDirect(ctx, accessNodeId, userId, clientMsgId, serverMsgId)
+        +SyncToSenderOtherDevices(ctx, platform, userId, msg, serverMsgId)
     }
 
-    class UserLocation {
-        +UserId: int64
-        +AccessNodeId: string
-        +ConnId: int64
-        +DeviceId: string
-        +Platform: string
-        +LoginTime: time.Time
-    }
-
-    RouterService --> UserLocation
+    RouterService --> MessagePublisher
 ```
+
+> [!NOTE]
+> 用户位置 (UserLocation) 的注册与注销由 **Access 层** 直接管理，Logic 层仅读取 Redis 中的位置信息进行消息路由。
 
 ---
 
@@ -217,29 +238,32 @@ import (
     "log/slog"
 
     "github.com/nats-io/nats.go"
-    "google.golang.org/protobuf/proto"
+    "sudooom.im.logic/internal/handler"
+    "sudooom.im.shared/proto"
 )
 
 type MessageSubscriber struct {
-    nc             *nats.Conn
-    messageService *service.MessageService
-    userService    *service.UserService
-    routerService  *service.RouterService
-    logger         *slog.Logger
+    nc      *nats.Conn
+    handler *handler.MessageHandler
+    config  SubscriberConfig
+    logger  *slog.Logger
+}
+
+type SubscriberConfig struct {
+    WorkerCount int
+    BufferSize  int
 }
 
 func NewMessageSubscriber(
     nc *nats.Conn,
-    messageService *service.MessageService,
-    userService *service.UserService,
-    routerService *service.RouterService,
+    handler *handler.MessageHandler,
+    config SubscriberConfig,
 ) *MessageSubscriber {
     return &MessageSubscriber{
-        nc:             nc,
-        messageService: messageService,
-        userService:    userService,
-        routerService:  routerService,
-        logger:         slog.Default(),
+        nc:      nc,
+        handler: handler,
+        config:  config,
+        logger:  slog.Default(),
     }
 }
 
@@ -252,81 +276,37 @@ func (s *MessageSubscriber) Start(ctx context.Context) error {
         return err
     }
 
-    s.logger.Info("NATS subscriber started, listening on im.logic.upstream")
+    s.logger.Info("NATS subscriber started", "subject", "im.logic.upstream")
     return nil
 }
 
 func (s *MessageSubscriber) handleUpstreamMessage(ctx context.Context, data []byte) {
-    var message pb.UpstreamMessage
-    if err := proto.Unmarshal(data, &message); err != nil {
-        s.logger.Error("Failed to unmarshal message", "error", err)
+    message, err := proto.DecodeUpstreamMessage(data)
+    if err != nil {
+        s.logger.Error("Failed to decode message", "error", err)
         return
     }
 
-    accessNodeId := message.GetAccessNodeId()
+    accessNodeId := message.AccessNodeId
+    platform := message.Platform
 
     switch {
-    case message.GetUserMessage() != nil:
-        s.handleUserMessage(ctx, message.GetUserMessage(), accessNodeId)
-    case message.GetUserOnline() != nil:
-        s.handleUserOnline(ctx, message.GetUserOnline(), accessNodeId)
-    case message.GetUserOffline() != nil:
-        s.handleUserOffline(ctx, message.GetUserOffline(), accessNodeId)
+    case message.UserMessage != nil:
+        s.handler.HandleUserMessage(ctx, message.UserMessage, accessNodeId, platform)
+    case message.UserOnline != nil:
+        s.handler.HandleUserOnline(ctx, message.UserOnline, accessNodeId)
+    case message.UserOffline != nil:
+        s.handler.HandleUserOffline(ctx, message.UserOffline, accessNodeId)
+    case message.ConversationRead != nil:
+        s.handler.HandleConversationRead(ctx, message.ConversationRead)
     }
-}
-
-func (s *MessageSubscriber) handleUserMessage(ctx context.Context, msg *pb.UserMessage, accessNodeId string) {
-    // 1. 消息存储
-    serverMsgId, err := s.messageService.SaveMessage(ctx, msg)
-    if err != nil {
-        s.logger.Error("Failed to save message", "error", err)
-        return
-    }
-
-    // 2. 发送 ACK 给发送者
-    if err := s.routerService.SendAckToUser(ctx, msg.GetFromUserId(), msg.GetMsgId(), serverMsgId); err != nil {
-        s.logger.Error("Failed to send ack", "error", err)
-    }
-
-    // 3. 路由消息给接收者
-    if msg.GetToUserId() > 0 {
-        s.routerService.RouteMessage(ctx, msg.GetToUserId(), msg, serverMsgId)
-    } else if msg.GetToGroupId() > 0 {
-        members, _ := s.groupService.GetGroupMembers(ctx, msg.GetToGroupId())
-        // 过滤发送者
-        filteredMembers := filterOut(members, msg.GetFromUserId())
-        s.routerService.RouteToMultiple(ctx, filteredMembers, msg, serverMsgId)
-    }
-}
-
-func (s *MessageSubscriber) handleUserOnline(ctx context.Context, event *pb.UserOnline, accessNodeId string) {
-    s.userService.RegisterUserLocation(ctx, &model.UserLocation{
-        UserId:       event.GetUserId(),
-        AccessNodeId: accessNodeId,
-        ConnId:       event.GetConnId(),
-        DeviceId:     event.GetDeviceId(),
-        Platform:     event.GetPlatform(),
-    })
-}
-
-func (s *MessageSubscriber) handleUserOffline(ctx context.Context, event *pb.UserOffline, accessNodeId string) {
-    s.userService.UnregisterUserLocation(ctx, event.GetUserId(), event.GetConnId(), accessNodeId)
 }
 
 func (s *MessageSubscriber) Stop() {
     s.logger.Info("NATS subscriber stopped")
 }
-
-func filterOut(members []int64, excludeId int64) []int64 {
-    result := make([]int64, 0, len(members))
-    for _, m := range members {
-        if m != excludeId {
-            result = append(result, m)
-        }
-    }
-    return result
-}
 ```
+
 
 ### 5.2 NATS 发布者 (用于下行推送)
 
@@ -743,48 +723,87 @@ import (
     "os"
     "os/signal"
     "syscall"
-    "time"
 
-    "github.com/nats-io/nats.go"
+    "github.com/jackc/pgx/v5/pgxpool"
     "github.com/redis/go-redis/v9"
-    "github.com/spf13/viper"
+
+    "sudooom.im.logic/internal/config"
+    "sudooom.im.logic/internal/handler"
+    imNats "sudooom.im.logic/internal/nats"
+    "sudooom.im.logic/internal/service"
+    "sudooom.im.shared/snowflake"
 )
 
 func main() {
     // 初始化日志
-    logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+    logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+        Level: slog.LevelDebug,
+    }))
     slog.SetDefault(logger)
 
     // 加载配置
-    cfg := loadConfig()
+    cfg, err := config.Load("configs/config.yaml")
+    if err != nil {
+        logger.Error("Failed to load config", "error", err)
+        os.Exit(1)
+    }
+
+    ctx, cancel := context.WithCancel(context.Background())
+    defer cancel()
 
     // 连接 NATS
-    nc, err := connectNATS(cfg.NATS)
+    natsClient, err := imNats.NewClient(cfg.NATS)
     if err != nil {
         logger.Error("Failed to connect to NATS", "error", err)
         os.Exit(1)
     }
-    defer nc.Close()
+    defer natsClient.Close()
 
     // 连接 Redis
     redisClient := connectRedis(cfg.Redis)
     defer redisClient.Close()
 
     // 连接数据库
-    db := connectDatabase(cfg.Database)
+    db, err := connectDatabase(ctx, cfg.Database)
+    if err != nil {
+        logger.Error("Failed to connect to database", "error", err)
+        os.Exit(1)
+    }
     defer db.Close()
 
+    // 初始化雪花ID生成器
+    sfNode, _ := snowflake.NewNode(1)
+
     // 初始化服务
-    publisher := nats.NewMessagePublisher(nc)
+    publisher := imNats.NewMessagePublisher(natsClient.Conn())
     routerService := service.NewRouterService(redisClient, publisher)
-    userService := service.NewUserService(redisClient)
+    groupService := service.NewGroupService(db)
     messageService := service.NewMessageService(db)
 
-    // 启动订阅者
-    ctx, cancel := context.WithCancel(context.Background())
-    defer cancel()
+    // 创建消息批量写入器
+    messageBatcher := service.NewMessageBatcher(db, sfNode, service.MessageBatcherConfig{
+        BatchSize:     cfg.Batch.Size,
+        FlushInterval: cfg.Batch.FlushInterval,
+    })
+    messageBatcher.Start(ctx)
 
-    subscriber := nats.NewMessageSubscriber(nc, messageService, userService, routerService)
+    // 创建会话服务
+    conversationService := service.NewConversationService(redisClient)
+
+    // 创建消息处理器
+    msgHandler := handler.NewMessageHandler(
+        messageBatcher,
+        messageService,
+        groupService,
+        routerService,
+        conversationService,
+    )
+
+    // 启动订阅者
+    subscriber := imNats.NewMessageSubscriber(natsClient.Conn(), msgHandler, imNats.SubscriberConfig{
+        WorkerCount: cfg.NATS.WorkerCount,
+        BufferSize:  cfg.NATS.BufferSize,
+    })
     if err := subscriber.Start(ctx); err != nil {
         logger.Error("Failed to start subscriber", "error", err)
         os.Exit(1)
@@ -798,39 +817,18 @@ func main() {
     <-quit
 
     logger.Info("Shutting down...")
+    cancel()
     subscriber.Stop()
-}
-
-func connectNATS(cfg NATSConfig) (*nats.Conn, error) {
-    opts := []nats.Option{
-        nats.MaxReconnects(cfg.MaxReconnects),
-        nats.ReconnectWait(cfg.ReconnectWait),
-        nats.DisconnectErrHandler(func(nc *nats.Conn, err error) {
-            slog.Warn("Disconnected from NATS", "error", err)
-        }),
-        nats.ReconnectHandler(func(nc *nats.Conn) {
-            slog.Info("Reconnected to NATS", "url", nc.ConnectedUrl())
-        }),
-    }
-    return nats.Connect(cfg.URL, opts...)
-}
-
-func connectRedis(cfg RedisConfig) *redis.Client {
-    return redis.NewClient(&redis.Options{
-        Addr:     fmt.Sprintf("%s:%d", cfg.Host, cfg.Port),
-        Password: cfg.Password,
-        DB:       cfg.DB,
-        PoolSize: cfg.PoolSize,
-    })
+    messageBatcher.Stop()
 }
 ```
 
 ### 8.3 go.mod
 
 ```go
-module github.com/yourorg/im-logic
+module sudooom.im.logic
 
-go 1.21
+go 1.25
 
 require (
     github.com/nats-io/nats.go v1.31.0

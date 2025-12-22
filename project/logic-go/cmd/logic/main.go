@@ -70,7 +70,6 @@ func main() {
 	// 初始化服务
 	publisher := imNats.NewMessagePublisher(natsClient.Conn())
 	routerService := service.NewRouterService(redisClient, publisher)
-	userService := service.NewUserService(redisClient)
 	groupService := service.NewGroupService(db)
 	messageService := service.NewMessageService(db)
 
@@ -88,7 +87,6 @@ func main() {
 	msgHandler := handler.NewMessageHandler(
 		messageBatcher,
 		messageService,
-		userService,
 		groupService,
 		routerService,
 		conversationService,

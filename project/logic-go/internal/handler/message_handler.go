@@ -12,7 +12,6 @@ import (
 type MessageHandler struct {
 	messageBatcher      *service.MessageBatcher // 批量写入器
 	messageService      *service.MessageService // 保留用于查询
-	userService         *service.UserService
 	groupService        *service.GroupService
 	routerService       *service.RouterService
 	conversationService *service.ConversationService // 会话服务
@@ -23,7 +22,6 @@ type MessageHandler struct {
 func NewMessageHandler(
 	messageBatcher *service.MessageBatcher,
 	messageService *service.MessageService,
-	userService *service.UserService,
 	groupService *service.GroupService,
 	routerService *service.RouterService,
 	conversationService *service.ConversationService,
@@ -31,7 +29,6 @@ func NewMessageHandler(
 	return &MessageHandler{
 		messageBatcher:      messageBatcher,
 		messageService:      messageService,
-		userService:         userService,
 		groupService:        groupService,
 		routerService:       routerService,
 		conversationService: conversationService,
