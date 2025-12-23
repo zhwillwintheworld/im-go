@@ -84,19 +84,10 @@ function Game() {
                 <p className={styles.subtitle}>选择你想要的操作</p>
 
                 <div className={styles.cardContainer}>
-                    <div className={styles.gameCard} onClick={handleStartGame}>
+                    <div className={styles.gameCard} onClick={() => navigate('/game/list')}>
                         <ThunderboltOutlined className={styles.cardIcon} />
                         <span className={styles.cardTitle}>开始游戏</span>
-                        <span className={styles.cardDesc}>匹配对手开始对战</span>
-                    </div>
-
-                    <div
-                        className={`${styles.gameCard} ${styles.mahjongCard}`}
-                        onClick={() => navigate('/mahjong')}
-                    >
-                        <span className={styles.mahjongIcon}>🀄</span>
-                        <span className={styles.cardTitle}>会同麻将</span>
-                        <span className={styles.cardDesc}>经典四人麻将</span>
+                        <span className={styles.cardDesc}>选择游戏开始对战</span>
                     </div>
 
                     <div className={styles.gameCard} onClick={handleViewRecords}>

@@ -7,6 +7,7 @@ const Login = lazy(() => import('./pages/Login'));
 const Home = lazy(() => import('./pages/Home'));
 const Chat = lazy(() => import('./pages/Chat'));
 const Game = lazy(() => import('./pages/Game'));
+const GameList = lazy(() => import('./pages/Game/List'));
 const Mahjong = lazy(() => import('./pages/Mahjong'));
 const MahjongRoom = lazy(() => import('./pages/Mahjong/Room'));
 
@@ -25,6 +26,7 @@ function App() {
                     <Route path="/home" element={<Home />} />
                     <Route path="/chat" element={<Chat />} />
                     <Route path="/game" element={<Game />} />
+                    <Route path="/game/list" element={<GameList />} />
                     <Route path="/mahjong" element={<Mahjong />} />
                     <Route path="/mahjong/room/:roomId" element={<MahjongRoom />} />
                     <Route path="*" element={<Navigate to="/login" replace />} />

@@ -1,0 +1,172 @@
+.container {
+    min-height: 100vh;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    padding: 24px;
+    position: relative;
+    animation: fadeIn 0.5s ease;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+.backBtn {
+    position: absolute;
+    top: 24px;
+    left: 24px;
+    color: rgba(255, 255, 255, 0.7);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    padding: 8px 16px;
+    border-radius: 8px;
+    transition: all 0.2s;
+}
+
+.backBtn:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.content {
+    max-width: 800px;
+    margin: 0 auto;
+    padding-top: 80px;
+}
+
+.title {
+    color: #fff;
+    font-size: 32px;
+    font-weight: 600;
+    text-align: center;
+    margin-bottom: 12px;
+}
+
+.subtitle {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 16px;
+    text-align: center;
+    margin-bottom: 48px;
+}
+
+.gameGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 24px;
+}
+
+.gameCard {
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    padding: 32px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    animation: scaleIn 0.5s ease both;
+}
+
+@keyframes scaleIn {
+    from {
+        opacity: 0;
+        transform: scale(0.9);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.gameCard:hover {
+    transform: translateY(-8px) scale(1.02);
+    background: rgba(255, 255, 255, 0.1);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+}
+
+.gameCard:active {
+    transform: translateY(-4px) scale(0.98);
+}
+
+/* 会同麻将特殊样式 */
+.mahjongCard {
+    border-color: rgba(245, 158, 11, 0.3);
+}
+
+.mahjongCard:hover {
+    border-color: rgba(245, 158, 11, 0.5);
+    box-shadow: 0 20px 40px rgba(245, 158, 11, 0.2);
+}
+
+.gameIcon {
+    font-size: 56px;
+    margin-bottom: 16px;
+    display: block;
+}
+
+.gameName {
+    color: #fff;
+    font-size: 20px;
+    font-weight: 500;
+    margin-bottom: 8px;
+    display: block;
+}
+
+.gameDesc {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 14px;
+    display: block;
+}
+
+.comingSoon {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.comingSoon:hover {
+    transform: none;
+    box-shadow: none;
+}
+
+.badge {
+    display: inline-block;
+    padding: 4px 12px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 20px;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 12px;
+    margin-top: 12px;
+}
+
+/* 响应式 */
+@media (max-width: 768px) {
+    .content {
+        padding-top: 60px;
+    }
+
+    .title {
+        font-size: 26px;
+    }
+
+    .gameGrid {
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+
+    .gameCard {
+        padding: 24px 20px;
+    }
+
+    .gameIcon {
+        font-size: 48px;
+    }
+}
