@@ -4,7 +4,9 @@ import { Spin } from 'antd';
 import { IMProvider } from './components/IMProvider';
 
 const Login = lazy(() => import('./pages/Login'));
+const Home = lazy(() => import('./pages/Home'));
 const Chat = lazy(() => import('./pages/Chat'));
+const Game = lazy(() => import('./pages/Game'));
 
 const Loading = () => (
     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
@@ -18,7 +20,9 @@ function App() {
             <Suspense fallback={<Loading />}>
                 <Routes>
                     <Route path="/login" element={<Login />} />
+                    <Route path="/home" element={<Home />} />
                     <Route path="/chat" element={<Chat />} />
+                    <Route path="/game" element={<Game />} />
                     <Route path="*" element={<Navigate to="/login" replace />} />
                 </Routes>
             </Suspense>

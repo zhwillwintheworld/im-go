@@ -1,0 +1,158 @@
+.layout {
+    height: 100vh;
+    display: flex;
+}
+
+/* 左侧图标导航栏 */
+.navSider {
+    width: 70px !important;
+    min-width: 70px !important;
+    max-width: 70px !important;
+    background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 16px 0;
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.userAvatar {
+    margin-bottom: 24px;
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+.userAvatar:hover {
+    transform: scale(1.1);
+}
+
+.navMenu {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+}
+
+.navItem {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 12px 8px;
+    cursor: pointer;
+    color: rgba(255, 255, 255, 0.6);
+    transition: all 0.2s;
+    border-left: 3px solid transparent;
+}
+
+.navItem:hover {
+    color: rgba(255, 255, 255, 0.9);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.navItem.active {
+    color: #7c3aed;
+    background: rgba(124, 58, 237, 0.1);
+    border-left-color: #7c3aed;
+}
+
+.navIcon {
+    font-size: 22px;
+}
+
+.navLabel {
+    font-size: 11px;
+}
+
+.navDivider {
+    width: 40px;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.1);
+    margin: 8px 0;
+}
+
+.navBottom {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+    padding-top: 16px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* 主内容区 */
+.mainContent {
+    flex: 1;
+    background: #f0f2f5;
+    overflow: hidden;
+}
+
+/* 欢迎页卡片 */
+.welcomeContainer {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 40px;
+    padding: 40px;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+}
+
+.welcomeTitle {
+    color: #fff;
+    font-size: 28px;
+    font-weight: 600;
+    margin: 0;
+}
+
+.welcomeSubtitle {
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 16px;
+    margin-top: 8px;
+}
+
+.cardContainer {
+    display: flex;
+    gap: 32px;
+}
+
+.featureCard {
+    width: 280px;
+    height: 200px;
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 16px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.featureCard:hover {
+    transform: translateY(-8px);
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(124, 58, 237, 0.5);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+}
+
+.featureIcon {
+    font-size: 48px;
+    color: #7c3aed;
+}
+
+.featureTitle {
+    color: #fff;
+    font-size: 20px;
+    font-weight: 500;
+}
+
+.featureDesc {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 14px;
+}

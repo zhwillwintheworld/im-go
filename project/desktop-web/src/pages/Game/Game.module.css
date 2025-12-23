@@ -1,0 +1,156 @@
+.container {
+    height: 100vh;
+    display: flex;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+}
+
+/* 左侧导航 */
+.navSider {
+    width: 70px !important;
+    min-width: 70px !important;
+    max-width: 70px !important;
+    background: rgba(0, 0, 0, 0.2);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 16px 0;
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.userAvatar {
+    margin-bottom: 24px;
+    cursor: pointer;
+}
+
+.navMenu {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+}
+
+.navItem {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 12px 8px;
+    cursor: pointer;
+    color: rgba(255, 255, 255, 0.6);
+    transition: all 0.2s;
+    border-left: 3px solid transparent;
+}
+
+.navItem:hover {
+    color: rgba(255, 255, 255, 0.9);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.navItem.active {
+    color: #7c3aed;
+    background: rgba(124, 58, 237, 0.1);
+    border-left-color: #7c3aed;
+}
+
+.navIcon {
+    font-size: 22px;
+}
+
+.navLabel {
+    font-size: 11px;
+}
+
+.navBottom {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+    padding-top: 16px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* 主内容区 */
+.content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+}
+
+.title {
+    color: #fff;
+    font-size: 32px;
+    font-weight: 600;
+    margin-bottom: 16px;
+}
+
+.subtitle {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 16px;
+    margin-bottom: 48px;
+}
+
+.cardContainer {
+    display: flex;
+    gap: 32px;
+}
+
+.gameCard {
+    width: 240px;
+    height: 180px;
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 16px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.gameCard:hover {
+    transform: translateY(-8px);
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(6, 182, 212, 0.5);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+}
+
+.cardIcon {
+    font-size: 42px;
+    color: #06b6d4;
+}
+
+.cardTitle {
+    color: #fff;
+    font-size: 18px;
+    font-weight: 500;
+}
+
+.cardDesc {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 13px;
+}
+
+/* 返回按钮 */
+.backBtn {
+    position: absolute;
+    top: 24px;
+    left: 90px;
+    color: rgba(255, 255, 255, 0.7);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    transition: color 0.2s;
+}
+
+.backBtn:hover {
+    color: #fff;
+}

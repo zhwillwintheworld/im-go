@@ -10,7 +10,7 @@ export default defineConfig({
         },
     },
     server: {
-        host: '0.0.0.0',  // 允许局域网访问
+        host: 'localhost',  // 仅允许本机访问
         port: 8083,
         proxy: {
             '/api': {

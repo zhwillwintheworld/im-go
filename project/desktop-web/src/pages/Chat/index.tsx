@@ -5,6 +5,7 @@ import { useChatStore } from '@/stores/chatStore';
 import { useMessageStore } from '@/stores/messageStore';
 import { useIMStore } from '@/stores/imStore';
 import FriendList from '@/components/FriendList';
+import GroupList from '@/components/GroupList';
 import styles from './Chat.module.css';
 
 const { Sider, Content } = Layout;
@@ -114,6 +115,16 @@ function Chat() {
                 </span>
             ),
             children: <FriendList onStartChat={handleStartChat} />,
+        },
+        {
+            key: 'groups',
+            label: (
+                <span>
+                    <TeamOutlined />
+                    群组
+                </span>
+            ),
+            children: <GroupList onStartChat={handleStartChat} />,
         },
     ];
 
