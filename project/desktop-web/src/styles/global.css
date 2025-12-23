@@ -1,8 +1,37 @@
 :root {
-    --primary-color: #1890ff;
-    --bg-color: #f0f2f5;
+    /* 主色调 */
+    --primary-color: #7c3aed;
+    --primary-light: #a78bfa;
+    --secondary-color: #06b6d4;
+
+    /* 深色主题 */
+    --bg-dark: #1a1a2e;
+    --bg-dark-secondary: #16213e;
+    --bg-light: #f0f2f5;
     --text-color: #333;
+    --text-light: rgba(255, 255, 255, 0.9);
+    --text-muted: rgba(255, 255, 255, 0.6);
+
+    /* 边框 */
     --border-radius: 8px;
+    --border-radius-lg: 16px;
+    --border-color: rgba(255, 255, 255, 0.1);
+
+    /* 阴影 */
+    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.1);
+    --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.2);
+    --shadow-lg: 0 20px 40px rgba(0, 0, 0, 0.3);
+
+    /* 过渡 */
+    --transition-fast: 0.15s ease;
+    --transition-normal: 0.3s ease;
+    --transition-slow: 0.5s ease;
+
+    /* 响应式断点（参考值） */
+    --breakpoint-sm: 576px;
+    --breakpoint-md: 768px;
+    --breakpoint-lg: 992px;
+    --breakpoint-xl: 1200px;
 }
 
 * {
@@ -11,12 +40,100 @@
     box-sizing: border-box;
 }
 
-html, body, #root {
+html,
+body,
+#root {
     height: 100%;
 }
 
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-    background-color: var(--bg-color);
+    background-color: var(--bg-light);
     color: var(--text-color);
+}
+
+/* 页面过渡动画 */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes slideInLeft {
+    from {
+        opacity: 0;
+        transform: translateX(-20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes scaleIn {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* 通用动画类 */
+.animate-fadeIn {
+    animation: fadeIn var(--transition-normal) forwards;
+}
+
+.animate-slideIn {
+    animation: slideInLeft var(--transition-normal) forwards;
+}
+
+.animate-scaleIn {
+    animation: scaleIn var(--transition-normal) forwards;
+}
+
+/* 移动端底部导航栏 */
+.mobile-nav {
+    display: none;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 60px;
+    background: var(--bg-dark);
+    border-top: 1px solid var(--border-color);
+    z-index: 1000;
+}
+
+/* 响应式媒体查询 */
+@media (max-width: 768px) {
+    .hide-on-mobile {
+        display: none !important;
+    }
+
+    .mobile-nav {
+        display: flex;
+        justify-content: space-around;
+        align-items: center;
+    }
+
+    .mobile-full-width {
+        width: 100% !important;
+    }
+}
+
+@media (min-width: 769px) {
+    .show-only-mobile {
+        display: none !important;
+    }
 }

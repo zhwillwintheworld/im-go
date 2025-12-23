@@ -1,6 +1,7 @@
 import { Layout, Avatar, Input, Button, Tabs, Empty } from 'antd';
-import { SendOutlined, MessageOutlined, TeamOutlined } from '@ant-design/icons';
+import { SendOutlined, MessageOutlined, TeamOutlined, ArrowLeftOutlined } from '@ant-design/icons';
 import { useState, useMemo, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useChatStore } from '@/stores/chatStore';
 import { useMessageStore } from '@/stores/messageStore';
 import { useIMStore } from '@/stores/imStore';
@@ -14,6 +15,7 @@ const { Sider, Content } = Layout;
 const EMPTY_MESSAGES: never[] = [];
 
 function Chat() {
+    const navigate = useNavigate();
     const [inputValue, setInputValue] = useState('');
     const [activeTab, setActiveTab] = useState<string>('chats');
     const conversations = useChatStore((state) => state.conversations);
@@ -132,6 +134,9 @@ function Chat() {
         <Layout className={styles.container}>
             <Sider width={300} className={styles.sider}>
                 <div className={styles.siderHeader}>
+                    <div className={styles.backBtn} onClick={() => navigate('/home')}>
+                        <ArrowLeftOutlined /> 主页
+                    </div>
                     <span className={styles.status}>
                         {imStatus === 'authenticated' ? '🟢' : '🔴'} {imStatus === 'authenticated' ? '在线' : '离线'}
                     </span>

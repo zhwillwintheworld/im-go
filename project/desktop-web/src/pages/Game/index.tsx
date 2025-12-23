@@ -90,6 +90,15 @@ function Game() {
                         <span className={styles.cardDesc}>匹配对手开始对战</span>
                     </div>
 
+                    <div
+                        className={`${styles.gameCard} ${styles.mahjongCard}`}
+                        onClick={() => navigate('/mahjong')}
+                    >
+                        <span className={styles.mahjongIcon}>🀄</span>
+                        <span className={styles.cardTitle}>会同麻将</span>
+                        <span className={styles.cardDesc}>经典四人麻将</span>
+                    </div>
+
                     <div className={styles.gameCard} onClick={handleViewRecords}>
                         <TrophyOutlined className={styles.cardIcon} />
                         <span className={styles.cardTitle}>查看战绩</span>
@@ -97,6 +106,31 @@ function Game() {
                     </div>
                 </div>
             </Content>
+
+            {/* 移动端底部导航 */}
+            <div className={styles.mobileNav}>
+                <div className={styles.mobileNavInner}>
+                    <div
+                        className={styles.mobileNavItem}
+                        onClick={() => navigate('/chat')}
+                    >
+                        <MessageOutlined className={styles.mobileNavIcon} />
+                        <span>聊天</span>
+                    </div>
+                    <div className={`${styles.mobileNavItem} ${styles.active}`}>
+                        <PlayCircleOutlined className={styles.mobileNavIcon} />
+                        <span>游戏</span>
+                    </div>
+                    <div className={styles.mobileNavItem}>
+                        <SettingOutlined className={styles.mobileNavIcon} />
+                        <span>设置</span>
+                    </div>
+                    <div className={styles.mobileNavItem} onClick={handleLogout}>
+                        <LogoutOutlined className={styles.mobileNavIcon} />
+                        <span>退出</span>
+                    </div>
+                </div>
+            </div>
         </Layout>
     );
 }

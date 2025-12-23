@@ -111,6 +111,34 @@ function Home() {
             <Content className={styles.mainContent}>
                 {renderWelcome()}
             </Content>
+
+            {/* 移动端底部导航 */}
+            <div className={styles.mobileNav}>
+                <div className={styles.mobileNavInner}>
+                    <div
+                        className={`${styles.mobileNavItem} ${activeNav === 'chat' ? styles.active : ''}`}
+                        onClick={() => handleNavClick('chat')}
+                    >
+                        <MessageOutlined className={styles.mobileNavIcon} />
+                        <span>聊天</span>
+                    </div>
+                    <div
+                        className={`${styles.mobileNavItem} ${activeNav === 'game' ? styles.active : ''}`}
+                        onClick={() => handleNavClick('game')}
+                    >
+                        <PlayCircleOutlined className={styles.mobileNavIcon} />
+                        <span>游戏</span>
+                    </div>
+                    <div className={styles.mobileNavItem}>
+                        <SettingOutlined className={styles.mobileNavIcon} />
+                        <span>设置</span>
+                    </div>
+                    <div className={styles.mobileNavItem} onClick={handleLogout}>
+                        <LogoutOutlined className={styles.mobileNavIcon} />
+                        <span>退出</span>
+                    </div>
+                </div>
+            </div>
         </Layout>
     );
 }

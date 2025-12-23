@@ -2,6 +2,7 @@
     height: 100vh;
     display: flex;
     background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    position: relative;
 }
 
 /* 左侧导航 */
@@ -20,6 +21,11 @@
 .userAvatar {
     margin-bottom: 24px;
     cursor: pointer;
+    transition: transform 0.2s;
+}
+
+.userAvatar:hover {
+    transform: scale(1.1);
 }
 
 .navMenu {
@@ -38,13 +44,17 @@
     padding: 12px 8px;
     cursor: pointer;
     color: rgba(255, 255, 255, 0.6);
-    transition: all 0.2s;
+    transition: all 0.2s ease;
     border-left: 3px solid transparent;
 }
 
 .navItem:hover {
     color: rgba(255, 255, 255, 0.9);
     background: rgba(255, 255, 255, 0.05);
+}
+
+.navItem:active {
+    transform: scale(0.95);
 }
 
 .navItem.active {
@@ -55,6 +65,11 @@
 
 .navIcon {
     font-size: 22px;
+    transition: transform 0.2s;
+}
+
+.navItem:hover .navIcon {
+    transform: scale(1.1);
 }
 
 .navLabel {
@@ -78,6 +93,19 @@
     align-items: center;
     justify-content: center;
     padding: 40px;
+    animation: fadeIn 0.5s ease forwards;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 .title {
@@ -85,12 +113,14 @@
     font-size: 32px;
     font-weight: 600;
     margin-bottom: 16px;
+    animation: fadeIn 0.6s ease 0.1s both;
 }
 
 .subtitle {
     color: rgba(255, 255, 255, 0.5);
     font-size: 16px;
     margin-bottom: 48px;
+    animation: fadeIn 0.6s ease 0.2s both;
 }
 
 .cardContainer {
@@ -111,19 +141,45 @@
     align-items: center;
     gap: 16px;
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    animation: scaleIn 0.5s ease 0.3s both;
+}
+
+@keyframes scaleIn {
+    from {
+        opacity: 0;
+        transform: scale(0.9);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.gameCard:nth-child(2) {
+    animation-delay: 0.4s;
 }
 
 .gameCard:hover {
-    transform: translateY(-8px);
+    transform: translateY(-8px) scale(1.02);
     background: rgba(255, 255, 255, 0.1);
     border-color: rgba(6, 182, 212, 0.5);
     box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
 }
 
+.gameCard:active {
+    transform: translateY(-4px) scale(0.98);
+}
+
 .cardIcon {
     font-size: 42px;
     color: #06b6d4;
+    transition: transform 0.3s;
+}
+
+.gameCard:hover .cardIcon {
+    transform: scale(1.1);
 }
 
 .cardTitle {
@@ -137,6 +193,24 @@
     font-size: 13px;
 }
 
+/* 会同麻将卡片特殊样式 */
+.mahjongCard {
+    border-color: rgba(245, 158, 11, 0.3);
+}
+
+.mahjongCard:hover {
+    border-color: rgba(245, 158, 11, 0.6);
+    box-shadow: 0 20px 40px rgba(245, 158, 11, 0.2);
+}
+
+.mahjongIcon {
+    font-size: 42px;
+}
+
+.gameCard:nth-child(3) {
+    animation-delay: 0.5s;
+}
+
 /* 返回按钮 */
 .backBtn {
     position: absolute;
@@ -148,9 +222,106 @@
     align-items: center;
     gap: 8px;
     font-size: 14px;
-    transition: color 0.2s;
+    transition: all 0.2s;
+    padding: 8px 16px;
+    border-radius: 8px;
 }
 
 .backBtn:hover {
     color: #fff;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+/* 移动端底部导航 */
+.mobileNav {
+    display: none;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 60px;
+    background: linear-gradient(180deg, #16213e 0%, #1a1a2e 100%);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    z-index: 1000;
+}
+
+.mobileNavInner {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    height: 100%;
+}
+
+.mobileNavItem {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 10px;
+    cursor: pointer;
+    padding: 8px 16px;
+}
+
+.mobileNavItem.active {
+    color: #06b6d4;
+}
+
+.mobileNavIcon {
+    font-size: 20px;
+}
+
+/* 响应式 - 手机 */
+@media (max-width: 768px) {
+    .container {
+        flex-direction: column;
+        padding-bottom: 60px;
+    }
+
+    .navSider {
+        display: none !important;
+    }
+
+    .mobileNav {
+        display: block;
+    }
+
+    .backBtn {
+        left: 16px;
+        top: 16px;
+    }
+
+    .content {
+        padding: 24px;
+        padding-top: 60px;
+    }
+
+    .title {
+        font-size: 24px;
+    }
+
+    .subtitle {
+        font-size: 14px;
+        margin-bottom: 32px;
+    }
+
+    .cardContainer {
+        flex-direction: column;
+        gap: 16px;
+        width: 100%;
+        max-width: 280px;
+    }
+
+    .gameCard {
+        width: 100%;
+        height: 120px;
+    }
+
+    .cardIcon {
+        font-size: 32px;
+    }
+
+    .cardTitle {
+        font-size: 16px;
+    }
 }
