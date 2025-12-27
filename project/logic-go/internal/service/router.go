@@ -210,8 +210,7 @@ func (s *RouterService) RouteMessage(ctx context.Context, userId int64, msg *pro
 	}
 
 	if len(locations) == 0 {
-		s.logger.Debug("User is offline, saving to offline storage", "userId", userId)
-		// TODO: offlineMessageService.Save(userId, message)
+		s.logger.Debug("User is offline", "userId", userId)
 		return nil
 	}
 

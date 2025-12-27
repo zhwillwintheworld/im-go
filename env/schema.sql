@@ -42,7 +42,6 @@ SET client_encoding = 'UTF8';
 -- ============================================
 
 -- 删除已存在的表
-DROP TABLE IF EXISTS offline_messages CASCADE;
 DROP TABLE IF EXISTS group_members CASCADE;
 DROP TABLE IF EXISTS groups CASCADE;
 DROP TABLE IF EXISTS messages CASCADE;
@@ -212,23 +211,3 @@ COMMENT ON COLUMN group_members.create_at IS '创建时间';
 COMMENT ON COLUMN group_members.update_at IS '更新时间';
 COMMENT ON COLUMN group_members.deleted IS '逻辑删除: 0=正常, 1=已删除';
 
--- 7. 离线消息表
-CREATE TABLE offline_messages (
-    id BIGINT PRIMARY KEY,                                              -- 雪花ID，主键
-    user_id BIGINT NOT NULL,                                            -- 用户ID，关联users.id
-    message_id BIGINT NOT NULL,                                         -- 消息ID，关联messages.id
-    create_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),          -- 创建时间
-    update_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),          -- 更新时间
-    deleted INT NOT NULL DEFAULT 0,                                     -- 逻辑删除: 0=正常, 1=已删除
-    UNIQUE(user_id, message_id)
-);
-
-CREATE INDEX idx_offline_messages_user ON offline_messages(user_id, create_at ASC);
-
-COMMENT ON TABLE offline_messages IS '离线消息表';
-COMMENT ON COLUMN offline_messages.id IS '雪花ID，主键';
-COMMENT ON COLUMN offline_messages.user_id IS '用户ID，关联users.id';
-COMMENT ON COLUMN offline_messages.message_id IS '消息ID，关联messages.id';
-COMMENT ON COLUMN offline_messages.create_at IS '创建时间';
-COMMENT ON COLUMN offline_messages.update_at IS '更新时间';
-COMMENT ON COLUMN offline_messages.deleted IS '逻辑删除: 0=正常, 1=已删除';

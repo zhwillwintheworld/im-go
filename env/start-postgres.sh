@@ -9,7 +9,7 @@ CONTAINER_NAME="postgres-dev"
 POSTGRES_IMAGE="postgres:16-alpine"
 POSTGRES_PORT=5432
 POSTGRES_USER="postgres"
-POSTGRES_PASSWORD="password"
+POSTGRES_PASSWORD="xhxxygwl"
 POSTGRES_DB="im_db"
 
 # SQL 文件
