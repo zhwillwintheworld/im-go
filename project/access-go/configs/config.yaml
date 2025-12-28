@@ -12,8 +12,8 @@ quic:
   max_incoming_uni_streams: 50
   allow_0rtt: true
   # TLS 证书配置（可选，不配置时使用自签名证书）
-  cert_file: "../../env/dev-certs/localhost.crt"
-  key_file: "../../env/dev-certs/localhost.key"
+  cert_file: "localhost+2.pem"
+  key_file: "localhost+2-key.pem"
 
 nats:
   url: "nats://localhost:4222"

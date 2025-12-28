@@ -37,13 +37,7 @@ class WebTransportManager {
 
         try {
             // 创建 WebTransport 连接
-            const transport = new WebTransport(url, {
-                // 开发环境由于使用自签名证书，必须验证指纹 (有效期仅 14 天)
-                // Hash of env/dev-certs/localhost.crt
-                serverCertificateHashes: [
-                    { algorithm: "sha-256", value: new Uint8Array(atob("Fl+d6Or0E6rxjZuC6t0YK2ExjfO8Way1Sxbr7EBCe9U=").split("").map(c => c.charCodeAt(0))) }
-                ],
-            });
+            const transport = new WebTransport(url);
 
             this.transport = transport;
 
