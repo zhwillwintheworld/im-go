@@ -36,8 +36,19 @@ class WebTransportManager {
         this.abortController = new AbortController();
 
         try {
+            // 开发环境证书哈希 (mkcert 生成的 localhost+2.pem)
+            // 用于绕过 Chrome 对 WebTransport/QUIC 自签名证书的限制
+            const certHash = 'Rl4sCNy7rq4eKHkxJj4n5qjaltEN8o9+5T3Iou/97yw=';
+
             // 创建 WebTransport 连接
-            const transport = new WebTransport(url);
+            const transport = new WebTransport(url, {
+                serverCertificateHashes: [
+                    {
+                        algorithm: 'sha-256',
+                        value: Uint8Array.from(atob(certHash), c => c.charCodeAt(0))
+                    }
+                ]
+            });
 
             this.transport = transport;
 
@@ -58,7 +69,7 @@ class WebTransportManager {
             this.startHeartbeat();
 
             // 启动数据接收
-            this.startReceiving();
+            await this.startReceiving();
         } catch (error) {
             console.error('[WebTransport] Connection failed:', error);
             this.setStatus('disconnected');
