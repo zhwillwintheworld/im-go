@@ -89,21 +89,21 @@ func (s *Server) Start(ctx context.Context) error {
 	// 订阅 NATS 下行消息
 	s.subscribeDownstream()
 
-	// 启动心跳检测器
-	s.heartbeatChecker = connection.NewHeartbeatChecker(
-		s.connMgr,
-		s.cfg.Server.HeartbeatTimeout,
-		s.cfg.Server.HeartbeatCheckInterval,
-		s.logger,
-		func(conn *connection.Connection) {
-			// 超时回调：清理用户位置并通知 Logic
-			if conn.UserID() > 0 {
-				s.redisClient.UnregisterUserLocation(ctx, conn.UserID(), conn.Platform())
-				s.handler.SendUserOfflineToLogic(conn)
-			}
-		},
-	)
-	go s.heartbeatChecker.Start(ctx)
+	// 启动心跳检测器（暂时关闭用于调试）
+	// s.heartbeatChecker = connection.NewHeartbeatChecker(
+	// 	s.connMgr,
+	// 	s.cfg.Server.HeartbeatTimeout,
+	// 	s.cfg.Server.HeartbeatCheckInterval,
+	// 	s.logger,
+	// 	func(conn *connection.Connection) {
+	// 		// 超时回调：清理用户位置并通知 Logic
+	// 		if conn.UserID() > 0 {
+	// 			s.redisClient.UnregisterUserLocation(ctx, conn.UserID(), conn.Platform())
+	// 			s.handler.SendUserOfflineToLogic(conn)
+	// 		}
+	// 	},
+	// )
+	// go s.heartbeatChecker.Start(ctx)
 
 	s.logger.Info("WebTransport server starting", "addr", s.cfg.Server.Addr)
 
@@ -149,15 +149,13 @@ func (s *Server) handleSession(ctx context.Context, session *webtransport.Sessio
 		return
 	}
 
-	// 认证成功，继续处理后续的双向流
-	for {
-		stream, err := session.AcceptStream(ctx)
-		if err != nil {
-			s.logger.Debug("Session closed", "conn_id", c.ID())
-			return
-		}
-		go s.handler.HandleStream(ctx, c, stream)
-	}
+	// 认证成功后，同步处理首个流（阻塞直到流关闭）
+	// 客户端只会使用这一个双向流进行所有通信
+	s.logger.Info("Auth successful, processing stream", "conn_id", c.ID())
+	s.handler.HandleStream(ctx, c, firstStream) // 同步调用，阻塞等待
+
+	// 流关闭后函数返回，触发 defer 中的清理逻辑
+	s.logger.Info("Stream closed, cleaning up session", "conn_id", c.ID())
 }
 
 func (s *Server) subscribeDownstream() {

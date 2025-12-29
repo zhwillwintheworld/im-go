@@ -59,6 +59,9 @@ func (h *Handler) HandleStream(ctx context.Context, conn *connection.Connection,
 		}
 	}(stream)
 
+	// \u8bbe\u7f6e\u5ba2\u6237\u7aef\u6d41\uff0c\u7528\u4e8e\u53d1\u9001\u6d88\u606f ACK
+	conn.SetClientStream(stream)
+
 	for {
 		// 读取帧头：4 bytes length + 1 byte frame type
 		header := make([]byte, FrameHeaderSize)
@@ -101,8 +104,9 @@ func (h *Handler) dispatch(ctx context.Context, conn *connection.Connection, str
 
 // HandleFirstStream 处理首个数据流，必须是认证请求
 // 返回 error 表示认证失败，调用方应关闭连接
+// 认证成功后流保持打开，调用方应继续在此流上处理后续消息
 func (h *Handler) HandleFirstStream(ctx context.Context, conn *connection.Connection, stream *webtransport.Stream) error {
-	defer stream.Close()
+	// 注意：不再 defer close，因为要复用这个流
 
 	// 读取帧头
 	header := make([]byte, FrameHeaderSize)
@@ -236,7 +240,7 @@ func (h *Handler) handleClientRequest(ctx context.Context, conn *connection.Conn
 	case im_protocol.RequestPayloadGameReq:
 		h.handleGameRequest(ctx, conn, stream, reqID, payload)
 	case im_protocol.RequestPayloadConversationReadReq:
-		h.handleConversationRead(ctx, conn, stream, reqID, payload)
+		h.handleConversationRead(conn, stream, reqID, payload)
 	default:
 		h.logger.Warn("Unknown payload type", "payload_type", payloadType)
 		h.sendClientResponse(stream, reqID, im_protocol.ErrorCodeUNKNOWN_ERROR, "unknown payload type", im_protocol.ResponsePayloadNONE, nil)
@@ -344,7 +348,7 @@ func (h *Handler) handleGameRequest(ctx context.Context, conn *connection.Connec
 }
 
 // handleConversationRead 处理会话已读请求
-func (h *Handler) handleConversationRead(ctx context.Context, conn *connection.Connection, stream *webtransport.Stream, reqID string, payload []byte) {
+func (h *Handler) handleConversationRead(conn *connection.Connection, stream *webtransport.Stream, reqID string, payload []byte) {
 	h.logger.Debug("ConversationReadReq received", "conn_id", conn.ID())
 
 	// 解析 ConversationReadReq
@@ -393,7 +397,10 @@ func (h *Handler) sendUserOnlineToLogic(conn *connection.Connection, sessInfo *c
 		},
 	}
 	data, _ := json.Marshal(msg)
-	h.natsClient.Publish(sharedNats.SubjectLogicUpstream, data)
+	err := h.natsClient.Publish(sharedNats.SubjectLogicUpstream, data)
+	if err != nil {
+		return
+	}
 	h.logger.Debug("Sent user online to logic", "userId", sessInfo.UserID)
 }
 
@@ -411,7 +418,10 @@ func (h *Handler) SendUserOfflineToLogic(conn *connection.Connection) {
 		},
 	}
 	data, _ := json.Marshal(msg)
-	h.natsClient.Publish(sharedNats.SubjectLogicUpstream, data)
+	err := h.natsClient.Publish(sharedNats.SubjectLogicUpstream, data)
+	if err != nil {
+		return
+	}
 }
 
 // HandleDownstream 处理下行消息（从 Logic 推送到客户端）
@@ -581,8 +591,14 @@ func (h *Handler) sendFrame(stream *webtransport.Stream, frameType byte, body []
 	header := make([]byte, FrameHeaderSize)
 	binary.BigEndian.PutUint32(header[:4], uint32(len(body)))
 	header[4] = frameType
-	stream.Write(header)
+	_, err := stream.Write(header)
+	if err != nil {
+		return
+	}
 	if len(body) > 0 {
-		stream.Write(body)
+		_, err := stream.Write(body)
+		if err != nil {
+			return
+		}
 	}
 }

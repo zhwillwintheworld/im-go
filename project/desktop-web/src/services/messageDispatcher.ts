@@ -1,6 +1,7 @@
 import { transportManager } from '@/services/transport/WebTransportManager';
 import { IMProtocol, FrameType } from '@/services/protocol/IMProtocol';
 import { ResponsePayload } from '@/protocol/im/protocol/response-payload';
+import { getUTC8TimeString } from '@/utils/time';
 
 type MessageHandler = (payload: Uint8Array | null, reqId: string | null) => void;
 
@@ -41,7 +42,7 @@ class MessageDispatcher {
         this.initialized = true;
 
         transportManager.onMessage((frameType: FrameType, body: Uint8Array) => {
-            console.log('[MessageDispatcher] Received frame:', FrameType[frameType]);
+            console.log('[MessageDispatcher] Received frame:', FrameType[frameType], "时间=" + getUTC8TimeString());
 
             if (frameType === FrameType.Response) {
                 this.handleResponse(body);

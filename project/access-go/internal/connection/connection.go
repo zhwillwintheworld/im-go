@@ -24,6 +24,10 @@ type Connection struct {
 	closeChan  chan struct{}
 	closeOnce  sync.Once
 	createTime time.Time
+
+	// 流复用优化：使用客户端创建的双向流
+	clientStream *webtransport.Stream // 客户端创建的双向流，用于发送消息
+	streamMutex  sync.Mutex
 }
 
 // SessionInfo 表示会话状态
@@ -47,6 +51,14 @@ func NewFromWebTransport(session *webtransport.Session, logger *slog.Logger) *Co
 	}
 	go c.writeLoop()
 	return c
+}
+
+// SetClientStream 设置客户端创建的双向流用于发送消息
+func (c *Connection) SetClientStream(stream *webtransport.Stream) {
+	c.streamMutex.Lock()
+	defer c.streamMutex.Unlock()
+	c.clientStream = stream
+	c.logger.Debug("Client stream set for connection", "conn_id", c.id)
 }
 
 func (c *Connection) ID() int64 {
@@ -95,16 +107,28 @@ func (c *Connection) writeLoop() {
 	for {
 		select {
 		case data := <-c.writeChan:
-			stream, err := c.session.OpenStream()
-			if err != nil {
-				c.logger.Error("Failed to open stream", "error", err)
+			c.streamMutex.Lock()
+
+			// 使用客户端创建的双向流发送消息
+			if c.clientStream == nil {
+				c.logger.Error("Client stream not set, cannot send message", "conn_id", c.id)
+				c.streamMutex.Unlock()
 				continue
 			}
-			if _, err := stream.Write(data); err != nil {
-				c.logger.Error("Failed to write to stream", "error", err)
+
+			// 直接写入客户端的流，不关闭流（通过帧头区分消息）
+			if _, err := c.clientStream.Write(data); err != nil {
+				c.logger.Error("Failed to write to client stream", "error", err)
+				// 出错时重置流
+				c.clientStream = nil
 			}
-			stream.Close()
+
+			c.streamMutex.Unlock()
 		case <-c.closeChan:
+			// 关闭时清理流（不需要close，已经由 HandleStream defer 处理）
+			c.streamMutex.Lock()
+			c.clientStream = nil
+			c.streamMutex.Unlock()
 			return
 		}
 	}
@@ -134,4 +158,3 @@ func (c *Connection) LastActiveTime() time.Time {
 	}
 	return c.createTime
 }
-
