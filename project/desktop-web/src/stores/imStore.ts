@@ -36,20 +36,14 @@ export const useIMStore = create<IMState>((set, get) => ({
         try {
             set({ status: 'connecting', error: null });
 
-            // 1. 建立 WebTransport 连接
-            await transportManager.connect(config.webTransportUrl);
-            set({ status: 'connected' });
-
-            // 2. 发送认证请求
-            set({ status: 'authenticating' });
-            const authFrame = IMProtocol.createAuthRequest(
+            // 建立 WebTransport 连接并自动发送认证请求
+            await transportManager.connect(config.webTransportUrl, {
                 token,
-                getDeviceId(),
-                '1.0.0'
-            );
-            await transportManager.send(authFrame);
+                deviceId: getDeviceId(),
+                appVersion: '1.0.0'
+            });
 
-            // 3. 认证成功
+            // 认证成功
             set({ status: 'authenticated' });
             console.log('[IMStore] Connected and authenticated');
         } catch (err) {

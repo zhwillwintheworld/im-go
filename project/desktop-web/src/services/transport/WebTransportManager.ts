@@ -21,17 +21,20 @@ class WebTransportManager {
     private heartbeatInterval: number | null = null;
     private abortController: AbortController | null = null;
     private isReceiving: boolean = false;
+    private authData: { token: string; deviceId: string; appVersion: string } | null = null;
 
     /**
-     * 连接到 WebTransport 服务器
+     * 连接到 WebTransport 服务器并发送认证请求
      * @param url WebTransport URL，格式: https://host:port
+     * @param authData 认证数据（token, deviceId, appVersion）
      */
-    async connect(url: string): Promise<void> {
+    async connect(url: string, authData: { token: string; deviceId: string; appVersion: string }): Promise<void> {
         if (this.status === 'connected' || this.status === 'connecting') {
             return;
         }
 
         this.url = url;
+        this.authData = authData;
         this.setStatus('connecting');
         this.abortController = new AbortController();
 
@@ -63,11 +66,21 @@ class WebTransportManager {
             this.setStatus('connected');
             this.reconnectAttempts = 0;
 
+            // 立即发送认证请求（连接建立后的首个请求）
+            console.log('[WebTransport] Sending authentication request...');
+            const authFrame = IMProtocol.createAuthRequest(
+                authData.token,
+                authData.deviceId,
+                authData.appVersion
+            );
+            await this.send(authFrame);
+            console.log('[WebTransport] Authentication request sent');
+
             // 启动心跳
             this.startHeartbeat();
 
-            // 启动数据接收
-            await this.startReceiving();
+            // 启动数据接收（非阻塞，在后台运行）
+            this.startReceiving();
         } catch (error) {
             console.error('[WebTransport] Connection failed:', error);
             this.setStatus('disconnected');
@@ -244,12 +257,14 @@ class WebTransportManager {
     }
 
     private handleDisconnect(): void {
-        if (this.reconnectAttempts < this.maxReconnectAttempts) {
+        if (this.reconnectAttempts < this.maxReconnectAttempts && this.authData) {
             this.setStatus('reconnecting');
             this.reconnectAttempts++;
             const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
             setTimeout(() => {
-                this.connect(this.url).catch(() => { });
+                if (this.authData) {
+                    this.connect(this.url, this.authData).catch(() => { });
+                }
             }, delay);
         } else {
             this.setStatus('disconnected');
