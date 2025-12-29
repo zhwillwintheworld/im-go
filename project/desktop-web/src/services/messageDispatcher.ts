@@ -47,7 +47,6 @@ class MessageDispatcher {
             if (frameType === FrameType.Response) {
                 this.handleResponse(body);
             } else if (frameType === FrameType.AuthAck) {
-                console.log('[MessageDispatcher] AuthAck received');
                 // 认证响应可以在这里处理，或者让 imStore 处理
             }
         });
@@ -57,13 +56,6 @@ class MessageDispatcher {
 
     private handleResponse(body: Uint8Array): void {
         const resp = IMProtocol.parseClientResponse(body);
-        console.log('[MessageDispatcher] ClientResponse:', {
-            reqId: resp.reqId,
-            code: resp.code,
-            msg: resp.msg,
-            payloadType: ResponsePayload[resp.payloadType],
-        });
-
         // 分发到对应的处理器
         const handlers = this.handlers.get(resp.payloadType) || [];
         for (const handler of handlers) {
@@ -72,11 +64,6 @@ class MessageDispatcher {
             } catch (e) {
                 console.error('[MessageDispatcher] Handler error:', e);
             }
-        }
-
-        // 如果没有注册处理器，打印警告
-        if (handlers.length === 0) {
-            console.warn('[MessageDispatcher] No handler for payload type:', ResponsePayload[resp.payloadType]);
         }
     }
 }

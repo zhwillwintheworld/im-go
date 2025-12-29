@@ -173,14 +173,6 @@ export const useMessageStore = create<MessageState>((set, get) => ({
         transportManager.onMessage((frameType: FrameType, body: Uint8Array) => {
             if (frameType === FrameType.Response) {
                 const resp = IMProtocol.parseClientResponse(body);
-                console.log('[MessageStore] ClientResponse:', {
-                    reqId: resp.reqId,
-                    code: resp.code,
-                    msg: resp.msg,
-                    payloadType: resp.payloadType,
-                    payloadLength: resp.payload?.length || 0
-                });
-
                 switch (resp.payloadType) {
                     case ResponsePayload.ChatSendAck:
                         // 消息发送确认

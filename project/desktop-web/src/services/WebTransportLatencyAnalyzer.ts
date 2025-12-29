@@ -163,10 +163,3 @@ export interface AnomalyResult {
 
 // 导出单例
 export const latencyAnalyzer = new WebTransportLatencyAnalyzer();
-
-// 开发环境自动打印报告（每 30 秒）
-if (process.env.NODE_ENV === 'development') {
-    setInterval(() => {
-        latencyAnalyzer.printReport();
-    }, 30000);
-}

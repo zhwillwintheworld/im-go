@@ -154,14 +154,6 @@ export class IMProtocol {
     ): { frame: Uint8Array; reqId: string } {
         const reqId = generateReqId();
 
-        console.log('[IMProtocol] Creating ChatSendRequest:', {
-            reqId,
-            chatType: ChatType[chatType],
-            targetId,
-            msgType: MsgType[msgType],
-            content: content.length > 50 ? content.substring(0, 50) + '...' : content
-        });
-
         // 1. 构建 ChatSendReq payload
         const payloadBuilder = new flatbuffers.Builder(512);
         const targetIdOffset = payloadBuilder.createString(targetId);
