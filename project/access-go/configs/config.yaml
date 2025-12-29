@@ -1,5 +1,5 @@
 server:
-  addr: "localhost:8081"
+  addr: ":8081"  # 使用明确的 IPv4 地址
   node_id: "access-1"
   max_connections: 50000
   heartbeat_timeout: 90s        # 心跳超时时间
@@ -12,8 +12,9 @@ quic:
   max_incoming_uni_streams: 50
   allow_0rtt: true
   # TLS 证书配置（可选，不配置时使用自签名证书）
-  cert_file: "localhost+2.pem"
-  key_file: "localhost+2-key.pem"
+  # WebTransport 要求自签名证书有效期不超过 14 天
+  cert_file: "localhost.crt"
+  key_file: "localhost.key"
 
 nats:
   url: "nats://localhost:4222"

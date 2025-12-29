@@ -36,18 +36,16 @@ class WebTransportManager {
         this.abortController = new AbortController();
 
         try {
-            // 开发环境证书哈希 (mkcert 生成的 localhost+2.pem)
-            // 用于绕过 Chrome 对 WebTransport/QUIC 自签名证书的限制
-            const certHash = 'Rl4sCNy7rq4eKHkxJj4n5qjaltEN8o9+5T3Iou/97yw=';
+            // 开发环境证书哈希 (14天有效期的自签名证书 wt-cert.pem)
+            // WebTransport 要求自签名证书有效期不超过 14 天
+            // 计算方法: openssl x509 -in wt-cert.pem -outform DER | openssl dgst -sha256 -binary | base64
+            const certHash = 'dkaPP2DW0TTuleeuGambIGepaiBVNOQcKK1rFLdUr7I=';
 
             // 创建 WebTransport 连接
             const transport = new WebTransport(url, {
                 serverCertificateHashes: [
-                    {
-                        algorithm: 'sha-256',
-                        value: Uint8Array.from(atob(certHash), c => c.charCodeAt(0))
-                    }
-                ]
+                    { algorithm: "sha-256", value: new Uint8Array(atob(certHash).split("").map(c => c.charCodeAt(0))) }
+                ],
             });
 
             this.transport = transport;

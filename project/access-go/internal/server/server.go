@@ -56,6 +56,7 @@ func (s *Server) Start(ctx context.Context) error {
 		MaxIncomingStreams:    s.cfg.QUIC.MaxIncomingStreams,
 		MaxIncomingUniStreams: s.cfg.QUIC.MaxIncomingUniStreams,
 		Allow0RTT:             s.cfg.QUIC.Allow0RTT,
+		EnableDatagrams:       true, // WebTransport 需要启用数据报支持
 	}
 
 	// 创建 WebTransport 服务器
@@ -188,6 +189,9 @@ func (s *Server) loadTLSConfig() (*tls.Config, error) {
 		if err != nil {
 			return nil, err
 		}
+		s.logger.Info("Loaded TLS certificate",
+			"cert_file", s.cfg.QUIC.CertFile,
+			"key_file", s.cfg.QUIC.KeyFile)
 		return &tls.Config{
 			Certificates: []tls.Certificate{cert},
 			NextProtos:   []string{"h3", "webtransport"},
