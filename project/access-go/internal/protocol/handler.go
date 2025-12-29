@@ -67,7 +67,7 @@ func (h *Handler) HandleStream(ctx context.Context, conn *connection.Connection,
 		header := make([]byte, FrameHeaderSize)
 		if _, err := io.ReadFull(stream, header); err != nil {
 			if err != io.EOF {
-				h.logger.Debug("Failed to read header", "error", err)
+				// Silent error handling
 			}
 			return
 		}
@@ -111,7 +111,6 @@ func (h *Handler) HandleFirstStream(ctx context.Context, conn *connection.Connec
 	// 读取帧头
 	header := make([]byte, FrameHeaderSize)
 	if _, err := io.ReadFull(stream, header); err != nil {
-		h.logger.Debug("Failed to read header", "error", err)
 		return fmt.Errorf("failed to read header: %w", err)
 	}
 
@@ -141,7 +140,7 @@ func (h *Handler) HandleFirstStream(ctx context.Context, conn *connection.Connec
 
 // handleAuth 处理认证请求，返回 error 表示认证失败
 func (h *Handler) handleAuth(ctx context.Context, conn *connection.Connection, stream *webtransport.Stream, body []byte) error {
-	h.logger.Debug("Auth request received", "conn_id", conn.ID())
+	// Auth request processing
 
 	// 解析 FlatBuffers AuthRequest
 	authReq := im_protocol.GetRootAsAuthRequest(body, 0)
@@ -223,12 +222,7 @@ func (h *Handler) handleClientRequest(ctx context.Context, conn *connection.Conn
 	reqID := string(clientReq.ReqId())
 	payloadType := clientReq.PayloadType()
 	payload := clientReq.PayloadBytes()
-	if payloadType != im_protocol.RequestPayloadHeartbeatReq {
-		h.logger.Debug("ClientRequest received",
-			"conn_id", conn.ID(),
-			"req_id", reqID,
-			"payload_type", payloadType.String())
-	}
+	// Request processing
 	// 根据 PayloadType 分发
 	switch payloadType {
 	case im_protocol.RequestPayloadHeartbeatReq:
@@ -268,7 +262,7 @@ func (h *Handler) handleHeartbeat(ctx context.Context, conn *connection.Connecti
 
 // handleChatSend 处理聊天发送请求
 func (h *Handler) handleChatSend(ctx context.Context, conn *connection.Connection, stream *webtransport.Stream, reqID string, payload []byte) {
-	h.logger.Debug("ChatSendReq received", "conn_id", conn.ID())
+	// Chat send request
 
 	// 解析 ChatSendReq
 	chatReq := im_protocol.GetRootAsChatSendReq(payload, 0)
@@ -298,33 +292,23 @@ func (h *Handler) handleChatSend(ctx context.Context, conn *connection.Connectio
 		msg.UserMessage.ToGroupId = targetId
 	}
 
-	h.logger.Debug("Forwarding ChatSendReq to logic",
-		"from", conn.UserID(),
-		"to", targetId,
-		"chatType", chatReq.ChatType().String())
+	// Forward to logic
 
 	data, _ := json.Marshal(msg)
 	if err := h.natsClient.Publish(sharedNats.SubjectLogicUpstream, data); err != nil {
 		h.logger.Error("Failed to publish to NATS", "error", err)
 		return
 	}
-	h.logger.Debug("Message published to NATS successfully", "subject", sharedNats.SubjectLogicUpstream)
+	// Message published
 }
 
 // handleRoomRequest 处理房间请求
 func (h *Handler) handleRoomRequest(ctx context.Context, conn *connection.Connection, stream *webtransport.Stream, reqID string, payload []byte) {
-	h.logger.Debug("RoomReq received", "conn_id", conn.ID())
-
-	// 解析 RoomReq
+	// Room request processing
 	roomReq := im_protocol.GetRootAsRoomReq(payload, 0)
-	action := roomReq.Action()
-	roomID := string(roomReq.RoomId())
-	gameType := roomReq.GameType()
-
-	h.logger.Debug("RoomReq details",
-		"action", action.String(),
-		"room_id", roomID,
-		"game_type", gameType.String())
+	_ = roomReq.Action()
+	_ = string(roomReq.RoomId())
+	_ = roomReq.GameType()
 
 	// TODO: 转发到 Logic 处理
 	// 暂时返回成功
@@ -333,23 +317,17 @@ func (h *Handler) handleRoomRequest(ctx context.Context, conn *connection.Connec
 
 // handleGameRequest 处理游戏请求
 func (h *Handler) handleGameRequest(ctx context.Context, conn *connection.Connection, stream *webtransport.Stream, reqID string, payload []byte) {
-	h.logger.Debug("GameReq received", "conn_id", conn.ID())
-
-	// 解析 GameReq
+	// Game request processing
 	gameReq := im_protocol.GetRootAsGameReq(payload, 0)
-	roomID := string(gameReq.RoomId())
-	gameType := gameReq.GameType()
-
-	h.logger.Debug("GameReq details",
-		"room_id", roomID,
-		"game_type", gameType.String())
+	_ = string(gameReq.RoomId())
+	_ = gameReq.GameType()
 
 	// TODO: 转发到 Logic 处理
 }
 
 // handleConversationRead 处理会话已读请求
 func (h *Handler) handleConversationRead(conn *connection.Connection, stream *webtransport.Stream, reqID string, payload []byte) {
-	h.logger.Debug("ConversationReadReq received", "conn_id", conn.ID())
+	// Conversation read request
 
 	// 解析 ConversationReadReq
 	readReq := im_protocol.GetRootAsConversationReadReq(payload, 0)
@@ -383,7 +361,7 @@ func (h *Handler) handleConversationRead(conn *connection.Connection, stream *we
 
 	// 返回成功
 	h.sendClientResponse(stream, reqID, im_protocol.ErrorCodeSUCCESS, "", im_protocol.ResponsePayloadNONE, nil)
-	h.logger.Debug("Conversation read forwarded to logic", "userId", conn.UserID(), "peerId", peerId, "groupId", groupId)
+	// Conversation read forwarded
 }
 
 func (h *Handler) sendUserOnlineToLogic(conn *connection.Connection, sessInfo *connection.SessionInfo) {
@@ -401,7 +379,7 @@ func (h *Handler) sendUserOnlineToLogic(conn *connection.Connection, sessInfo *c
 	if err != nil {
 		return
 	}
-	h.logger.Debug("Sent user online to logic", "userId", sessInfo.UserID)
+	// User online notification sent
 }
 
 // SendUserOfflineToLogic 发送用户下线通知
@@ -426,7 +404,7 @@ func (h *Handler) SendUserOfflineToLogic(conn *connection.Connection) {
 
 // HandleDownstream 处理下行消息（从 Logic 推送到客户端）
 func (h *Handler) HandleDownstream(data []byte) {
-	h.logger.Debug("Downstream message received", "size", len(data))
+	// Downstream message processing
 
 	// 解析下行消息
 	var msg proto.DownstreamMessage
@@ -447,7 +425,7 @@ func (h *Handler) HandleDownstream(data []byte) {
 func (h *Handler) handlePushMessage(pushMsg *proto.PushMessage) {
 	conns := h.connMgr.GetByUserID(pushMsg.ToUserId)
 	if len(conns) == 0 {
-		h.logger.Debug("Push dropped, user offline", "toUserId", pushMsg.ToUserId)
+		// User offline, push dropped
 		return
 	}
 
@@ -482,15 +460,13 @@ func (h *Handler) handlePushMessage(pushMsg *proto.PushMessage) {
 		}
 	}
 
-	h.logger.Debug("Pushed message to users",
-		"toUserId", pushMsg.ToUserId,
-		"connCount", len(conns))
+	// Message pushed
 }
 
 func (h *Handler) handleMessageAck(ack *proto.MessageAck) {
 	conns := h.connMgr.GetByUserID(ack.ToUserId)
 	if len(conns) == 0 {
-		h.logger.Debug("Message ACK dropped, user offline", "userId", ack.ToUserId)
+		// User offline, ACK dropped
 		return
 	}
 
@@ -514,9 +490,7 @@ func (h *Handler) handleMessageAck(ack *proto.MessageAck) {
 		conn.Send(respFrame)
 	}
 
-	h.logger.Debug("Message ACK sent to user",
-		"userId", ack.ToUserId,
-		"clientMsgId", ack.ClientMsgId)
+	// ACK sent
 }
 
 // buildClientResponseFrame 构建完整的 ClientResponse 帧（用于 conn.Send 推送）

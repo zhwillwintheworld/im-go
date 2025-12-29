@@ -97,9 +97,7 @@ func (c *Client) UnregisterUserLocation(ctx context.Context, userId int64, platf
 	err := c.client.Del(ctx, key).Err()
 
 	if err == nil {
-		c.logger.Debug("Unregistered user location",
-			"userId", userId,
-			"platform", platform)
+		// User location unregistered
 	}
 
 	return err

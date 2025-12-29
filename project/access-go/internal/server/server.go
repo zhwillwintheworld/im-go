@@ -129,12 +129,12 @@ func (s *Server) handleSession(ctx context.Context, session *webtransport.Sessio
 		s.connMgr.Remove(c.ID())
 	}()
 
-	s.logger.Info("New WebTransport session", "conn_id", c.ID())
+	// New session
 
 	// 首个 stream 必须是认证请求
 	firstStream, err := session.AcceptStream(ctx)
 	if err != nil {
-		s.logger.Debug("Session closed before auth", "conn_id", c.ID())
+		// Session closed before auth
 		return
 	}
 
@@ -151,11 +151,11 @@ func (s *Server) handleSession(ctx context.Context, session *webtransport.Sessio
 
 	// 认证成功后，同步处理首个流（阻塞直到流关闭）
 	// 客户端只会使用这一个双向流进行所有通信
-	s.logger.Info("Auth successful, processing stream", "conn_id", c.ID())
+	// Auth successful, process stream
 	s.handler.HandleStream(ctx, c, firstStream) // 同步调用，阻塞等待
 
 	// 流关闭后函数返回，触发 defer 中的清理逻辑
-	s.logger.Info("Stream closed, cleaning up session", "conn_id", c.ID())
+	// Stream closed, cleanup
 }
 
 func (s *Server) subscribeDownstream() {
@@ -171,7 +171,7 @@ func (s *Server) subscribeDownstream() {
 		s.handler.HandleDownstream(data)
 	})
 
-	s.logger.Info("Subscribed to downstream", "subject", subject)
+	// Subscribed to downstream
 }
 
 func (s *Server) getNodeID() string {

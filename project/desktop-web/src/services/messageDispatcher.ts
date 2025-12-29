@@ -42,7 +42,7 @@ class MessageDispatcher {
         this.initialized = true;
 
         transportManager.onMessage((frameType: FrameType, body: Uint8Array) => {
-            console.log('[MessageDispatcher] Received frame:', FrameType[frameType], "时间=" + getUTC8TimeString());
+
 
             if (frameType === FrameType.Response) {
                 this.handleResponse(body);

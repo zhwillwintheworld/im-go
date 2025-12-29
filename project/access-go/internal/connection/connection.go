@@ -58,7 +58,7 @@ func (c *Connection) SetClientStream(stream *webtransport.Stream) {
 	c.streamMutex.Lock()
 	defer c.streamMutex.Unlock()
 	c.clientStream = stream
-	c.logger.Debug("Client stream set for connection", "conn_id", c.id)
+	// Client stream set
 }
 
 func (c *Connection) ID() int64 {

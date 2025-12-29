@@ -28,9 +28,6 @@ class WebTransportManager {
     private sendWriter: WritableStreamDefaultWriter<Uint8Array> | null = null;
     private receiveReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
 
-    // 记录上次发送时间，用于分析空闲时间和延迟的关系
-    private lastSendTime: number = 0;
-
     // 认证响应等待
     private authResolve: ((value: boolean) => void) | null = null;
     private authReject: ((reason?: any) => void) | null = null;
@@ -177,24 +174,8 @@ class WebTransportManager {
         }
 
         try {
-            const startTime = performance.now();
-            const startTimeString = getUTC8TimeString();
-
-            // 计算距离上次发送的时间间隔
-            const idleTime = this.lastSendTime > 0 ? startTime - this.lastSendTime : 0;
-            const idleInfo = idleTime > 0 ? `, 空闲时间=${(idleTime / 1000).toFixed(2)}秒` : '';
-
-            console.log(`[WebTransport] 📤 开始发送帧, 大小=${data.length}字节, 时间=${startTimeString}${idleInfo}`);
-
             // 直接写入，不等待 ready（减少延迟）
             await this.sendWriter.write(data);
-
-            const endTime = performance.now();
-            const endTimeString = getUTC8TimeString();
-            const duration = endTime - startTime;
-            this.lastSendTime = endTime;  // 记录本次发送时间
-
-            console.log(`[WebTransport] ✅ 帧发送完成, 大小=${data.length}字节, 时间=${endTimeString}, 耗时=${duration.toFixed(2)}ms`);
         } catch (error) {
             console.error('[WebTransport] Send error:', error);
             // 出错时重置
