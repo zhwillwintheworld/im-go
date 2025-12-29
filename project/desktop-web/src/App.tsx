@@ -10,6 +10,7 @@ const Game = lazy(() => import('./pages/Game'));
 const GameList = lazy(() => import('./pages/Game/List'));
 const Mahjong = lazy(() => import('./pages/Mahjong'));
 const MahjongRoom = lazy(() => import('./pages/Mahjong/Room'));
+const MahjongGame = lazy(() => import('./pages/Mahjong/Game'));
 
 const Loading = () => (
     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
@@ -29,6 +30,7 @@ function App() {
                     <Route path="/game/list" element={<GameList />} />
                     <Route path="/mahjong" element={<Mahjong />} />
                     <Route path="/mahjong/room/:roomId" element={<MahjongRoom />} />
+                    <Route path="/mahjong/game/:roomId" element={<MahjongGame />} />
                     <Route path="*" element={<Navigate to="/login" replace />} />
                 </Routes>
             </Suspense>

@@ -98,7 +98,7 @@ class WebTransportManager {
             console.log('[WebTransport] ✅ Authentication successful');
 
             // 启动心跳（暂时关闭用于调试）
-            // this.startHeartbeat();
+            this.startHeartbeat();
         } catch (error) {
             console.error('[WebTransport] Connection failed:', error);
             this.setStatus('disconnected');

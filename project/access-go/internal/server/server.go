@@ -89,21 +89,24 @@ func (s *Server) Start(ctx context.Context) error {
 	// 订阅 NATS 下行消息
 	s.subscribeDownstream()
 
-	// 启动心跳检测器（暂时关闭用于调试）
-	// s.heartbeatChecker = connection.NewHeartbeatChecker(
-	// 	s.connMgr,
-	// 	s.cfg.Server.HeartbeatTimeout,
-	// 	s.cfg.Server.HeartbeatCheckInterval,
-	// 	s.logger,
-	// 	func(conn *connection.Connection) {
-	// 		// 超时回调：清理用户位置并通知 Logic
-	// 		if conn.UserID() > 0 {
-	// 			s.redisClient.UnregisterUserLocation(ctx, conn.UserID(), conn.Platform())
-	// 			s.handler.SendUserOfflineToLogic(conn)
-	// 		}
-	// 	},
-	// )
-	// go s.heartbeatChecker.Start(ctx)
+	//启动心跳检测器（暂时关闭用于调试）
+	s.heartbeatChecker = connection.NewHeartbeatChecker(
+		s.connMgr,
+		s.cfg.Server.HeartbeatTimeout,
+		s.cfg.Server.HeartbeatCheckInterval,
+		s.logger,
+		func(conn *connection.Connection) {
+			// 超时回调：清理用户位置并通知 Logic
+			if conn.UserID() > 0 {
+				err := s.redisClient.UnregisterUserLocation(ctx, conn.UserID(), conn.Platform())
+				if err != nil {
+					s.logger.Error("UnregisterUserLocation", "error", err)
+				}
+				s.handler.SendUserOfflineToLogic(conn)
+			}
+		},
+	)
+	go s.heartbeatChecker.Start(ctx)
 
 	s.logger.Info("WebTransport server starting", "addr", s.cfg.Server.Addr)
 
@@ -156,6 +159,7 @@ func (s *Server) handleSession(ctx context.Context, session *webtransport.Sessio
 
 	// 流关闭后函数返回，触发 defer 中的清理逻辑
 	// Stream closed, cleanup
+
 }
 
 func (s *Server) subscribeDownstream() {

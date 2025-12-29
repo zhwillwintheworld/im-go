@@ -68,10 +68,6 @@ function MahjongRoom() {
     };
 
     const handleStartGame = () => {
-        if (!canStart) {
-            message.warning('需要4人准备才能开始游戏');
-            return;
-        }
         message.info('游戏开始！');
         navigate(`/mahjong/game/${roomId}`);
     };
@@ -208,7 +204,6 @@ function MahjongRoom() {
                     <button
                         className={styles.startBtn}
                         onClick={handleStartGame}
-                        disabled={!canStart}
                     >
                         开始游戏 ({readyCount}/4)
                     </button>

@@ -114,13 +114,6 @@ export const useMessageStore = create<MessageState>((set, get) => ({
             const content = chatPush.content() || '';
             const sendTime = chatPush.sendTime();
 
-            console.log('[MessageStore] ChatPush parsed:', {
-                msgId,
-                senderId,
-                content: content.length > 50 ? content.substring(0, 50) + '...' : content,
-                sendTime: sendTime.toString()
-            });
-
             // 会话 ID 使用发送者 ID（私聊场景）
             const conversationId = senderId;
 

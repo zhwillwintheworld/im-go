@@ -1,0 +1,398 @@
+.container {
+    min-height: 100vh;
+    background: linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%);
+    display: flex;
+    flex-direction: column;
+    padding: 16px;
+    position: relative;
+    overflow: hidden;
+}
+
+/* 顶部信息栏 */
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 20px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 12px;
+    margin-bottom: 16px;
+    backdrop-filter: blur(10px);
+}
+
+.backBtn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background: transparent;
+    border: 1px solid rgba(239, 68, 68, 0.4);
+    border-radius: 8px;
+    color: #ef4444;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 14px;
+}
+
+.backBtn:hover {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: #ef4444;
+    transform: translateX(-2px);
+}
+
+.gameInfo {
+    display: flex;
+    gap: 24px;
+    align-items: center;
+}
+
+.infoItem {
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 14px;
+    padding: 6px 16px;
+    background: rgba(124, 58, 237, 0.2);
+    border-radius: 20px;
+    border: 1px solid rgba(124, 58, 237, 0.3);
+}
+
+/* 游戏主区 */
+.gameArea {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 16px;
+    max-width: 1400px;
+    margin: 0 auto;
+    width: 100%;
+}
+
+/* 其他玩家 */
+.otherPlayer {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    flex-direction: column;
+}
+
+.otherPlayer.top {
+    align-self: center;
+}
+
+.otherPlayer.left {
+    align-self: center;
+}
+
+.otherPlayer.right {
+    align-self: center;
+}
+
+.playerInfo {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.playerName {
+    color: #fff;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.tileCount {
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 12px;
+}
+
+.handTiles {
+    display: flex;
+    gap: 2px;
+    flex-wrap: wrap;
+    max-width: 400px;
+}
+
+.hiddenTile {
+    width: 28px;
+    height: 40px;
+    background: linear-gradient(145deg, #2d3748, #1a202c);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.discardArea {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    max-width: 300px;
+    padding: 8px;
+    background: rgba(0, 0, 0, 0.1);
+    border-radius: 8px;
+}
+
+.discardTile {
+    width: 24px;
+    height: 32px;
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid rgba(0, 0, 0, 0.2);
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    opacity: 0.9;
+    writing-mode: vertical-rl;
+    text-orientation: upright;
+}
+
+/* 中间区域 */
+.middleArea {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 24px;
+}
+
+.centerTable {
+    flex: 1;
+    max-width: 500px;
+    aspect-ratio: 1;
+    background: radial-gradient(circle, rgba(0, 100, 50, 0.3) 0%, rgba(0, 50, 25, 0.2) 100%);
+    border: 3px solid rgba(255, 215, 0, 0.3);
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.tableContent {
+    text-align: center;
+}
+
+.dealerMark {
+    font-size: 64px;
+    margin-bottom: 16px;
+    animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+
+    0%,
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+
+    50% {
+        transform: scale(1.1);
+        opacity: 0.8;
+    }
+}
+
+.roundInfo {
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 18px;
+    font-weight: 500;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+/* 我的手牌区 */
+.myPlayer {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    align-items: center;
+}
+
+.myHandTiles {
+    display: flex;
+    gap: 6px;
+    padding: 16px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 12px;
+    border: 2px solid rgba(124, 58, 237, 0.4);
+    box-shadow: 0 4px 16px rgba(124, 58, 237, 0.2);
+}
+
+.myTile {
+    width: 44px;
+    height: 64px;
+    background: linear-gradient(145deg, #f8f9fa, #e9ecef);
+    border: 2px solid rgba(0, 0, 0, 0.2);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    user-select: none;
+    writing-mode: vertical-rl;
+    text-orientation: upright;
+}
+
+.myTile:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 8px 16px rgba(124, 58, 237, 0.4);
+    border-color: rgba(124, 58, 237, 0.6);
+}
+
+.myTile.selected {
+    transform: translateY(-16px);
+    background: linear-gradient(145deg, #fef3c7, #fde68a);
+    border-color: #f59e0b;
+    box-shadow: 0 12px 24px rgba(245, 158, 11, 0.5);
+}
+
+/* 麻将牌颜色 */
+.myTile.wan {
+    color: #dc2626;
+    font-weight: 600;
+}
+
+.myTile.tiao {
+    color: #16a34a;
+    font-weight: 600;
+}
+
+.myTile.tong {
+    color: #2563eb;
+    font-weight: 600;
+}
+
+.discardTile.wan {
+    color: #dc2626;
+    font-weight: 600;
+}
+
+.discardTile.tiao {
+    color: #16a34a;
+    font-weight: 600;
+}
+
+.discardTile.tong {
+    color: #2563eb;
+    font-weight: 600;
+}
+
+/* 操作按钮 */
+.actionButtons {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+}
+
+.actionBtn {
+    padding: 12px 24px;
+    font-size: 16px;
+    font-weight: 500;
+    background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%);
+    border: none;
+    border-radius: 10px;
+    color: #fff;
+    cursor: pointer;
+    transition: all 0.3s;
+    box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
+    min-width: 100px;
+}
+
+.actionBtn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(124, 58, 237, 0.5);
+    background: linear-gradient(135deg, #8b5cf6 0%, #a855f7 100%);
+}
+
+.actionBtn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    background: linear-gradient(135deg, #4b5563 0%, #6b7280 100%);
+    box-shadow: none;
+}
+
+/* 响应式 */
+@media (max-width: 1200px) {
+    .centerTable {
+        max-width: 400px;
+    }
+
+    .hiddenTile {
+        width: 24px;
+        height: 34px;
+        font-size: 18px;
+    }
+
+    .myTile {
+        width: 38px;
+        height: 56px;
+        font-size: 12px;
+    }
+}
+
+@media (max-width: 992px) {
+    .middleArea {
+        flex-direction: column;
+    }
+
+    .centerTable {
+        max-width: 300px;
+    }
+
+    .gameInfo {
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .myHandTiles {
+        gap: 4px;
+        padding: 12px;
+    }
+
+    .myTile {
+        width: 32px;
+        height: 48px;
+        font-size: 11px;
+    }
+
+    .actionButtons {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .actionBtn {
+        padding: 10px 20px;
+        font-size: 14px;
+        min-width: 80px;
+    }
+}
+
+@media (max-width: 768px) {
+    .header {
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .myTile {
+        width: 28px;
+        height: 42px;
+        font-size: 10px;
+    }
+
+    .dealerMark {
+        font-size: 48px;
+    }
+
+    .roundInfo {
+        font-size: 14px;
+    }
+}
