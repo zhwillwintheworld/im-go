@@ -10,7 +10,14 @@ interface MahjongTileProps {
 
 function MahjongTileComponent({ type, value, selected, onClick, size = 'normal' }: MahjongTileProps) {
     const getSvgPath = () => {
-        return `/src/assets/mahjong/${type}-${value}.png`;
+        // 类型映射：wan=m(万), tong=p(饼), tiao=s(条)
+        const typeMap: Record<'wan' | 'tiao' | 'tong', string> = {
+            wan: 'm',
+            tong: 'p',
+            tiao: 's',
+        };
+        const suffix = typeMap[type];
+        return `/src/assets/mahjong/${value}${suffix}.svg`;
     };
 
     return (
