@@ -1,7 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { message } from 'antd';
 import { EyeOutlined, PlusOutlined, SendOutlined } from '@ant-design/icons';
+import { mahjongRoomService } from '@/services/mahjongRoomService';
+import { useIMStore } from '@/stores/imStore';
+import { RoomInfo, RoomPlayer as FBRoomPlayer } from '@/protocol/im/protocol';
 import styles from './Room.module.css';
 
 interface Player {
@@ -29,6 +32,7 @@ const POSITION_LABELS: Record<SeatPosition, string> = {
 function MahjongRoom() {
     const navigate = useNavigate();
     const { roomId } = useParams<{ roomId: string }>();
+    const imStatus = useIMStore((state) => state.status);
 
     // 模拟数据
     const [seats, setSeats] = useState<Record<SeatPosition, Player | null>>({
@@ -52,24 +56,70 @@ function MahjongRoom() {
     const readyCount = Object.values(seats).filter(p => p?.isReady).length;
     const canStart = readyCount >= 4;
 
-    const handleTakeSeat = (position: SeatPosition) => {
-        if (seats[position]) return;
-        // TODO: 调用 API 占座
-        message.success(`已占据 ${POSITION_LABELS[position]} 座位`);
-        setSeats({
-            ...seats,
-            [position]: { id: myId, name: '我', isReady: false, isOwner: false },
+    // 监听房间状态更新
+    useEffect(() => {
+        if (!roomId || imStatus !== 'authenticated') return;
+
+        const unsubscribe = mahjongRoomService.onRoomUpdate((roomInfo) => {
+            const newSeats: Record<SeatPosition, Player | null> = {
+                east: null, south: null, west: null, north: null,
+            };
+            const seatPositions: SeatPosition[] = ['east', 'south', 'west', 'north'];
+
+            for (let i = 0; i < roomInfo.playersLength(); i++) {
+                const fbPlayer = roomInfo.players(i);
+                if (fbPlayer) {
+                    const seatIndex = fbPlayer.seatIndex();
+                    const position = seatPositions[seatIndex];
+                    const user = fbPlayer.user();
+                    if (position && user) {
+                        newSeats[position] = {
+                            id: fbPlayer.userId() || '',
+                            name: user.nickname() || '未知',
+                            isReady: fbPlayer.isReady(),
+                            isOwner: fbPlayer.userId() === roomInfo.ownerId(),
+                        };
+                        if (fbPlayer.userId() === myId) {
+                            setIsReady(fbPlayer.isReady());
+                        }
+                    }
+                }
+            }
+            setSeats(newSeats);
         });
+
+        return unsubscribe;
+    }, [roomId, imStatus, myId]);
+
+    const handleTakeSeat = async (position: SeatPosition) => {
+        if (seats[position]) return;
+        const seatPositions: SeatPosition[] = ['east', 'south', 'west', 'north'];
+        const seatIndex = seatPositions.indexOf(position);
+        try {
+            await mahjongRoomService.takeSeat(roomId!, seatIndex);
+            message.success(`正在占据 ${POSITION_LABELS[position]} 座位...`);
+        } catch (error) {
+            message.error('占座失败');
+        }
     };
 
-    const handleReady = () => {
-        setIsReady(!isReady);
-        message.info(isReady ? '已取消准备' : '已准备');
+    const handleReady = async () => {
+        try {
+            await mahjongRoomService.toggleReady(roomId!);
+            message.info(isReady ? '正在取消准备...' : '正在准备...');
+        } catch (error) {
+            message.error('操作失败');
+        }
     };
 
-    const handleStartGame = () => {
-        message.info('游戏开始！');
-        navigate(`/mahjong/game/${roomId}`);
+    const handleStartGame = async () => {
+        try {
+            await mahjongRoomService.startGame(roomId!);
+            message.info('正在开始游戏...');
+            navigate(`/mahjong/game/${roomId}`);
+        } catch (error) {
+            message.error('开始游戏失败');
+        }
     };
 
     const handleLeave = () => {

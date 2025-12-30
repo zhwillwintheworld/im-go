@@ -108,7 +108,9 @@ enum RoomAction : byte {
     CREATE = 0,
     JOIN = 1,
     LEAVE = 2,
-    READY = 3
+    READY = 3,
+    CHANGE_SEAT = 4,  // 换座位
+    START_GAME = 5    // 开始游戏
 }
 
 table RoomReq {
@@ -116,6 +118,7 @@ table RoomReq {
     game_type: GameType;
     room_id: string;
     room_config: string;
+    target_seat_index: int32 = -1;  // 目标座位索引（-1表示不指定，0-3对应东南西北）
 }
 
 // 游戏请求
