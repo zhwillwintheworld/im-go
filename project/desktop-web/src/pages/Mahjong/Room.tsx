@@ -4,7 +4,7 @@ import { message } from 'antd';
 import { EyeOutlined, PlusOutlined, SendOutlined } from '@ant-design/icons';
 import { mahjongRoomService } from '@/services/mahjongRoomService';
 import { useIMStore } from '@/stores/imStore';
-import { RoomInfo, RoomPlayer as FBRoomPlayer } from '@/protocol/im/protocol';
+import { RoomInfo, RoomPlayer as FBRoomPlayer } from '@/im/protocol';
 import styles from './Room.module.css';
 
 interface Player {

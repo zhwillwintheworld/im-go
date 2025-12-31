@@ -10,4 +10,3 @@ export enum RequestPayload {
   RoomReq = 4,
   ConversationReadReq = 5
 }
-

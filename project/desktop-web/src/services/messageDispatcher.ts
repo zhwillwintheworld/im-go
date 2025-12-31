@@ -1,7 +1,6 @@
 import { transportManager } from '@/services/transport/WebTransportManager';
 import { IMProtocol, FrameType } from '@/services/protocol/IMProtocol';
-import { ResponsePayload } from '@/protocol/im/protocol/response-payload';
-import { getUTC8TimeString } from '@/utils/time';
+import { ResponsePayload } from '@/im/protocol';
 
 type MessageHandler = (payload: Uint8Array | null, reqId: string | null) => void;
 

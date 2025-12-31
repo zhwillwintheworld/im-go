@@ -4,5 +4,5 @@
 
 export enum GameType {
   UNKNOWN = 0,
-  MAHJONG = 1
+  HT_MAHJONG = 1
 }

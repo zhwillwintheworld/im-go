@@ -7,24 +7,30 @@ import "strconv"
 type RoomAction int8
 
 const (
-	RoomActionCREATE RoomAction = 0
-	RoomActionJOIN   RoomAction = 1
-	RoomActionLEAVE  RoomAction = 2
-	RoomActionREADY  RoomAction = 3
+	RoomActionCREATE      RoomAction = 0
+	RoomActionJOIN        RoomAction = 1
+	RoomActionLEAVE       RoomAction = 2
+	RoomActionREADY       RoomAction = 3
+	RoomActionCHANGE_SEAT RoomAction = 4
+	RoomActionSTART_GAME  RoomAction = 5
 )
 
 var EnumNamesRoomAction = map[RoomAction]string{
-	RoomActionCREATE: "CREATE",
-	RoomActionJOIN:   "JOIN",
-	RoomActionLEAVE:  "LEAVE",
-	RoomActionREADY:  "READY",
+	RoomActionCREATE:      "CREATE",
+	RoomActionJOIN:        "JOIN",
+	RoomActionLEAVE:       "LEAVE",
+	RoomActionREADY:       "READY",
+	RoomActionCHANGE_SEAT: "CHANGE_SEAT",
+	RoomActionSTART_GAME:  "START_GAME",
 }
 
 var EnumValuesRoomAction = map[string]RoomAction{
-	"CREATE": RoomActionCREATE,
-	"JOIN":   RoomActionJOIN,
-	"LEAVE":  RoomActionLEAVE,
-	"READY":  RoomActionREADY,
+	"CREATE":      RoomActionCREATE,
+	"JOIN":        RoomActionJOIN,
+	"LEAVE":       RoomActionLEAVE,
+	"READY":       RoomActionREADY,
+	"CHANGE_SEAT": RoomActionCHANGE_SEAT,
+	"START_GAME":  RoomActionSTART_GAME,
 }
 
 func (v RoomAction) String() string {

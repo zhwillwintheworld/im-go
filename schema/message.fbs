@@ -38,7 +38,8 @@ enum MsgType : byte {
 
 enum GameType : byte {
     UNKNOWN = 0,
-    MAHJONG = 1
+     // 会同麻将
+     HT_MAHJONG = 1
 }
 
 enum ErrorCode : short {

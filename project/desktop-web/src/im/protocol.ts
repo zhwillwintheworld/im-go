@@ -9,6 +9,7 @@ export { ChatSendReq } from './protocol/chat-send-req.js';
 export { ChatType } from './protocol/chat-type.js';
 export { ClientRequest } from './protocol/client-request.js';
 export { ClientResponse } from './protocol/client-response.js';
+export { ConversationReadReq } from './protocol/conversation-read-req.js';
 export { ErrorCode } from './protocol/error-code.js';
 export { GamePayload } from './protocol/game-payload.js';
 export { GamePush } from './protocol/game-push.js';

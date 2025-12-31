@@ -1,15 +1,17 @@
 import * as flatbuffers from 'flatbuffers';
-import { AuthRequest } from '../../protocol/im/protocol/auth-request.js';
-import { ClientRequest } from '../../protocol/im/protocol/client-request.js';
-import { ClientResponse } from '../../protocol/im/protocol/client-response.js';
-import { HeartbeatReq } from '../../protocol/im/protocol/heartbeat-req.js';
-import { ChatSendReq } from '../../protocol/im/protocol/chat-send-req.js';
-import { ConversationReadReq } from '../../protocol/im/protocol/conversation-read-req.js';
-import { Platform } from '../../protocol/im/protocol/platform.js';
-import { RequestPayload } from '../../protocol/im/protocol/request-payload.js';
-import { ResponsePayload } from '../../protocol/im/protocol/response-payload.js';
-import { ChatType } from '../../protocol/im/protocol/chat-type.js';
-import { MsgType } from '../../protocol/im/protocol/msg-type.js';
+import {
+    AuthRequest,
+    ClientRequest,
+    ClientResponse,
+    HeartbeatReq,
+    ChatSendReq,
+    ConversationReadReq,
+    Platform,
+    RequestPayload,
+    ResponsePayload,
+    ChatType,
+    MsgType
+} from '@/im/protocol';
 
 /**
  * 帧类型定义 - 与服务端 handler.go 保持一致

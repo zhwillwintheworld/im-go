@@ -6,5 +6,7 @@ export enum RoomAction {
   CREATE = 0,
   JOIN = 1,
   LEAVE = 2,
-  READY = 3
+  READY = 3,
+  CHANGE_SEAT = 4,
+  START_GAME = 5
 }

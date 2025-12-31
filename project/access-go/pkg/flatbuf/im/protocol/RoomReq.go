@@ -81,8 +81,20 @@ func (rcv *RoomReq) RoomConfig() []byte {
 	return nil
 }
 
+func (rcv *RoomReq) TargetSeatIndex() int32 {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
+	if o != 0 {
+		return rcv._tab.GetInt32(o + rcv._tab.Pos)
+	}
+	return -1
+}
+
+func (rcv *RoomReq) MutateTargetSeatIndex(n int32) bool {
+	return rcv._tab.MutateInt32Slot(12, n)
+}
+
 func RoomReqStart(builder *flatbuffers.Builder) {
-	builder.StartObject(4)
+	builder.StartObject(5)
 }
 func RoomReqAddAction(builder *flatbuffers.Builder, action RoomAction) {
 	builder.PrependInt8Slot(0, int8(action), 0)
@@ -95,6 +107,9 @@ func RoomReqAddRoomId(builder *flatbuffers.Builder, roomId flatbuffers.UOffsetT)
 }
 func RoomReqAddRoomConfig(builder *flatbuffers.Builder, roomConfig flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(3, flatbuffers.UOffsetT(roomConfig), 0)
+}
+func RoomReqAddTargetSeatIndex(builder *flatbuffers.Builder, targetSeatIndex int32) {
+	builder.PrependInt32Slot(4, targetSeatIndex, -1)
 }
 func RoomReqEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()

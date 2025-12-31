@@ -50,8 +50,13 @@ roomConfig(optionalEncoding?:any):string|Uint8Array|null {
   return offset ? this.bb!.__string(this.bb_pos + offset, optionalEncoding) : null;
 }
 
+targetSeatIndex():number {
+  const offset = this.bb!.__offset(this.bb_pos, 12);
+  return offset ? this.bb!.readInt32(this.bb_pos + offset) : -1;
+}
+
 static startRoomReq(builder:flatbuffers.Builder) {
-  builder.startObject(4);
+  builder.startObject(5);
 }
 
 static addAction(builder:flatbuffers.Builder, action:RoomAction) {
@@ -70,17 +75,22 @@ static addRoomConfig(builder:flatbuffers.Builder, roomConfigOffset:flatbuffers.O
   builder.addFieldOffset(3, roomConfigOffset, 0);
 }
 
+static addTargetSeatIndex(builder:flatbuffers.Builder, targetSeatIndex:number) {
+  builder.addFieldInt32(4, targetSeatIndex, -1);
+}
+
 static endRoomReq(builder:flatbuffers.Builder):flatbuffers.Offset {
   const offset = builder.endObject();
   return offset;
 }
 
-static createRoomReq(builder:flatbuffers.Builder, action:RoomAction, gameType:GameType, roomIdOffset:flatbuffers.Offset, roomConfigOffset:flatbuffers.Offset):flatbuffers.Offset {
+static createRoomReq(builder:flatbuffers.Builder, action:RoomAction, gameType:GameType, roomIdOffset:flatbuffers.Offset, roomConfigOffset:flatbuffers.Offset, targetSeatIndex:number):flatbuffers.Offset {
   RoomReq.startRoomReq(builder);
   RoomReq.addAction(builder, action);
   RoomReq.addGameType(builder, gameType);
   RoomReq.addRoomId(builder, roomIdOffset);
   RoomReq.addRoomConfig(builder, roomConfigOffset);
+  RoomReq.addTargetSeatIndex(builder, targetSeatIndex);
   return RoomReq.endRoomReq(builder);
 }
 }

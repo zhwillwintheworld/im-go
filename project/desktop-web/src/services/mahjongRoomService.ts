@@ -1,6 +1,6 @@
 import * as flatbuffers from 'flatbuffers';
 import { transportManager } from '@/services/transport/WebTransportManager';
-import { IMProtocol } from '@/services/protocol/IMProtocol';
+import { FrameType } from '@/services/protocol/IMProtocol';
 import { messageDispatcher, ResponsePayload } from '@/services/messageDispatcher';
 import {
     RoomAction,
@@ -9,7 +9,9 @@ import {
     RoomPush,
     RoomInfo,
     GameType,
-} from '@/protocol/im/protocol';
+    ClientRequest,
+    RequestPayload
+} from '@/im/protocol';
 
 type RoomUpdateCallback = (roomInfo: RoomInfo) => void;
 
@@ -79,7 +81,7 @@ class MahjongRoomService {
         // 构建 RoomReq
         RoomReq.startRoomReq(builder);
         RoomReq.addAction(builder, action);
-        RoomReq.addGameType(builder, GameType.MAHJONG);
+        RoomReq.addGameType(builder, GameType.HT_MAHJONG);
         RoomReq.addRoomId(builder, roomIdOffset);
 
         // 注意：现有协议可能还没有 targetSeatIndex 字段
@@ -97,7 +99,6 @@ class MahjongRoomService {
         const reqIdOffset = requestBuilder.createString(reqId);
 
         // 构建 ClientRequest
-        const { ClientRequest, RequestPayload } = await import('@/protocol/im/protocol');
         const payloadOffset = ClientRequest.createPayloadVector(requestBuilder, payload);
 
         ClientRequest.startClientRequest(requestBuilder);
@@ -109,8 +110,6 @@ class MahjongRoomService {
         requestBuilder.finish(clientReqOffset);
 
         // 发送帧
-        const { FrameType } = await import('@/services/protocol/IMProtocol');
-        const frameBuilder = new flatbuffers.Builder(1024);
         const frameBody = requestBuilder.asUint8Array();
         const frame = new Uint8Array(5 + frameBody.length);
         const view = new DataView(frame.buffer);

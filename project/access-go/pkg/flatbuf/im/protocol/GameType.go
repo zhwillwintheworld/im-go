@@ -7,18 +7,18 @@ import "strconv"
 type GameType int8
 
 const (
-	GameTypeUNKNOWN GameType = 0
-	GameTypeMAHJONG GameType = 1
+	GameTypeUNKNOWN    GameType = 0
+	GameTypeHT_MAHJONG GameType = 1
 )
 
 var EnumNamesGameType = map[GameType]string{
-	GameTypeUNKNOWN: "UNKNOWN",
-	GameTypeMAHJONG: "MAHJONG",
+	GameTypeUNKNOWN:    "UNKNOWN",
+	GameTypeHT_MAHJONG: "HT_MAHJONG",
 }
 
 var EnumValuesGameType = map[string]GameType{
-	"UNKNOWN": GameTypeUNKNOWN,
-	"MAHJONG": GameTypeMAHJONG,
+	"UNKNOWN":    GameTypeUNKNOWN,
+	"HT_MAHJONG": GameTypeHT_MAHJONG,
 }
 
 func (v GameType) String() string {
