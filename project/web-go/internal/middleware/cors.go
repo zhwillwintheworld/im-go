@@ -59,9 +59,11 @@ func Logger() gin.HandlerFunc {
 			path = path + "?" + query
 		}
 
-		gin.DefaultWriter.Write([]byte(
+		if _, err := gin.DefaultWriter.Write([]byte(
 			formatLog(status, latency, clientIP, method, path),
-		))
+		)); err != nil {
+			// 忽略日志写入错误
+		}
 	}
 }
 

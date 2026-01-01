@@ -137,7 +137,9 @@ func (c *Connection) writeLoop() {
 func (c *Connection) Close() {
 	c.closeOnce.Do(func() {
 		close(c.closeChan)
-		c.session.CloseWithError(0, "connection closed")
+		if err := c.session.CloseWithError(0, "connection closed"); err != nil {
+			c.logger.Error("Failed to close WebTransport session", "error", err, "conn_id", c.id)
+		}
 	})
 }
 

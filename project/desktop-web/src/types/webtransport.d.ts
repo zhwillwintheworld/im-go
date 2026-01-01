@@ -37,7 +37,7 @@ interface WebTransport {
     createBidirectionalStream(): Promise<WebTransportBidirectionalStream>;
 }
 
-declare var WebTransport: {
+declare const WebTransport: {
     prototype: WebTransport;
     new(url: string, options?: WebTransportOptions): WebTransport;
 };

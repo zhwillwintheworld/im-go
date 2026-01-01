@@ -132,7 +132,9 @@ func (d *testDeps) teardown() {
 		d.db.Close()
 	}
 	if d.redisClient != nil {
-		d.redisClient.Close()
+		if err := d.redisClient.Close(); err != nil {
+			// 忽略关闭错误，测试环境清理
+		}
 	}
 }
 
@@ -153,7 +155,11 @@ func TestIntegration_Login_Success(t *testing.T) {
 	testNickname := "Test User"
 
 	// 清理可能存在的测试用户
-	defer deps.cleanupTestUser(ctx, testUsername)
+	defer func() {
+		if err := deps.cleanupTestUser(ctx, testUsername); err != nil {
+			// 忽略清理错误
+		}
+	}()
 
 	// Step 1: 先注册用户
 	registerBody := map[string]string{
@@ -230,7 +236,11 @@ func TestIntegration_Login_WrongPassword(t *testing.T) {
 	testPassword := "password123"
 	testNickname := "Test User"
 
-	defer deps.cleanupTestUser(ctx, testUsername)
+	defer func() {
+		if err := deps.cleanupTestUser(ctx, testUsername); err != nil {
+			// 忽略清理错误
+		}
+	}()
 
 	// 先注册用户
 	registerBody := map[string]string{

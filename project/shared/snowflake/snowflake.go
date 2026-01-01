@@ -37,10 +37,10 @@ func (id ID) Int64() int64 {
 
 // Node 雪花ID生成器节点
 type Node struct {
-	mu        sync.Mutex
-	nodeID    int64
-	sequence  int64
-	lastTime  int64
+	mu       sync.Mutex
+	nodeID   int64
+	sequence int64
+	lastTime int64
 }
 
 // NewNode 创建雪花ID生成器

@@ -48,7 +48,11 @@ func main() {
 
 	// 连接 Redis
 	redisClient := connectRedis(cfg.Redis)
-	defer redisClient.Close()
+	defer func() {
+		if err := redisClient.Close(); err != nil {
+			logger.Error("Failed to close Redis client", "error", err)
+		}
+	}()
 	logger.Info("Connected to Redis", "host", cfg.Redis.Host)
 
 	// 连接数据库
@@ -90,6 +94,7 @@ func main() {
 		groupService,
 		routerService,
 		conversationService,
+		redisClient,
 	)
 
 	// 启动订阅者
@@ -111,7 +116,9 @@ func main() {
 
 	logger.Info("Shutting down...")
 	cancel()
-	subscriber.Stop()
+	if err := subscriber.Stop(); err != nil {
+		logger.Error("Failed to stop subscriber", "error", err)
+	}
 	messageBatcher.Stop()
 	logger.Info("Logic service stopped")
 }

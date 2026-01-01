@@ -522,7 +522,10 @@ func (h *Handler) handleMessageAck(ack *proto.MessageAck) {
 	// reqId 使用 ClientMsgId，让客户端可以关联请求
 	for _, conn := range conns {
 		respFrame := h.buildClientResponseFrame(ack.ClientMsgId, im_protocol.ErrorCodeSUCCESS, "", im_protocol.ResponsePayloadChatSendAck, payload)
-		conn.Send(respFrame)
+		if err := conn.Send(respFrame); err != nil {
+			h.logger.Error("Failed to send ACK to user", "userId", conn.UserID(), "error", err)
+			continue // 继续发送给其他连接
+		}
 	}
 
 	// ACK sent

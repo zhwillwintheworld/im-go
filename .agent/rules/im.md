@@ -11,5 +11,8 @@ trigger: always_on
 7. 修改了 schema.sql 就要修改对应的 model, 修改了 model 也要修改 schema.sql，新增 model 就要在schema 中新增表，新增表就要生成对应的 model
 8. 绝对不允许在表中设置外键,可以在字段描述中表明这个字段对应某个表的主键，但绝对不允许使用外键
 9. 建表语句中每个字段必须要有字段描述 字符串字段设置不可为空且需要加默认值为空字符串
-11. 判断字符串字段是否为空不能使用 `column` = null 这个格式，需要使用`column` != ''
-12. web-go 返回的response对象中id字段必须为string，因为前端js会丢精度
+10. 判断字符串字段是否为空不能使用 `column` = null 这个格式，需要使用`column` != ''
+11. web-go 返回的response对象中id字段必须为string，因为前端js会丢精度
+12. 校验代码不要生成编译产物
+13. go模块的代码被修改后要使用 scripts 目录下 check-go-quality.sh 脚本来检查质量 并解决错误与警告
+14. web模块的代码被修改后要使用 scripts 目录下的 check-go-quality.sh 脚本来检查质量 并处理错误与警告

@@ -42,7 +42,11 @@ func main() {
 
 	// 初始化 Redis 客户端
 	redisClient := imRedis.NewClient(cfg.Redis, cfg.Server.NodeID)
-	defer redisClient.Close()
+	defer func() {
+		if err := redisClient.Close(); err != nil {
+			logger.Error("Failed to close Redis client", "error", err)
+		}
+	}()
 	logger.Info("Connected to Redis", "addr", cfg.Redis.Addr)
 
 	// 创建并启动服务器

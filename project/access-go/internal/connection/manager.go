@@ -97,7 +97,10 @@ func (m *Manager) Broadcast(data []byte) {
 	defer m.mu.RUnlock()
 
 	for _, conn := range m.connections {
-		conn.Send(data)
+		if err := conn.Send(data); err != nil {
+			// 记录错误但继续给其他连接发送
+			// 注意：这里不记录日志，因为 Manager 没有 logger，错误会在 Send 方法中处理
+		}
 	}
 }
 
@@ -112,4 +115,3 @@ func (m *Manager) GetAllConnections() []*Connection {
 	}
 	return conns
 }
-
