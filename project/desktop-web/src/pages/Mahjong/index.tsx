@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Switch, message } from 'antd';
 import { ArrowLeftOutlined, PlusOutlined, LoginOutlined } from '@ant-design/icons';
+import { mahjongRoomService } from '@/services/mahjongRoomService';
+import { useIMStore } from '@/stores/imStore';
 import styles from './Mahjong.module.css';
 
 type ModalType = 'none' | 'create' | 'join';
@@ -16,6 +18,7 @@ interface RoomSettings {
 
 function Mahjong() {
     const navigate = useNavigate();
+    const imStatus = useIMStore((state) => state.status);
     const [modalType, setModalType] = useState<ModalType>('none');
 
     // 加入房间表单
@@ -31,25 +34,74 @@ function Mahjong() {
         autoStart: false,
     });
 
-    const handleJoinRoom = () => {
+    // 监听房间创建/加入的响应
+    useEffect(() => {
+        if (imStatus !== 'authenticated') return;
+
+        const unsubscribe = mahjongRoomService.onRoomUpdate((roomInfo) => {
+            const roomId = roomInfo.roomId();
+            if (roomId) {
+                console.log('[Mahjong] Received room info, navigating to:', roomId);
+                message.success('进入房间成功！');
+                navigate(`/mahjong/room/${roomId}`);
+            }
+        });
+
+        return unsubscribe;
+    }, [imStatus, navigate]);
+
+    const handleJoinRoom = async () => {
         if (!joinRoomId.trim()) {
             message.error('请输入房间号');
             return;
         }
-        // TODO: 调用 API 加入房间
-        message.info(`加入房间 ${joinRoomId}...`);
-        navigate(`/mahjong/room/${joinRoomId}`);
+
+        if (imStatus !== 'authenticated') {
+            message.error('请先登录');
+            return;
+        }
+
+        try {
+            message.loading('加入房间中...');
+            await mahjongRoomService.joinRoom(
+                joinRoomId,
+                joinPassword || undefined
+            );
+            // 成功后会通过 onRoomUpdate 监听器跳转
+
+
+        } catch (error) {
+            console.error('[Mahjong] Join room error:', error);
+            message.error('加入房间失败');
+        }
     };
 
-    const handleCreateRoom = () => {
+    const handleCreateRoom = async () => {
         if (!roomSettings.roomName.trim()) {
             message.error('请输入房间名称');
             return;
         }
-        // TODO: 调用 API 创建房间
-        message.info('创建房间中...');
-        // 模拟创建成功后跳转
-        navigate('/mahjong/room/123456');
+
+        if (imStatus !== 'authenticated') {
+            message.error('请先登录');
+            return;
+        }
+
+        try {
+            message.loading('创建房间中...');
+            const config = JSON.stringify({
+                name: roomSettings.roomName,
+                password: roomSettings.password,
+                max_players: roomSettings.maxPlayers,
+                allow_spectators: roomSettings.allowSpectators,
+                auto_start: roomSettings.autoStart,
+            });
+            await mahjongRoomService.createRoom(config);
+            // 成功后会通过 onRoomUpdate 监听器跳转
+        } catch (error) {
+            console.error('[Mahjong] Create room error:', error);
+            message.error('创建房间失败');
+        }
     };
 
     const closeModal = () => {

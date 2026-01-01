@@ -110,6 +110,41 @@ func (h *MessageHandler) HandleUserOffline(ctx context.Context, event *proto.Use
 	h.logger.Info("User offline", "userId", event.UserId, "accessNodeId", accessNodeId)
 }
 
+// HandleRoomRequest 处理房间请求
+func (h *MessageHandler) HandleRoomRequest(ctx context.Context, req *proto.RoomRequest, accessNodeId string) {
+	h.logger.Info("Room request received",
+		"userId", req.UserId,
+		"reqId", req.ReqId,
+		"action", req.Action,
+		"roomId", req.RoomId,
+		"gameType", req.GameType,
+		"accessNodeId", accessNodeId)
+
+	// TODO: 实现具体业务逻辑
+	// - CREATE: 创建房间
+	// - JOIN: 加入房间
+	// - LEAVE: 离开房间
+	// - READY: 准备/取消准备
+	// - CHANGE_SEAT: 换座位
+	// - START_GAME: 开始游戏
+}
+
+// HandleGameRequest 处理游戏请求
+func (h *MessageHandler) HandleGameRequest(ctx context.Context, req *proto.GameRequest, accessNodeId string) {
+	h.logger.Info("Game request received",
+		"userId", req.UserId,
+		"reqId", req.ReqId,
+		"roomId", req.RoomId,
+		"gameType", req.GameType,
+		"accessNodeId", accessNodeId)
+
+	// TODO: 实现具体游戏逻辑
+	// - 解析 GamePayload
+	// - 处理游戏动作 (出牌、碰、杠、胡等)
+	// - 更新游戏状态
+	// - 广播游戏状态给房间所有玩家
+}
+
 // filterOut 过滤掉指定用户
 func filterOut(members []int64, excludeId int64) []int64 {
 	result := make([]int64, 0, len(members))

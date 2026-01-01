@@ -242,7 +242,7 @@ func (h *Handler) handleClientRequest(ctx context.Context, conn *connection.Conn
 }
 
 // handleHeartbeat 处理心跳请求
-func (h *Handler) handleHeartbeat(ctx context.Context, conn *connection.Connection, stream *webtransport.Stream, reqID string, payload []byte) {
+func (h *Handler) handleHeartbeat(ctx context.Context, conn *connection.Connection, stream *webtransport.Stream, reqID string, _payload []byte) {
 	// 刷新用户位置 TTL
 	if conn.UserID() > 0 {
 		if err := h.redisClient.RefreshUserLocation(ctx, conn.UserID(), conn.Platform()); err != nil {
@@ -261,7 +261,7 @@ func (h *Handler) handleHeartbeat(ctx context.Context, conn *connection.Connecti
 }
 
 // handleChatSend 处理聊天发送请求
-func (h *Handler) handleChatSend(ctx context.Context, conn *connection.Connection, stream *webtransport.Stream, reqID string, payload []byte) {
+func (h *Handler) handleChatSend(_ctx context.Context, conn *connection.Connection, _stream *webtransport.Stream, reqID string, payload []byte) {
 	// Chat send request
 
 	// 解析 ChatSendReq
@@ -303,26 +303,61 @@ func (h *Handler) handleChatSend(ctx context.Context, conn *connection.Connectio
 }
 
 // handleRoomRequest 处理房间请求
-func (h *Handler) handleRoomRequest(ctx context.Context, conn *connection.Connection, stream *webtransport.Stream, reqID string, payload []byte) {
+func (h *Handler) handleRoomRequest(_ctx context.Context, conn *connection.Connection, _stream *webtransport.Stream, reqID string, payload []byte) {
 	// Room request processing
-	roomReq := im_protocol.GetRootAsRoomReq(payload, 0)
-	_ = roomReq.Action()
-	_ = string(roomReq.RoomId())
-	_ = roomReq.GameType()
 
-	// TODO: 转发到 Logic 处理
-	// 暂时返回成功
-	h.sendClientResponse(stream, reqID, im_protocol.ErrorCodeSUCCESS, "", im_protocol.ResponsePayloadRoomResp, nil)
+	// 解析 RoomReq
+	roomReq := im_protocol.GetRootAsRoomReq(payload, 0)
+
+	// 封装上行消息到 Logic
+	msg := &proto.UpstreamMessage{
+		AccessNodeId: h.nodeID,
+		RoomRequest: &proto.RoomRequest{
+			UserId:     conn.UserID(),
+			ReqId:      reqID,
+			Action:     roomReq.Action().String(),
+			RoomId:     string(roomReq.RoomId()),
+			GameType:   roomReq.GameType().String(),
+			RoomConfig: string(roomReq.RoomConfig()),
+			SeatIndex:  roomReq.TargetSeatIndex(),
+		},
+	}
+
+	// Forward to logic
+	data, _ := json.Marshal(msg)
+	if err := h.natsClient.Publish(sharedNats.SubjectLogicUpstream, data); err != nil {
+		h.logger.Error("Failed to publish room request to NATS", "error", err)
+		return
+	}
+	// Room request published
 }
 
 // handleGameRequest 处理游戏请求
-func (h *Handler) handleGameRequest(ctx context.Context, conn *connection.Connection, stream *webtransport.Stream, reqID string, payload []byte) {
+func (h *Handler) handleGameRequest(_ctx context.Context, conn *connection.Connection, _stream *webtransport.Stream, reqID string, payload []byte) {
 	// Game request processing
-	gameReq := im_protocol.GetRootAsGameReq(payload, 0)
-	_ = string(gameReq.RoomId())
-	_ = gameReq.GameType()
 
-	// TODO: 转发到 Logic 处理
+	// 解析 GameReq
+	gameReq := im_protocol.GetRootAsGameReq(payload, 0)
+
+	// 封装上行消息到 Logic
+	msg := &proto.UpstreamMessage{
+		AccessNodeId: h.nodeID,
+		GameRequest: &proto.GameRequest{
+			UserId:      conn.UserID(),
+			ReqId:       reqID,
+			RoomId:      string(gameReq.RoomId()),
+			GameType:    gameReq.GameType().String(),
+			GamePayload: gameReq.GamePayloadBytes(),
+		},
+	}
+
+	// Forward to logic
+	data, _ := json.Marshal(msg)
+	if err := h.natsClient.Publish(sharedNats.SubjectLogicUpstream, data); err != nil {
+		h.logger.Error("Failed to publish game request to NATS", "error", err)
+		return
+	}
+	// Game request published
 }
 
 // handleConversationRead 处理会话已读请求

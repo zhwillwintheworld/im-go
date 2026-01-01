@@ -71,18 +71,23 @@ class MahjongRoomService {
     private async sendRoomRequest(
         action: RoomAction,
         roomId: string,
-        targetSeatIndex: number = -1
+        targetSeatIndex: number = -1,
+        roomConfig: string = ''
     ): Promise<void> {
         const builder = new flatbuffers.Builder(256);
 
-        // 构建房间ID
+        // 构建房间ID和配置
         const roomIdOffset = builder.createString(roomId);
+        const roomConfigOffset = roomConfig ? builder.createString(roomConfig) : 0;
 
         // 构建 RoomReq
         RoomReq.startRoomReq(builder);
         RoomReq.addAction(builder, action);
         RoomReq.addGameType(builder, GameType.HT_MAHJONG);
         RoomReq.addRoomId(builder, roomIdOffset);
+        if (roomConfigOffset) {
+            RoomReq.addRoomConfig(builder, roomConfigOffset);
+        }
 
         // 注意：现有协议可能还没有 targetSeatIndex 字段
         // 如果使用，需要后端更新 schema
@@ -122,7 +127,30 @@ class MahjongRoomService {
         console.log('[MahjongRoomService] Sent room request:', RoomAction[action], {
             roomId,
             targetSeatIndex,
+            roomConfig,
         });
+    }
+
+    /**
+     * 创建房间
+     * @param roomConfig 房间配置 JSON 字符串
+     * @returns Promise<string> 返回创建的房间 ID
+     */
+    async createRoom(roomConfig: string): Promise<void> {
+        // 使用临时的房间 ID，实际的房间 ID 会在响应中返回
+        await this.sendRoomRequest(RoomAction.CREATE, '', -1, roomConfig);
+    }
+
+    /**
+     * 加入房间
+     * @param roomId 房间 ID
+     * @param password 房间密码（可选）
+     * @param seatIndex 座位索引（可选，-1 表示自动分配）
+     */
+    async joinRoom(roomId: string, password?: string, seatIndex: number = -1): Promise<void> {
+        // 如果有密码，可以放在 roomConfig 中
+        const config = password ? JSON.stringify({ password }) : '';
+        await this.sendRoomRequest(RoomAction.JOIN, roomId, seatIndex, config);
     }
 
     /**
@@ -138,8 +166,8 @@ class MahjongRoomService {
      * @param seatIndex 座位索引 (0=东, 1=南, 2=西, 3=北)
      */
     async takeSeat(roomId: string, seatIndex: number): Promise<void> {
-        // 使用 JOIN 动作，后端可以根据 seatIndex 分配座位
-        await this.sendRoomRequest(RoomAction.JOIN, roomId, seatIndex);
+        // 使用 CHANGE_SEAT 动作
+        await this.sendRoomRequest(RoomAction.CHANGE_SEAT, roomId, seatIndex);
     }
 
     /**
@@ -154,13 +182,7 @@ class MahjongRoomService {
      * 注意：需要后端支持 START_GAME 动作
      */
     async startGame(roomId: string): Promise<void> {
-        // 如果后端已支持 START_GAME，使用它
-        // 否则可能需要通过其他方式触发
-        // await this.sendRoomRequest(RoomAction.START_GAME, roomId);
-
-        // 临时方案：可能需要调用 REST API
-        console.log('[MahjongRoomService] Start game request:', roomId);
-        // TODO: 实现开始游戏逻辑
+        await this.sendRoomRequest(RoomAction.START_GAME, roomId);
     }
 
     /**
