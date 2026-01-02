@@ -259,16 +259,13 @@ func createWebTransportDialer(t *testing.T) *webtransport.Dialer {
 
 // setTestUserToken 设置测试用户 token（模拟 web-go 登录时设置的数据）
 func setTestUserToken(ctx context.Context, redisClient *redis.Client, userID int64, platform, token, deviceID string) error {
-	// 1. 准备 token 信息
-	tokenInfo := redis.UserTokenInfo{
+	// Mock Redis token info
+	mockUserInfo := &redis.UserTokenInfo{
 		UserID:   userID,
-		Username: "test_user",
-		Nickname: "测试用户",
-		Avatar:   "",
 		DeviceID: deviceID,
 		Platform: platform,
 	}
-	tokenInfoJSON, err := json.Marshal(tokenInfo)
+	tokenInfoJSON, err := json.Marshal(mockUserInfo)
 	if err != nil {
 		return err
 	}

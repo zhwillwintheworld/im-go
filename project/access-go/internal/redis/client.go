@@ -6,30 +6,21 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"strings"
 	"time"
 
 	"github.com/redis/go-redis/v9"
 	"sudooom.im.access/internal/config"
+	sharedRedis "sudooom.im.shared/redis"
 )
 
 const (
-	// 用户位置 key 格式: im:user:location:{userId}:{platform}
-	// 一个 platform 只维持一个连接
-	userLocationKeyPrefix = "im:user:location:"
-	locationTTL           = 2 * time.Minute // 2 分钟 TTL，心跳续期
-	// token 信息存储 key 前缀（与 web-go 一致）
-	tokenInfoPrefix = "token:info:"
-	// 用户 token key 前缀: user:token:{userId}:{platform} -> accessToken
-	tokenUserPrefix = "user:token:"
+	// 用户位置 TTL: 2 分钟，心跳续期
+	locationTTL = 2 * time.Minute
 )
 
-// UserTokenInfo 存储在 Redis 中的用户 Token 信息（与 web-go 一致）
+// UserTokenInfo 存储在 Redis 中的用户 Token 信息（仅认证字段）
 type UserTokenInfo struct {
 	UserID   int64  `json:"user_id"`
-	Username string `json:"username"`
-	Nickname string `json:"nickname"`
-	Avatar   string `json:"avatar"`
 	DeviceID string `json:"device_id"`
 	Platform string `json:"platform"`
 }
@@ -67,16 +58,11 @@ func NewClient(cfg config.RedisConfig, nodeID string) *Client {
 	}
 }
 
-// buildLocationKey 构建 location key: im:user:location:{userId}:{platform}
-func buildLocationKey(userId int64, platform string) string {
-	return fmt.Sprintf("%s%d:%s", userLocationKeyPrefix, userId, strings.ToLower(platform))
-}
-
 // RegisterUserLocation 注册用户位置
 // Key: im:user:location:{userId}:{platform}, Value: accessId
 // 一个 platform 只维持一个连接，新连接会覆盖旧连接
 func (c *Client) RegisterUserLocation(ctx context.Context, userId int64, platform string) error {
-	key := buildLocationKey(userId, platform)
+	key := sharedRedis.BuildUserLocationKeyWithPlatform(userId, platform)
 
 	err := c.client.Set(ctx, key, c.nodeID, locationTTL).Err()
 
@@ -92,7 +78,7 @@ func (c *Client) RegisterUserLocation(ctx context.Context, userId int64, platfor
 
 // UnregisterUserLocation 移除用户位置
 func (c *Client) UnregisterUserLocation(ctx context.Context, userId int64, platform string) error {
-	key := buildLocationKey(userId, platform)
+	key := sharedRedis.BuildUserLocationKeyWithPlatform(userId, platform)
 
 	err := c.client.Del(ctx, key).Err()
 
@@ -105,13 +91,13 @@ func (c *Client) UnregisterUserLocation(ctx context.Context, userId int64, platf
 
 // RefreshUserLocation 刷新用户位置 TTL（心跳时调用）
 func (c *Client) RefreshUserLocation(ctx context.Context, userId int64, platform string) error {
-	key := buildLocationKey(userId, platform)
+	key := sharedRedis.BuildUserLocationKeyWithPlatform(userId, platform)
 	return c.client.Expire(ctx, key, locationTTL).Err()
 }
 
 // GetUserLocation 获取用户某平台的位置（返回 access 实例 ID）
 func (c *Client) GetUserLocation(ctx context.Context, userId int64, platform string) (string, error) {
-	key := buildLocationKey(userId, platform)
+	key := sharedRedis.BuildUserLocationKeyWithPlatform(userId, platform)
 	nodeId, err := c.client.Get(ctx, key).Result()
 	if errors.Is(err, redis.Nil) {
 		return "", nil
@@ -121,7 +107,7 @@ func (c *Client) GetUserLocation(ctx context.Context, userId int64, platform str
 
 // GetUserInfoByToken 从 Redis 获取 token 对应的用户信息
 func (c *Client) GetUserInfoByToken(ctx context.Context, token string) (*UserTokenInfo, error) {
-	key := tokenInfoPrefix + token
+	key := sharedRedis.BuildTokenInfoKey(token)
 	data, err := c.client.Get(ctx, key).Result()
 	if errors.Is(err, redis.Nil) {
 		return nil, nil // token 不存在
@@ -138,14 +124,9 @@ func (c *Client) GetUserInfoByToken(ctx context.Context, token string) (*UserTok
 	return &userInfo, nil
 }
 
-// buildUserTokenKey 构建用户 token key: user:token:{userId}:{platform}
-func buildUserTokenKey(userId int64, platform string) string {
-	return fmt.Sprintf("%s%d:%s", tokenUserPrefix, userId, strings.ToLower(platform))
-}
-
 // GetCurrentToken 获取用户在该 platform 的当前有效 token
 func (c *Client) GetCurrentToken(ctx context.Context, userId int64, platform string) (string, error) {
-	key := buildUserTokenKey(userId, platform)
+	key := sharedRedis.BuildUserTokenKey(userId, platform)
 	token, err := c.client.Get(ctx, key).Result()
 	if errors.Is(err, redis.Nil) {
 		return "", nil

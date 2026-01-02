@@ -12,9 +12,10 @@ import (
 	"github.com/quic-go/webtransport-go"
 	"sudooom.im.access/internal/config"
 	"sudooom.im.access/internal/connection"
+	"sudooom.im.access/internal/handler"
 	"sudooom.im.access/internal/nats"
-	"sudooom.im.access/internal/protocol"
 	"sudooom.im.access/internal/redis"
+	"sudooom.im.access/internal/workerpool"
 	sharedNats "sudooom.im.shared/nats"
 )
 
@@ -24,15 +25,30 @@ type Server struct {
 	redisClient      *redis.Client
 	logger           *slog.Logger
 	connMgr          *connection.Manager
-	handler          *protocol.Handler
+	handler          *handler.Handler
 	wtServer         *webtransport.Server
 	heartbeatChecker *connection.HeartbeatChecker
+	workerPool       *workerpool.Pool
 	wg               sync.WaitGroup
 }
 
 func New(cfg *config.Config, natsClient *nats.Client, redisClient *redis.Client, logger *slog.Logger) *Server {
 	connMgr := connection.NewManager()
-	handler := protocol.NewHandler(connMgr, natsClient, redisClient, cfg.Server.NodeID, logger)
+
+	// 设置 Worker Pool 默认值
+	workerPoolSize := cfg.Server.WorkerPoolSize
+	if workerPoolSize <= 0 {
+		workerPoolSize = 1000 // 默认 1000 个 worker
+	}
+	workerQueueSize := cfg.Server.WorkerQueueSize
+	if workerQueueSize <= 0 {
+		workerQueueSize = 10000 // 默认队列大小 10000
+	}
+
+	// 创建 Worker Pool
+	workerPool := workerpool.New(workerPoolSize, workerQueueSize, logger)
+
+	handler := handler.NewHandler(connMgr, natsClient, redisClient, cfg.Server.NodeID, logger, workerPool)
 
 	return &Server{
 		cfg:         cfg,
@@ -41,6 +57,7 @@ func New(cfg *config.Config, natsClient *nats.Client, redisClient *redis.Client,
 		logger:      logger,
 		connMgr:     connMgr,
 		handler:     handler,
+		workerPool:  workerPool,
 	}
 }
 
@@ -212,8 +229,16 @@ func (s *Server) ConnManager() *connection.Manager {
 }
 
 func (s *Server) Shutdown() {
+	// 先关闭 WebTransport Server，停止接收新连接
 	if s.wtServer != nil {
 		s.wtServer.Close()
 	}
+
+	// 关闭 Worker Pool，等待所有消息处理完成
+	if s.workerPool != nil {
+		s.workerPool.Shutdown()
+	}
+
+	// 等待所有会话处理完成
 	s.wg.Wait()
 }

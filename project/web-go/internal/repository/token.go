@@ -3,25 +3,15 @@ package repository
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	sharedRedis "sudooom.im.shared/redis"
 )
 
-const (
-	// tokenUserPrefix 用户Token前缀: user:token:{user_id}:{platform} -> accessToken
-	tokenUserPrefix = "user:token:"
-	// tokenInfoPrefix Token信息前缀: token:info:{accessToken} -> userInfo JSON
-	tokenInfoPrefix = "token:info:"
-)
-
-// UserTokenInfo 存储在Redis中的用户信息
+// UserTokenInfo 存储在Redis中的 Token 信息（仅认证字段）
 type UserTokenInfo struct {
 	UserID   int64  `json:"user_id"`
-	Username string `json:"username"`
-	Nickname string `json:"nickname"`
-	Avatar   string `json:"avatar"`
 	DeviceID string `json:"device_id"`
 	Platform string `json:"platform"`
 }
@@ -36,28 +26,18 @@ func NewTokenRepository(rdb *redis.Client) *TokenRepository {
 	return &TokenRepository{rdb: rdb}
 }
 
-// buildUserTokenKey 构建用户Token的Key: user:token:{user_id}:{platform}
-func buildUserTokenKey(userID int64, platform string) string {
-	return fmt.Sprintf("%s%d:%s", tokenUserPrefix, userID, platform)
-}
-
-// buildTokenInfoKey 构建Token信息的Key: token:info:{accessToken}
-func buildTokenInfoKey(accessToken string) string {
-	return tokenInfoPrefix + accessToken
-}
-
 // SaveToken 保存Token到Redis
 // 1. user:token:{user_id}:{platform} -> accessToken
 // 2. token:info:{accessToken} -> userInfo JSON
 func (r *TokenRepository) SaveToken(ctx context.Context, userInfo *UserTokenInfo, accessToken string, expiration time.Duration) error {
 	// 构建 Keys
-	userTokenKey := buildUserTokenKey(userInfo.UserID, userInfo.Platform)
-	tokenInfoKey := buildTokenInfoKey(accessToken)
+	userTokenKey := sharedRedis.BuildUserTokenKey(userInfo.UserID, userInfo.Platform)
+	tokenInfoKey := sharedRedis.BuildTokenInfoKey(accessToken)
 
 	// 序列化用户信息
 	userInfoJSON, err := json.Marshal(userInfo)
 	if err != nil {
-		return fmt.Errorf("failed to marshal user info: %w", err)
+		return err
 	}
 
 	// 使用 Pipeline 批量执行
@@ -71,16 +51,12 @@ func (r *TokenRepository) SaveToken(ctx context.Context, userInfo *UserTokenInfo
 
 	// 执行 Pipeline
 	_, err = pipe.Exec(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to save token: %w", err)
-	}
-
-	return nil
+	return err
 }
 
 // GetTokenByUserPlatform 根据用户ID和平台获取Token
 func (r *TokenRepository) GetTokenByUserPlatform(ctx context.Context, userID int64, platform string) (string, error) {
-	key := buildUserTokenKey(userID, platform)
+	key := sharedRedis.BuildUserTokenKey(userID, platform)
 	token, err := r.rdb.Get(ctx, key).Result()
 	if err == redis.Nil {
 		return "", nil
@@ -93,7 +69,7 @@ func (r *TokenRepository) GetTokenByUserPlatform(ctx context.Context, userID int
 
 // GetUserInfoByToken 根据Token获取用户信息
 func (r *TokenRepository) GetUserInfoByToken(ctx context.Context, accessToken string) (*UserTokenInfo, error) {
-	key := buildTokenInfoKey(accessToken)
+	key := sharedRedis.BuildTokenInfoKey(accessToken)
 	data, err := r.rdb.Get(ctx, key).Result()
 	if err == redis.Nil {
 		return nil, nil
@@ -104,7 +80,7 @@ func (r *TokenRepository) GetUserInfoByToken(ctx context.Context, accessToken st
 
 	var userInfo UserTokenInfo
 	if err := json.Unmarshal([]byte(data), &userInfo); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal user info: %w", err)
+		return nil, err
 	}
 
 	return &userInfo, nil
@@ -112,7 +88,7 @@ func (r *TokenRepository) GetUserInfoByToken(ctx context.Context, accessToken st
 
 // DeleteToken 删除Token（登出时使用）
 func (r *TokenRepository) DeleteToken(ctx context.Context, userID int64, platform, accessToken string) error {
-	tokenInfoKey := buildTokenInfoKey(accessToken)
+	tokenInfoKey := sharedRedis.BuildTokenInfoKey(accessToken)
 
 	pipe := r.rdb.Pipeline()
 	pipe.Del(ctx, tokenInfoKey)
@@ -123,7 +99,7 @@ func (r *TokenRepository) DeleteToken(ctx context.Context, userID int64, platfor
 // DeleteOldToken 删除旧Token（重新登录时清理旧Token）
 func (r *TokenRepository) DeleteOldToken(ctx context.Context, userID int64, platform string) error {
 	// 先获取旧Token
-	userTokenKey := buildUserTokenKey(userID, platform)
+	userTokenKey := sharedRedis.BuildUserTokenKey(userID, platform)
 	oldToken, err := r.rdb.Get(ctx, userTokenKey).Result()
 	if err == redis.Nil {
 		// 没有旧Token，无需删除
@@ -134,13 +110,13 @@ func (r *TokenRepository) DeleteOldToken(ctx context.Context, userID int64, plat
 	}
 
 	// 删除旧Token的用户信息
-	oldTokenInfoKey := buildTokenInfoKey(oldToken)
+	oldTokenInfoKey := sharedRedis.BuildTokenInfoKey(oldToken)
 	return r.rdb.Del(ctx, oldTokenInfoKey).Err()
 }
 
 // GetTokenTTL 获取Token的剩余过期时间
 func (r *TokenRepository) GetTokenTTL(ctx context.Context, accessToken string) (time.Duration, error) {
-	key := buildTokenInfoKey(accessToken)
+	key := sharedRedis.BuildTokenInfoKey(accessToken)
 	ttl, err := r.rdb.TTL(ctx, key).Result()
 	if err != nil {
 		return 0, err
@@ -150,12 +126,29 @@ func (r *TokenRepository) GetTokenTTL(ctx context.Context, accessToken string) (
 
 // RefreshTokenExpire 刷新Token的过期时间
 func (r *TokenRepository) RefreshTokenExpire(ctx context.Context, userInfo *UserTokenInfo, accessToken string, expiration time.Duration) error {
-	userTokenKey := buildUserTokenKey(userInfo.UserID, userInfo.Platform)
-	tokenInfoKey := buildTokenInfoKey(accessToken)
+	userTokenKey := sharedRedis.BuildUserTokenKey(userInfo.UserID, userInfo.Platform)
+	tokenInfoKey := sharedRedis.BuildTokenInfoKey(accessToken)
 
 	pipe := r.rdb.Pipeline()
 	pipe.Expire(ctx, userTokenKey, expiration)
 	pipe.Expire(ctx, tokenInfoKey, expiration)
 	_, err := pipe.Exec(ctx)
 	return err
+}
+
+// SaveUserInfo 保存用户基本信息到 Redis（永久存储，与平台无关）
+func (r *TokenRepository) SaveUserInfo(ctx context.Context, userID int64, username, nickname, avatar string) error {
+	userInfoKey := sharedRedis.BuildUserInfoKey(userID)
+	userInfo := map[string]interface{}{
+		"user_id":  userID,
+		"username": username,
+		"nickname": nickname,
+		"avatar":   avatar,
+	}
+	userInfoJSON, err := json.Marshal(userInfo)
+	if err != nil {
+		return err
+	}
+	// 不设置过期时间，永久保存
+	return r.rdb.Set(ctx, userInfoKey, string(userInfoJSON), 0).Err()
 }

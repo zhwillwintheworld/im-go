@@ -87,6 +87,9 @@ func main() {
 	// 创建会话服务
 	conversationService := service.NewConversationService(redisClient)
 
+	// 创建房间服务
+	roomService := service.NewRoomService(redisClient, sfNode, routerService)
+
 	// 创建消息处理器
 	msgHandler := handler.NewMessageHandler(
 		messageBatcher,
@@ -95,6 +98,7 @@ func main() {
 		routerService,
 		conversationService,
 		redisClient,
+		roomService,
 	)
 
 	// 启动订阅者

@@ -90,6 +90,12 @@ func (s *AuthService) Register(ctx context.Context, req *RegisterRequest) (*mode
 		return nil, err
 	}
 
+	// 保存用户基本信息到 Redis（与平台无关，永久存储）
+	if err := s.tokenRepo.SaveUserInfo(ctx, user.ID, user.Username, user.Nickname, user.Avatar); err != nil {
+		// 记录日志但不影响注册流程
+		// 可以在这里添加日志记录
+	}
+
 	return user, nil
 }
 
@@ -125,17 +131,20 @@ func (s *AuthService) Login(ctx context.Context, req *LoginRequest) (*LoginRespo
 		return nil, err
 	}
 
-	// 存储Token到Redis
+	// 存储Token到Redis（只存储认证相关字段）
 	userTokenInfo := &repository.UserTokenInfo{
 		UserID:   user.ID,
-		Username: user.Username,
-		Nickname: user.Nickname,
-		Avatar:   user.Avatar,
 		DeviceID: req.DeviceID,
 		Platform: req.Platform,
 	}
 	if err := s.tokenRepo.SaveToken(ctx, userTokenInfo, tokenPair.AccessToken, s.jwtService.GetAccessExpire()); err != nil {
 		return nil, err
+	}
+
+	// 保存用户基本信息到 Redis（与平台无关，永久存储）
+	if err := s.tokenRepo.SaveUserInfo(ctx, user.ID, user.Username, user.Nickname, user.Avatar); err != nil {
+		// 记录日志但不影响登录流程
+		// 可以在这里添加日志记录
 	}
 
 	return &LoginResponse{

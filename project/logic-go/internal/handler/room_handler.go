@@ -2,10 +2,10 @@ package handler
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 
 	"github.com/redis/go-redis/v9"
+	"sudooom.im.logic/internal/service"
 	"sudooom.im.shared/proto"
 )
 
@@ -18,14 +18,16 @@ type RoomActionHandler interface {
 type RoomHandler struct {
 	actionHandlers map[string]RoomActionHandler
 	redisClient    *redis.Client
+	roomService    *service.RoomService
 	logger         *slog.Logger
 }
 
 // NewRoomHandler 创建房间请求处理器
-func NewRoomHandler(redisClient *redis.Client) *RoomHandler {
+func NewRoomHandler(redisClient *redis.Client, roomService *service.RoomService) *RoomHandler {
 	h := &RoomHandler{
 		actionHandlers: make(map[string]RoomActionHandler),
 		redisClient:    redisClient,
+		roomService:    roomService,
 		logger:         slog.Default(),
 	}
 
@@ -37,7 +39,7 @@ func NewRoomHandler(redisClient *redis.Client) *RoomHandler {
 
 // registerActionHandlers 注册各种房间操作处理器
 func (h *RoomHandler) registerActionHandlers() {
-	h.actionHandlers["CREATE"] = &CreateRoomHandler{logger: h.logger}
+	h.actionHandlers["CREATE"] = &CreateRoomHandler{roomService: h.roomService, logger: h.logger}
 	h.actionHandlers["JOIN"] = &JoinRoomHandler{logger: h.logger}
 	h.actionHandlers["LEAVE"] = &LeaveRoomHandler{logger: h.logger}
 	h.actionHandlers["READY"] = &ReadyRoomHandler{logger: h.logger}
@@ -49,8 +51,12 @@ func (h *RoomHandler) registerActionHandlers() {
 func (h *RoomHandler) Handle(ctx context.Context, req *proto.RoomRequest, accessNodeId string) error {
 	handler, ok := h.actionHandlers[req.Action]
 	if !ok {
-		h.logger.Warn("Unknown room action", "action", req.Action, "userId", req.UserId)
-		return fmt.Errorf("unknown room action: %s", req.Action)
+		// 记录警告日志
+		h.logger.Warn("Unknown room action", "action", req.Action, "userId", req.UserId, "reqId", req.ReqId)
+		// TODO: 异步发送错误响应给客户端
+		// 这里不返回错误，避免阻塞消息处理流程
+		// 后续可以通过 RouterService 发送 RoomPush 错误事件给客户端
+		return nil
 	}
 
 	return handler.Handle(ctx, req, accessNodeId)
@@ -62,7 +68,8 @@ func (h *RoomHandler) Handle(ctx context.Context, req *proto.RoomRequest, access
 
 // CreateRoomHandler 创建房间
 type CreateRoomHandler struct {
-	logger *slog.Logger
+	roomService *service.RoomService
+	logger      *slog.Logger
 }
 
 func (h *CreateRoomHandler) Handle(ctx context.Context, req *proto.RoomRequest, accessNodeId string) error {
@@ -72,7 +79,25 @@ func (h *CreateRoomHandler) Handle(ctx context.Context, req *proto.RoomRequest, 
 		"gameType", req.GameType,
 		"roomConfig", req.RoomConfig,
 		"accessNodeId", accessNodeId)
-	// TODO: 实现创建房间逻辑
+
+	// 1. 创建房间
+	room, err := h.roomService.CreateRoom(ctx, req, accessNodeId)
+	if err != nil {
+		h.logger.Error("Failed to create room", "error", err, "userId", req.UserId)
+		// TODO: 发送错误响应给客户端
+		return nil // 不阻塞流程
+	}
+
+	// 2. 发送房间创建成功响应
+	if err := h.roomService.SendRoomCreatedResponse(ctx, room, accessNodeId); err != nil {
+		h.logger.Error("Failed to send room created response", "error", err, "roomId", room.RoomID)
+	}
+
+	h.logger.Info("Room created and response sent",
+		"roomId", room.RoomID,
+		"roomName", room.RoomName,
+		"userId", req.UserId)
+
 	return nil
 }
 

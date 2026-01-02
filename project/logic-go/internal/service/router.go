@@ -311,3 +311,29 @@ func (s *RouterService) RouteToMultiple(ctx context.Context, userIds []int64, ms
 
 	return nil
 }
+
+// SendRoomPushToUser 发送房间推送到用户
+func (s *RouterService) SendRoomPushToUser(ctx context.Context, accessNodeId string, userId int64, event string, roomId string, roomInfo []byte) error {
+	roomPushMsg := &proto.DownstreamMessage{
+		Payload: proto.DownstreamPayload{
+			RoomPush: &proto.RoomPush{
+				Event:    event, // ROOM_CREATED, USER_JOINED, USER_LEFT 等
+				RoomId:   roomId,
+				UserId:   userId,
+				RoomInfo: roomInfo, // JSON 编码的房间信息
+				ToUserId: userId,   // 发送给创建者
+			},
+		},
+	}
+
+	if err := s.publisher.PublishToAccess(accessNodeId, roomPushMsg); err != nil {
+		s.logger.Warn("Failed to send room push to user",
+			"userId", userId,
+			"accessNodeId", accessNodeId,
+			"event", event,
+			"error", err)
+		return err
+	}
+
+	return nil
+}

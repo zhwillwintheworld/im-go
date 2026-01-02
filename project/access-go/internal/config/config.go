@@ -24,6 +24,8 @@ type ServerConfig struct {
 	MaxConnections         int           `yaml:"max_connections"`
 	HeartbeatTimeout       time.Duration `yaml:"heartbeat_timeout"`        // 心跳超时时间，默认 90s
 	HeartbeatCheckInterval time.Duration `yaml:"heartbeat_check_interval"` // 检测间隔，默认 30s
+	WorkerPoolSize         int           `yaml:"worker_pool_size"`         // Worker Pool 大小，默认 1000
+	WorkerQueueSize        int           `yaml:"worker_queue_size"`        // Worker 任务队列大小，默认 10000
 }
 
 type QUICConfig struct {

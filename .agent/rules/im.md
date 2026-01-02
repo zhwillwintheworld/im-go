@@ -13,6 +13,8 @@ trigger: always_on
 9. 建表语句中每个字段必须要有字段描述 字符串字段设置不可为空且需要加默认值为空字符串
 10. 判断字符串字段是否为空不能使用 `column` = null 这个格式，需要使用`column` != ''
 11. web-go 返回的response对象中id字段必须为string，因为前端js会丢精度
-12. 校验代码不要生成编译产物
-13. go模块的代码被修改后要使用 scripts 目录下 check-go-quality.sh 脚本来检查质量 并解决错误与警告
-14. web模块的代码被修改后要使用 scripts 目录下的 check-go-quality.sh 脚本来检查质量 并处理错误与警告
+12. 在 access logic web 这三个模块中，绝对不允许阻塞消息处理，只需要打印日志即可，如果修改或生成的代码阻塞了消息处理，一定要通知我
+13. 校验代码不要生成编译产物
+14. go模块的代码被修改后要使用 scripts 目录下 check-go-quality.sh 脚本来检查质量 并解决错误与警告
+15. web模块的代码被修改后要使用 scripts 目录下的 check-go-quality.sh 脚本来检查质量 并处理错误与警告
+16. 所有对于 redis 的键值操作，都需要在 shared 模块的 redis 目录下的 keys.go 中定义方法定义 key
