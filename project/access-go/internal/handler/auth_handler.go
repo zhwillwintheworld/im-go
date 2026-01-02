@@ -3,15 +3,15 @@ package handler
 import (
 	"context"
 	"encoding/binary"
-	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
 
+	// Added by user instruction
+	// Added by user instruction
 	"github.com/quic-go/webtransport-go"
 	"sudooom.im.access/internal/connection"
 	im_protocol "sudooom.im.access/pkg/flatbuf/im/protocol"
-	sharedNats "sudooom.im.shared/nats"
 	"sudooom.im.shared/proto"
 )
 
@@ -111,10 +111,23 @@ func (h *Handler) handleAuth(ctx context.Context, conn *connection.Connection, s
 		Platform: platform.String(),
 	}
 	conn.BindSession(sessInfo)
-	h.connMgr.BindUser(conn.ID(), sessInfo.UserID)
 
-	// 注册用户位置到 Redis
-	if err := h.redisClient.RegisterUserLocation(ctx, sessInfo.UserID, sessInfo.Platform); err != nil {
+	// 绑定用户到连接管理器（按平台）
+	// 如果该用户在同一平台已有连接，会返回旧连接
+	oldConn := h.connMgr.BindUser(conn.ID(), sessInfo.UserID, sessInfo.Platform)
+	if oldConn != nil {
+		// 踢掉同平台的旧连接
+		h.logger.Info("Kicking old connection on same platform",
+			"user_id", sessInfo.UserID,
+			"platform", sessInfo.Platform,
+			"old_conn_id", oldConn.ID(),
+			"new_conn_id", conn.ID())
+		// 旧连接会在 server 的 defer 中自动清理
+		oldConn.Close()
+	}
+
+	// 注册用户位置到 Redis（包含 connId）
+	if err := h.redisClient.RegisterUserLocation(ctx, sessInfo.UserID, sessInfo.Platform, conn.ID()); err != nil {
 		h.logger.Error("Failed to register user location", "error", err)
 	}
 
@@ -128,22 +141,20 @@ func (h *Handler) handleAuth(ctx context.Context, conn *connection.Connection, s
 	return nil
 }
 
+// sendUserOnlineToLogic 发送用户上线事件到 Logic
 func (h *Handler) sendUserOnlineToLogic(conn *connection.Connection, sessInfo *connection.SessionInfo) {
-	msg := &proto.UpstreamMessage{
-		AccessNodeId: h.nodeID,
+	msg := h.buildUpstreamMessage(conn, proto.UpstreamPayload{
 		UserOnline: &proto.UserOnline{
 			UserId:   sessInfo.UserID,
 			ConnId:   conn.ID(),
 			DeviceId: sessInfo.DeviceID,
 			Platform: sessInfo.Platform,
 		},
+	})
+
+	if err := h.publishUpstream(msg); err != nil {
+		h.logger.Error("Failed to publish user online event", "error", err)
 	}
-	data, _ := json.Marshal(msg)
-	err := h.natsClient.Publish(sharedNats.SubjectLogicUpstream, data)
-	if err != nil {
-		return
-	}
-	// User online notification sent
 }
 
 // SendUserOfflineToLogic 发送用户下线通知
@@ -152,16 +163,19 @@ func (h *Handler) SendUserOfflineToLogic(conn *connection.Connection) {
 		return
 	}
 
+	// 注意：这里不能使用 buildUpstreamMessage，因为连接可能已经不存在了
+	// 所以手动构建，只填充必需的字段
 	msg := &proto.UpstreamMessage{
 		AccessNodeId: h.nodeID,
-		UserOffline: &proto.UserOffline{
-			UserId: conn.UserID(),
-			ConnId: conn.ID(),
+		Payload: proto.UpstreamPayload{
+			UserOffline: &proto.UserOffline{
+				UserId: conn.UserID(),
+				ConnId: conn.ID(),
+			},
 		},
 	}
-	data, _ := json.Marshal(msg)
-	err := h.natsClient.Publish(sharedNats.SubjectLogicUpstream, data)
-	if err != nil {
-		return
+
+	if err := h.publishUpstream(msg); err != nil {
+		h.logger.Error("Failed to publish user offline event", "error", err)
 	}
 }

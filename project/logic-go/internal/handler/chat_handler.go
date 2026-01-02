@@ -37,7 +37,7 @@ func NewChatHandler(
 }
 
 // Handle 处理聊天消息
-func (h *ChatHandler) Handle(ctx context.Context, msg *proto.UserMessage, accessNodeId string, platform string) {
+func (h *ChatHandler) Handle(ctx context.Context, msg *proto.UserMessage, accessNodeId string, connId int64, platform string) {
 	// 1. 异步批量消息存储（立即返回 serverMsgId）
 	serverMsgId, err := h.messageBatcher.SaveMessage(msg)
 	if err != nil {
@@ -45,8 +45,8 @@ func (h *ChatHandler) Handle(ctx context.Context, msg *proto.UserMessage, access
 		return
 	}
 
-	// 2. 发送 ACK 给发送者（直接回复到消息来源的 access 节点）
-	if err := h.routerService.SendAckToUserDirect(ctx, accessNodeId, msg.FromUserId, msg.ClientMsgId, serverMsgId); err != nil {
+	// 直接回 ACK 给发送者（使用 connId 避免查询 Redis）
+	if err := h.routerService.SendAckToUserDirect(ctx, accessNodeId, connId, msg.FromUserId, msg.ClientMsgId, serverMsgId); err != nil {
 		h.logger.Error("Failed to send ack", "error", err)
 	}
 

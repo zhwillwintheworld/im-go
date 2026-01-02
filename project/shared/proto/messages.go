@@ -4,8 +4,14 @@ package proto
 
 // UpstreamMessage 上行消息封装
 type UpstreamMessage struct {
-	AccessNodeId     string            `json:"AccessNodeId"`
-	Platform         string            `json:"Platform,omitempty"` // 发送消息的平台
+	AccessNodeId string          `json:"AccessNodeId"`
+	ConnId       int64           `json:"ConnId,string,omitempty"` // 连接 ID（用于 Logic 回 ACK）
+	Platform     string          `json:"Platform,omitempty"`      // 发送消息的平台
+	Payload      UpstreamPayload `json:"Payload"`
+}
+
+// UpstreamPayload 上行消息载荷
+type UpstreamPayload struct {
 	UserMessage      *UserMessage      `json:"UserMessage,omitempty"`
 	UserOnline       *UserOnline       `json:"UserOnline,omitempty"`
 	UserOffline      *UserOffline      `json:"UserOffline,omitempty"`
@@ -71,7 +77,10 @@ type GameRequest struct {
 
 // DownstreamMessage 下行消息封装
 type DownstreamMessage struct {
-	Payload DownstreamPayload `json:"Payload"`
+	UserId   int64             `json:"UserId,string,omitempty"` // 目标用户 ID（Access 路由必需）
+	ConnId   int64             `json:"ConnId,string,omitempty"` // 目标连接 ID（优先使用）
+	Platform string            `json:"Platform,omitempty"`      // 目标平台（ConnId 为空时使用）
+	Payload  DownstreamPayload `json:"Payload"`
 }
 
 // DownstreamPayload 下行消息载荷
@@ -91,6 +100,8 @@ type PushMessage struct {
 	MsgType     int32  `json:"MsgType"`
 	Content     []byte `json:"Content"`
 	Timestamp   int64  `json:"Timestamp"`
+	Platform    string `json:"Platform,omitempty"`      // 目标平台（用于 Access 路由）
+	ConnId      int64  `json:"ConnId,string,omitempty"` // 目标连接 ID（用于 Access 直接路由）
 }
 
 // MessageAck 消息确认
@@ -99,6 +110,8 @@ type MessageAck struct {
 	ServerMsgId int64  `json:"ServerMsgId,string"`
 	ToUserId    int64  `json:"ToUserId,string"` // 接收 ACK 的用户 ID
 	Timestamp   int64  `json:"Timestamp"`
+	Platform    string `json:"Platform,omitempty"`      // 目标平台（发送消息的平台）
+	ConnId      int64  `json:"ConnId,string,omitempty"` // 目标连接 ID（用于 Access 直接路由）
 }
 
 // RoomPush 房间推送
@@ -108,6 +121,8 @@ type RoomPush struct {
 	UserId   int64  `json:"UserId,string,omitempty"`   // 触发事件的用户ID
 	RoomInfo []byte `json:"RoomInfo"`                  // FlatBuffers RoomInfo 数据
 	ToUserId int64  `json:"ToUserId,string,omitempty"` // 目标用户ID（可选，为空则广播给房间所有人）
+	Platform string `json:"Platform,omitempty"`        // 目标平台（可选）
+	ConnId   int64  `json:"ConnId,string,omitempty"`   // 目标连接 ID（可选）
 }
 
 // GamePush 游戏推送
@@ -116,4 +131,6 @@ type GamePush struct {
 	GameType    string `json:"GameType"`
 	GamePayload []byte `json:"GamePayload"`               // FlatBuffers 游戏推送数据
 	ToUserId    int64  `json:"ToUserId,string,omitempty"` // 目标用户ID（可选，为空则广播）
+	Platform    string `json:"Platform,omitempty"`        // 目标平台（可选）
+	ConnId      int64  `json:"ConnId,string,omitempty"`   // 目标连接 ID（可选）
 }

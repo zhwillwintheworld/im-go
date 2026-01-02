@@ -59,17 +59,32 @@ func NewClient(cfg config.RedisConfig, nodeID string) *Client {
 }
 
 // RegisterUserLocation 注册用户位置
-// Key: im:user:location:{userId}:{platform}, Value: accessId
+// Key: im:user:location:{userId}:{platform}, Value: JSON{accessNodeId, connId}
 // 一个 platform 只维持一个连接，新连接会覆盖旧连接
-func (c *Client) RegisterUserLocation(ctx context.Context, userId int64, platform string) error {
+func (c *Client) RegisterUserLocation(ctx context.Context, userId int64, platform string, connId int64) error {
 	key := sharedRedis.BuildUserLocationKeyWithPlatform(userId, platform)
 
-	err := c.client.Set(ctx, key, c.nodeID, locationTTL).Err()
+	// 存储完整的路由信息
+	location := UserLocation{
+		UserId:       userId,
+		AccessNodeId: c.nodeID,
+		ConnId:       connId,
+		Platform:     platform,
+		LoginTime:    time.Now(),
+	}
+
+	data, err := json.Marshal(location)
+	if err != nil {
+		return fmt.Errorf("failed to marshal location: %w", err)
+	}
+
+	err = c.client.Set(ctx, key, data, locationTTL).Err()
 
 	if err == nil {
 		c.logger.Debug("Registered user location",
 			"userId", userId,
 			"platform", platform,
+			"connId", connId,
 			"nodeId", c.nodeID)
 	}
 
@@ -95,14 +110,24 @@ func (c *Client) RefreshUserLocation(ctx context.Context, userId int64, platform
 	return c.client.Expire(ctx, key, locationTTL).Err()
 }
 
-// GetUserLocation 获取用户某平台的位置（返回 access 实例 ID）
-func (c *Client) GetUserLocation(ctx context.Context, userId int64, platform string) (string, error) {
+// GetUserLocation 获取用户某平台的位置（返回完整路由信息）
+func (c *Client) GetUserLocation(ctx context.Context, userId int64, platform string) (*UserLocation, error) {
 	key := sharedRedis.BuildUserLocationKeyWithPlatform(userId, platform)
-	nodeId, err := c.client.Get(ctx, key).Result()
+	data, err := c.client.Get(ctx, key).Result()
 	if errors.Is(err, redis.Nil) {
-		return "", nil
+		return nil, nil // 用户不在线
 	}
-	return nodeId, err
+	if err != nil {
+		return nil, err
+	}
+
+	// 解析 JSON
+	var location UserLocation
+	if err := json.Unmarshal([]byte(data), &location); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal location: %w", err)
+	}
+
+	return &location, nil
 }
 
 // GetUserInfoByToken 从 Redis 获取 token 对应的用户信息

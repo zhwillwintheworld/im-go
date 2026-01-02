@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 	"sync"
 	"time"
@@ -57,15 +58,21 @@ func (s *RouterService) GetUserLocations(ctx context.Context, userId int64) ([]s
 		if result == nil {
 			continue
 		}
-		accessNodeId, ok := result.(string)
-		if !ok || accessNodeId == "" {
+		jsonStr, ok := result.(string)
+		if !ok || jsonStr == "" {
 			continue
 		}
-		locations = append(locations, sharedModel.UserLocation{
-			UserId:       userId,
-			AccessNodeId: accessNodeId,
-			Platform:     AllPlatforms[i],
-		})
+
+		// 解析 JSON 格式的 UserLocation
+		var loc sharedModel.UserLocation
+		if err := json.Unmarshal([]byte(jsonStr), &loc); err != nil {
+			s.logger.Warn("Failed to unmarshal user location",
+				"userId", userId,
+				"platform", AllPlatforms[i],
+				"error", err)
+			continue
+		}
+		locations = append(locations, loc)
 	}
 
 	return locations, nil
@@ -93,15 +100,21 @@ func (s *RouterService) GetUserLocationsByPlatforms(ctx context.Context, userId 
 		if result == nil {
 			continue
 		}
-		accessNodeId, ok := result.(string)
-		if !ok || accessNodeId == "" {
+		jsonStr, ok := result.(string)
+		if !ok || jsonStr == "" {
 			continue
 		}
-		locations = append(locations, sharedModel.UserLocation{
-			UserId:       userId,
-			AccessNodeId: accessNodeId,
-			Platform:     platforms[i],
-		})
+
+		// 解析 JSON 格式的 UserLocation
+		var loc sharedModel.UserLocation
+		if err := json.Unmarshal([]byte(jsonStr), &loc); err != nil {
+			s.logger.Warn("Failed to unmarshal user location",
+				"userId", userId,
+				"platform", platforms[i],
+				"error", err)
+			continue
+		}
+		locations = append(locations, loc)
 	}
 
 	return locations, nil
@@ -122,6 +135,7 @@ func (s *RouterService) SendAckToUser(ctx context.Context, userId int64, clientM
 					ServerMsgId: serverMsgId,
 					ToUserId:    userId,
 					Timestamp:   time.Now().UnixMilli(),
+					Platform:    loc.Platform, // 填充平台信息
 				},
 			},
 		}
@@ -133,8 +147,8 @@ func (s *RouterService) SendAckToUser(ctx context.Context, userId int64, clientM
 	return nil
 }
 
-// SendAckToUserDirect 直接发送 ACK 到指定的 Access 节点（用于回复发送者，避免 Redis 查询）
-func (s *RouterService) SendAckToUserDirect(ctx context.Context, accessNodeId string, userId int64, clientMsgId string, serverMsgId int64) error {
+// SendAckToUserDirect 直接发送 ACK 到指定的 Access 节点（用于回复发送者，使用 connId 避免查询）
+func (s *RouterService) SendAckToUserDirect(ctx context.Context, accessNodeId string, connId int64, userId int64, clientMsgId string, serverMsgId int64) error {
 	ackMsg := &proto.DownstreamMessage{
 		Payload: proto.DownstreamPayload{
 			MessageAck: &proto.MessageAck{
@@ -142,6 +156,7 @@ func (s *RouterService) SendAckToUserDirect(ctx context.Context, accessNodeId st
 				ServerMsgId: serverMsgId,
 				ToUserId:    userId,
 				Timestamp:   time.Now().UnixMilli(),
+				ConnId:      connId, // 填充 connId，Access 直接路由
 			},
 		},
 	}
@@ -186,6 +201,7 @@ func (s *RouterService) SyncToSenderOtherDevices(ctx context.Context, excludePla
 					MsgType:     msg.MsgType,
 					Content:     msg.Content,
 					Timestamp:   time.Now().UnixMilli(),
+					Platform:    loc.Platform, // 填充平台信息
 				},
 			},
 		}
@@ -225,6 +241,8 @@ func (s *RouterService) RouteMessage(ctx context.Context, userId int64, msg *pro
 		wg.Add(1)
 		go func(nodeId string) {
 			defer wg.Done()
+			// 注意：这里推送给同一个 Access 节点上的所有平台连接
+			// Access 会根据 userId 推送到该节点上的所有平台
 			downstreamMsg := &proto.DownstreamMessage{
 				Payload: proto.DownstreamPayload{
 					PushMessage: &proto.PushMessage{
@@ -235,6 +253,7 @@ func (s *RouterService) RouteMessage(ctx context.Context, userId int64, msg *pro
 						MsgType:     msg.MsgType,
 						Content:     msg.Content,
 						Timestamp:   time.Now().UnixMilli(),
+						// Platform 为空，Access 会推送给该用户在该节点的所有平台
 					},
 				},
 			}

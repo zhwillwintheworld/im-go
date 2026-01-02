@@ -13,7 +13,7 @@ import (
 
 // MessageHandler 消息处理器接口
 type MessageHandler interface {
-	HandleUserMessage(ctx context.Context, msg *proto.UserMessage, accessNodeId string, platform string)
+	HandleUserMessage(ctx context.Context, msg *proto.UserMessage, accessNodeId string, connId int64, platform string)
 	HandleUserOnline(ctx context.Context, event *proto.UserOnline, accessNodeId string)
 	HandleUserOffline(ctx context.Context, event *proto.UserOffline, accessNodeId string)
 	HandleConversationRead(ctx context.Context, event *proto.ConversationRead)
@@ -126,18 +126,18 @@ func (s *MessageSubscriber) handleUpstreamMessage(ctx context.Context, data []by
 	platform := message.Platform
 
 	switch {
-	case message.UserMessage != nil:
-		s.handler.HandleUserMessage(ctx, message.UserMessage, accessNodeId, platform)
-	case message.UserOnline != nil:
-		s.handler.HandleUserOnline(ctx, message.UserOnline, accessNodeId)
-	case message.UserOffline != nil:
-		s.handler.HandleUserOffline(ctx, message.UserOffline, accessNodeId)
-	case message.ConversationRead != nil:
-		s.handler.HandleConversationRead(ctx, message.ConversationRead)
-	case message.RoomRequest != nil:
-		s.handler.HandleRoomRequest(ctx, message.RoomRequest, accessNodeId)
-	case message.GameRequest != nil:
-		s.handler.HandleGameRequest(ctx, message.GameRequest, accessNodeId)
+	case message.Payload.UserMessage != nil:
+		s.handler.HandleUserMessage(ctx, message.Payload.UserMessage, accessNodeId, message.ConnId, platform)
+	case message.Payload.UserOnline != nil:
+		s.handler.HandleUserOnline(ctx, message.Payload.UserOnline, accessNodeId)
+	case message.Payload.UserOffline != nil:
+		s.handler.HandleUserOffline(ctx, message.Payload.UserOffline, accessNodeId)
+	case message.Payload.ConversationRead != nil:
+		s.handler.HandleConversationRead(ctx, message.Payload.ConversationRead)
+	case message.Payload.RoomRequest != nil:
+		s.handler.HandleRoomRequest(ctx, message.Payload.RoomRequest, accessNodeId)
+	case message.Payload.GameRequest != nil:
+		s.handler.HandleGameRequest(ctx, message.Payload.GameRequest, accessNodeId)
 	}
 }
 

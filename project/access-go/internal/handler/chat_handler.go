@@ -2,13 +2,11 @@ package handler
 
 import (
 	"context"
-	"encoding/json"
 	"strconv"
 
 	"github.com/quic-go/webtransport-go"
 	"sudooom.im.access/internal/connection"
 	im_protocol "sudooom.im.access/pkg/flatbuf/im/protocol"
-	sharedNats "sudooom.im.shared/nats"
 	"sudooom.im.shared/proto"
 )
 
@@ -24,30 +22,26 @@ func (h *Handler) handleChatSend(_ctx context.Context, conn *connection.Connecti
 	targetId, _ := strconv.ParseInt(targetIdStr, 10, 64)
 
 	// 封装上行消息到 Logic
-	msg := &proto.UpstreamMessage{
-		AccessNodeId: h.nodeID,
-		Platform:     conn.Platform(), // 发送消息的平台
+	msg := h.buildUpstreamMessage(conn, proto.UpstreamPayload{
 		UserMessage: &proto.UserMessage{
 			FromUserId:  conn.UserID(),
 			ClientMsgId: reqID,
 			MsgType:     int32(chatReq.MsgType()),
 			Content:     chatReq.Content(),
-			Timestamp:   0, // Logic 层会处理
+			Timestamp:   0,
 		},
-	}
+	})
 
 	// 根据 ChatType 设置目标
 	switch chatReq.ChatType() {
 	case im_protocol.ChatTypePRIVATE:
-		msg.UserMessage.ToUserId = targetId
+		msg.Payload.UserMessage.ToUserId = targetId
 	case im_protocol.ChatTypeGROUP:
-		msg.UserMessage.ToGroupId = targetId
+		msg.Payload.UserMessage.ToGroupId = targetId
 	}
 
 	// Forward to logic
-
-	data, _ := json.Marshal(msg)
-	if err := h.natsClient.Publish(sharedNats.SubjectLogicUpstream, data); err != nil {
+	if err := h.publishUpstream(msg); err != nil {
 		h.logger.Error("Failed to publish to NATS", "error", err)
 		return
 	}
@@ -71,18 +65,16 @@ func (h *Handler) handleConversationRead(conn *connection.Connection, stream *we
 	lastReadMsgId, _ := strconv.ParseInt(lastReadMsgIdStr, 10, 64)
 
 	// 封装上行消息到 Logic
-	msg := &proto.UpstreamMessage{
-		AccessNodeId: h.nodeID,
+	msg := h.buildUpstreamMessage(conn, proto.UpstreamPayload{
 		ConversationRead: &proto.ConversationRead{
 			UserId:        conn.UserID(),
 			PeerID:        peerId,
 			GroupID:       groupId,
 			LastReadMsgID: lastReadMsgId,
 		},
-	}
+	})
 
-	data, _ := json.Marshal(msg)
-	if err := h.natsClient.Publish(sharedNats.SubjectLogicUpstream, data); err != nil {
+	if err := h.publishUpstream(msg); err != nil {
 		h.logger.Error("Failed to publish conversation read to NATS", "error", err)
 		h.sendClientResponse(stream, reqID, im_protocol.ErrorCodeUNKNOWN_ERROR, "internal error", im_protocol.ResponsePayloadNONE, nil)
 		return

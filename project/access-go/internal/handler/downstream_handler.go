@@ -7,6 +7,7 @@ import (
 	"time"
 
 	flatbuffers "github.com/google/flatbuffers/go"
+	"sudooom.im.access/internal/connection"
 	im_protocol "sudooom.im.access/pkg/flatbuf/im/protocol"
 	"sudooom.im.shared/proto"
 )
@@ -22,22 +23,49 @@ func (h *Handler) HandleDownstream(data []byte) {
 		return
 	}
 
-	if msg.Payload.PushMessage != nil {
-		h.handlePushMessage(msg.Payload.PushMessage)
-	}
-
-	if msg.Payload.MessageAck != nil {
-		h.handleMessageAck(msg.Payload.MessageAck)
-	}
-}
-
-func (h *Handler) handlePushMessage(pushMsg *proto.PushMessage) {
-	conns := h.connMgr.GetByUserID(pushMsg.ToUserId)
-	if len(conns) == 0 {
-		// User offline, push dropped
+	// 优先使用 ConnId 直接路由
+	if msg.ConnId > 0 {
+		conn := h.connMgr.Get(msg.ConnId)
+		if conn == nil {
+			h.logger.Warn("Connection not found for downstream message", "connId", msg.ConnId)
+			return
+		}
+		h.sendToConnection(conn, &msg)
 		return
 	}
 
+	// UserId 是必需的
+	if msg.UserId == 0 {
+		h.logger.Warn("No userId found in downstream message")
+		return
+	}
+
+	// 使用 Platform 路由到指定平台
+	if msg.Platform != "" {
+		conn := h.connMgr.GetByUserIDAndPlatform(msg.UserId, msg.Platform)
+		if conn != nil {
+			h.sendToConnection(conn, &msg)
+		}
+		return
+	}
+
+	// 没有 Platform，推送到所有平台
+	conns := h.connMgr.GetByUserID(msg.UserId)
+	for _, conn := range conns {
+		h.sendToConnection(conn, &msg)
+	}
+}
+
+// sendToConnection 发送消息到指定连接
+func (h *Handler) sendToConnection(conn *connection.Connection, msg *proto.DownstreamMessage) {
+	if msg.Payload.PushMessage != nil {
+		h.handlePushMessage(conn, msg.Payload.PushMessage)
+	} else if msg.Payload.MessageAck != nil {
+		h.handleMessageAck(conn, msg.Payload.MessageAck)
+	}
+}
+
+func (h *Handler) handlePushMessage(conn *connection.Connection, pushMsg *proto.PushMessage) {
 	// 使用 FlatBuffers 构建 ChatPush
 	builder := flatbuffers.NewBuilder(512)
 
@@ -60,25 +88,14 @@ func (h *Handler) handlePushMessage(pushMsg *proto.PushMessage) {
 	payload := builder.FinishedBytes()
 
 	// 构建 ClientResponse 并发送
-	for _, conn := range conns {
-		respFrame := h.buildClientResponseFrame("", im_protocol.ErrorCodeSUCCESS, "", im_protocol.ResponsePayloadChatPush, payload)
-		err := conn.Send(respFrame)
-		if err != nil {
-			h.logger.Error("Failed to send push message to user", "userId", conn.UserID(), "error", err)
-			continue // 继续发送给其他连接
-		}
+	respFrame := h.buildClientResponseFrame("", im_protocol.ErrorCodeSUCCESS, "", im_protocol.ResponsePayloadChatPush, payload)
+	err := conn.Send(respFrame)
+	if err != nil {
+		h.logger.Error("Failed to send push message to user", "userId", conn.UserID(), "error", err)
 	}
-
-	// Message pushed
 }
 
-func (h *Handler) handleMessageAck(ack *proto.MessageAck) {
-	conns := h.connMgr.GetByUserID(ack.ToUserId)
-	if len(conns) == 0 {
-		// User offline, ACK dropped
-		return
-	}
-
+func (h *Handler) handleMessageAck(conn *connection.Connection, ack *proto.MessageAck) {
 	// 使用 FlatBuffers 构建 ChatSendAck
 	builder := flatbuffers.NewBuilder(128)
 
@@ -94,15 +111,10 @@ func (h *Handler) handleMessageAck(ack *proto.MessageAck) {
 
 	// 构建 ClientResponse 并发送
 	// reqId 使用 ClientMsgId，让客户端可以关联请求
-	for _, conn := range conns {
-		respFrame := h.buildClientResponseFrame(ack.ClientMsgId, im_protocol.ErrorCodeSUCCESS, "", im_protocol.ResponsePayloadChatSendAck, payload)
-		if err := conn.Send(respFrame); err != nil {
-			h.logger.Error("Failed to send ACK to user", "userId", conn.UserID(), "error", err)
-			continue // 继续发送给其他连接
-		}
+	respFrame := h.buildClientResponseFrame(ack.ClientMsgId, im_protocol.ErrorCodeSUCCESS, "", im_protocol.ResponsePayloadChatSendAck, payload)
+	if err := conn.Send(respFrame); err != nil {
+		h.logger.Error("Failed to send ACK to user", "userId", conn.UserID(), "error", err)
 	}
-
-	// ACK sent
 }
 
 // buildClientResponseFrame 构建完整的 ClientResponse 帧（用于 conn.Send 推送）

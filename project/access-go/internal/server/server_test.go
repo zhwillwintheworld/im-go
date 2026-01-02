@@ -136,11 +136,11 @@ func TestWebTransportAuth(t *testing.T) {
 	if err != nil {
 		t.Fatalf("获取用户位置失败: %v", err)
 	}
-	if location == "" {
+	if location == nil {
 		t.Fatalf("用户位置未在 Redis 中注册")
 	}
 
-	t.Logf("用户位置已注册: %s", location)
+	t.Logf("用户位置已注册: accessNodeId=%s, connId=%d", location.AccessNodeId, location.ConnId)
 
 	// 清理：移除测试数据
 	cleanupTestData(ctx, t, redisClient, testUserID, testPlatform, testToken)

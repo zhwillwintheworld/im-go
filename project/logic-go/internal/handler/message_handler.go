@@ -36,8 +36,8 @@ func NewMessageHandler(
 }
 
 // HandleUserMessage 处理用户消息
-func (h *MessageHandler) HandleUserMessage(ctx context.Context, msg *proto.UserMessage, accessNodeId string, platform string) {
-	h.chatHandler.Handle(ctx, msg, accessNodeId, platform)
+func (h *MessageHandler) HandleUserMessage(ctx context.Context, msg *proto.UserMessage, accessNodeId string, connId int64, platform string) {
+	h.chatHandler.Handle(ctx, msg, accessNodeId, connId, platform)
 }
 
 // HandleConversationRead 处理会话已读
