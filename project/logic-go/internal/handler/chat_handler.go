@@ -46,7 +46,7 @@ func (h *ChatHandler) Handle(ctx context.Context, msg *proto.UserMessage, access
 	}
 
 	// 直接回 ACK 给发送者（使用 connId 避免查询 Redis）
-	if err := h.routerService.SendAckToUserDirect(ctx, accessNodeId, connId, msg.FromUserId, msg.ClientMsgId, serverMsgId); err != nil {
+	if err := h.routerService.SendAckToUserDirect(accessNodeId, connId, msg.FromUserId, msg.ClientMsgId, serverMsgId); err != nil {
 		h.logger.Error("Failed to send ack", "error", err)
 	}
 

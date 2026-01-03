@@ -24,7 +24,7 @@ func NewGameHandler(redisClient *redis.Client) *GameHandler {
 }
 
 // Handle 处理游戏请求
-func (h *GameHandler) Handle(ctx context.Context, req *proto.GameRequest, accessNodeId string) error {
+func (h *GameHandler) Handle(ctx context.Context, req *proto.GameRequest, accessNodeId string, connId int64, platform string) error {
 	h.logger.Info("Game request received",
 		"userId", req.UserId,
 		"reqId", req.ReqId,
@@ -35,7 +35,7 @@ func (h *GameHandler) Handle(ctx context.Context, req *proto.GameRequest, access
 	// 根据游戏类型分发
 	switch req.GameType {
 	case "HT_MAHJONG":
-		return h.handleMahjongGame(ctx, req, accessNodeId)
+		return h.handleMahjongGame(ctx, req, accessNodeId, connId, platform)
 	default:
 		h.logger.Warn("Unknown game type", "gameType", req.GameType)
 		return fmt.Errorf("unknown game type: %s", req.GameType)
@@ -43,7 +43,7 @@ func (h *GameHandler) Handle(ctx context.Context, req *proto.GameRequest, access
 }
 
 // handleMahjongGame 处理麻将游戏请求
-func (h *GameHandler) handleMahjongGame(ctx context.Context, req *proto.GameRequest, accessNodeId string) error {
+func (h *GameHandler) handleMahjongGame(ctx context.Context, req *proto.GameRequest, accessNodeId string, connId int64, platform string) error {
 	h.logger.Debug("Handling mahjong game request",
 		"userId", req.UserId,
 		"roomId", req.RoomId,

@@ -2,28 +2,32 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"log/slog"
 
 	"github.com/redis/go-redis/v9"
 	"sudooom.im.logic/internal/service"
+	"sudooom.im.logic/internal/service/room"
+	"sudooom.im.shared/model"
 	"sudooom.im.shared/proto"
 )
 
 // RoomActionHandler 房间操作处理器接口
 type RoomActionHandler interface {
-	Handle(ctx context.Context, req *proto.RoomRequest, accessNodeId string) error
+	Handle(ctx context.Context, req *proto.RoomRequest, accessNodeId string, connId int64, platform string) error
 }
 
 // RoomHandler 房间请求处理器
 type RoomHandler struct {
 	actionHandlers map[string]RoomActionHandler
 	redisClient    *redis.Client
-	roomService    *service.RoomService
+	roomService    *room.RoomService
 	logger         *slog.Logger
 }
 
 // NewRoomHandler 创建房间请求处理器
-func NewRoomHandler(redisClient *redis.Client, roomService *service.RoomService) *RoomHandler {
+func NewRoomHandler(redisClient *redis.Client, roomService *room.RoomService) *RoomHandler {
 	h := &RoomHandler{
 		actionHandlers: make(map[string]RoomActionHandler),
 		redisClient:    redisClient,
@@ -40,7 +44,12 @@ func NewRoomHandler(redisClient *redis.Client, roomService *service.RoomService)
 // registerActionHandlers 注册各种房间操作处理器
 func (h *RoomHandler) registerActionHandlers() {
 	h.actionHandlers["CREATE"] = &CreateRoomHandler{roomService: h.roomService, logger: h.logger}
-	h.actionHandlers["JOIN"] = &JoinRoomHandler{logger: h.logger}
+	h.actionHandlers["JOIN"] = &JoinRoomHandler{
+		redisClient:   h.redisClient,
+		roomService:   h.roomService,
+		routerService: h.roomService.GetRouterService(),
+		logger:        h.logger,
+	}
 	h.actionHandlers["LEAVE"] = &LeaveRoomHandler{logger: h.logger}
 	h.actionHandlers["READY"] = &ReadyRoomHandler{logger: h.logger}
 	h.actionHandlers["CHANGE_SEAT"] = &ChangeSeatHandler{logger: h.logger}
@@ -48,18 +57,16 @@ func (h *RoomHandler) registerActionHandlers() {
 }
 
 // Handle 处理房间请求
-func (h *RoomHandler) Handle(ctx context.Context, req *proto.RoomRequest, accessNodeId string) error {
+func (h *RoomHandler) Handle(ctx context.Context, req *proto.RoomRequest, accessNodeId string, connId int64, platform string) error {
 	handler, ok := h.actionHandlers[req.Action]
 	if !ok {
 		// 记录警告日志
 		h.logger.Warn("Unknown room action", "action", req.Action, "userId", req.UserId, "reqId", req.ReqId)
-		// TODO: 异步发送错误响应给客户端
-		// 这里不返回错误，避免阻塞消息处理流程
 		// 后续可以通过 RouterService 发送 RoomPush 错误事件给客户端
 		return nil
 	}
 
-	return handler.Handle(ctx, req, accessNodeId)
+	return handler.Handle(ctx, req, accessNodeId, connId, platform)
 }
 
 // ============================================================================
@@ -68,11 +75,11 @@ func (h *RoomHandler) Handle(ctx context.Context, req *proto.RoomRequest, access
 
 // CreateRoomHandler 创建房间
 type CreateRoomHandler struct {
-	roomService *service.RoomService
+	roomService *room.RoomService
 	logger      *slog.Logger
 }
 
-func (h *CreateRoomHandler) Handle(ctx context.Context, req *proto.RoomRequest, accessNodeId string) error {
+func (h *CreateRoomHandler) Handle(ctx context.Context, req *proto.RoomRequest, accessNodeId string, connId int64, platform string) error {
 	h.logger.Info("Create room",
 		"userId", req.UserId,
 		"reqId", req.ReqId,
@@ -81,40 +88,106 @@ func (h *CreateRoomHandler) Handle(ctx context.Context, req *proto.RoomRequest, 
 		"accessNodeId", accessNodeId)
 
 	// 1. 创建房间
-	room, err := h.roomService.CreateRoom(ctx, req, accessNodeId)
+	roomCreate, err := h.roomService.CreateRoom(ctx, req, accessNodeId)
 	if err != nil {
 		h.logger.Error("Failed to create room", "error", err, "userId", req.UserId)
-		// TODO: 发送错误响应给客户端
+		// TODO: createRoom
 		return nil // 不阻塞流程
 	}
 
 	// 2. 发送房间创建成功响应
-	if err := h.roomService.SendRoomCreatedResponse(ctx, room, accessNodeId); err != nil {
-		h.logger.Error("Failed to send room created response", "error", err, "roomId", room.RoomID)
+	if err := h.roomService.SendRoomCreatedResponse(ctx, roomCreate, accessNodeId, connId, platform); err != nil {
+		h.logger.Error("Failed to send room created response", "error", err, "roomId", roomCreate.RoomID)
 	}
 
 	h.logger.Info("Room created and response sent",
-		"roomId", room.RoomID,
-		"roomName", room.RoomName,
+		"roomId", roomCreate.RoomID,
+		"roomName", roomCreate.RoomName,
 		"userId", req.UserId)
-
 	return nil
 }
 
 // JoinRoomHandler 加入房间
 type JoinRoomHandler struct {
-	logger *slog.Logger
+	redisClient   *redis.Client
+	roomService   *room.RoomService
+	routerService *service.RouterService
+	logger        *slog.Logger
 }
 
-func (h *JoinRoomHandler) Handle(ctx context.Context, req *proto.RoomRequest, accessNodeId string) error {
+func (h *JoinRoomHandler) Handle(ctx context.Context, req *proto.RoomRequest, accessNodeId string, connId int64, platform string) error {
 	h.logger.Info("Join room",
 		"userId", req.UserId,
 		"reqId", req.ReqId,
 		"roomId", req.RoomId,
 		"seatIndex", req.SeatIndex,
 		"accessNodeId", accessNodeId)
-	// TODO: 实现加入房间逻辑
+
+	// 调用 Service 层处理业务逻辑
+	_, err := h.roomService.JoinRoom(ctx, room.JoinRoomParams{
+		UserId:       req.UserId,
+		RoomId:       req.RoomId,
+		Password:     req.RoomConfig, // RoomConfig 用于传递密码
+		SeatIndex:    req.SeatIndex,
+		AccessNodeId: accessNodeId,
+		ConnId:       connId,
+		Platform:     platform,
+	})
+
+	if err != nil {
+		h.logger.Warn("Failed to join room", "error", err, "userId", req.UserId, "roomId", req.RoomId)
+		h.sendErrorResponse(ctx, accessNodeId, connId, platform, req.UserId, req.RoomId, err)
+		return nil // 不阻塞消息处理
+	}
+
 	return nil
+}
+
+// sendErrorResponse 发送错误响应
+func (h *JoinRoomHandler) sendErrorResponse(ctx context.Context, accessNodeId string, connId int64, platform string, userId int64, roomId string, err error) {
+	// 将 error 映射到错误码和消息
+	errorCode, errorMsg := h.mapErrorToCodeAndMsg(err)
+
+	errorInfo := map[string]string{
+		"error_code": errorCode,
+		"error_msg":  errorMsg,
+	}
+	errorData, _ := json.Marshal(errorInfo)
+
+	// 构造 sender location
+	senderLoc := model.UserLocation{
+		AccessNodeId: accessNodeId,
+		ConnId:       connId,
+		Platform:     platform,
+		UserId:       userId,
+	}
+
+	// 发送给自己（只需快速响应，错误不需要多端同步）
+	if err := h.routerService.SendRoomPushToSelf(senderLoc, "JOIN_ROOM_ERROR", roomId, errorData); err != nil {
+		h.logger.Warn("Failed to send error response", "error", err, "userId", userId)
+	}
+}
+
+// mapErrorToCodeAndMsg 将 error 映射到错误码和错误消息
+func (h *JoinRoomHandler) mapErrorToCodeAndMsg(err error) (string, string) {
+	switch {
+	case errors.Is(err, room.ErrRoomNotFound):
+		return "ROOM_NOT_FOUND", "房间已解散"
+	case errors.Is(err, room.ErrRoomFull):
+		return "ROOM_FULL", "房间已满"
+	case errors.Is(err, room.ErrRoomBusy):
+		return "ROOM_BUSY", "房间正在处理其他操作"
+	case errors.Is(err, room.ErrInvalidPassword):
+		return "INVALID_PASSWORD", "房间密码错误"
+	case errors.Is(err, room.ErrGameStarted):
+		return "GAME_STARTED", "游戏已开始"
+	case errors.Is(err, room.ErrAlreadyInRoom):
+		return "ALREADY_IN_ROOM", "您已在房间中"
+	case errors.Is(err, room.ErrLockFailed):
+		return "LOCK_FAILED", "无法获取房间锁"
+	default:
+		return "JOIN_FAILED", "加入房间失败"
+	}
 }
 
 // LeaveRoomHandler 离开房间
@@ -122,7 +195,7 @@ type LeaveRoomHandler struct {
 	logger *slog.Logger
 }
 
-func (h *LeaveRoomHandler) Handle(ctx context.Context, req *proto.RoomRequest, accessNodeId string) error {
+func (h *LeaveRoomHandler) Handle(ctx context.Context, req *proto.RoomRequest, accessNodeId string, connId int64, platform string) error {
 	h.logger.Info("Leave room",
 		"userId", req.UserId,
 		"reqId", req.ReqId,
@@ -137,7 +210,7 @@ type ReadyRoomHandler struct {
 	logger *slog.Logger
 }
 
-func (h *ReadyRoomHandler) Handle(ctx context.Context, req *proto.RoomRequest, accessNodeId string) error {
+func (h *ReadyRoomHandler) Handle(ctx context.Context, req *proto.RoomRequest, accessNodeId string, connId int64, platform string) error {
 	h.logger.Info("Ready in room",
 		"userId", req.UserId,
 		"reqId", req.ReqId,
@@ -152,7 +225,7 @@ type ChangeSeatHandler struct {
 	logger *slog.Logger
 }
 
-func (h *ChangeSeatHandler) Handle(ctx context.Context, req *proto.RoomRequest, accessNodeId string) error {
+func (h *ChangeSeatHandler) Handle(ctx context.Context, req *proto.RoomRequest, accessNodeId string, connId int64, platform string) error {
 	h.logger.Info("Change seat",
 		"userId", req.UserId,
 		"reqId", req.ReqId,
@@ -168,7 +241,7 @@ type StartGameHandler struct {
 	logger *slog.Logger
 }
 
-func (h *StartGameHandler) Handle(ctx context.Context, req *proto.RoomRequest, accessNodeId string) error {
+func (h *StartGameHandler) Handle(ctx context.Context, req *proto.RoomRequest, accessNodeId string, connId int64, platform string) error {
 	h.logger.Info("Start game",
 		"userId", req.UserId,
 		"reqId", req.ReqId,

@@ -5,6 +5,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 	"sudooom.im.logic/internal/service"
+	"sudooom.im.logic/internal/service/room"
 	"sudooom.im.shared/proto"
 )
 
@@ -25,7 +26,7 @@ func NewMessageHandler(
 	routerService *service.RouterService,
 	conversationService *service.ConversationService,
 	redisClient *redis.Client,
-	roomService *service.RoomService,
+	roomService *room.RoomService,
 ) *MessageHandler {
 	return &MessageHandler{
 		chatHandler: NewChatHandler(messageBatcher, messageService, groupService, routerService, conversationService),
@@ -56,11 +57,11 @@ func (h *MessageHandler) HandleUserOffline(ctx context.Context, event *proto.Use
 }
 
 // HandleRoomRequest 处理房间请求
-func (h *MessageHandler) HandleRoomRequest(ctx context.Context, req *proto.RoomRequest, accessNodeId string) {
-	_ = h.roomHandler.Handle(ctx, req, accessNodeId)
+func (h *MessageHandler) HandleRoomRequest(ctx context.Context, req *proto.RoomRequest, accessNodeId string, connId int64, platform string) {
+	_ = h.roomHandler.Handle(ctx, req, accessNodeId, connId, platform)
 }
 
 // HandleGameRequest 处理游戏请求
-func (h *MessageHandler) HandleGameRequest(ctx context.Context, req *proto.GameRequest, accessNodeId string) {
-	_ = h.gameHandler.Handle(ctx, req, accessNodeId)
+func (h *MessageHandler) HandleGameRequest(ctx context.Context, req *proto.GameRequest, accessNodeId string, connId int64, platform string) {
+	_ = h.gameHandler.Handle(ctx, req, accessNodeId, connId, platform)
 }

@@ -16,6 +16,7 @@ import (
 	"sudooom.im.logic/internal/handler"
 	imNats "sudooom.im.logic/internal/nats"
 	"sudooom.im.logic/internal/service"
+	"sudooom.im.logic/internal/service/room"
 	"sudooom.im.shared/snowflake"
 )
 
@@ -95,7 +96,7 @@ func main() {
 	conversationService := service.NewConversationService(redisClient)
 
 	// 创建房间服务
-	roomService := service.NewRoomService(redisClient, sfNode, routerService)
+	roomService := room.NewRoomService(redisClient, sfNode, routerService)
 
 	// 创建消息处理器
 	msgHandler := handler.NewMessageHandler(

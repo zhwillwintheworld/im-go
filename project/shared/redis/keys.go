@@ -79,3 +79,32 @@ func BuildUserTokenKey(userId int64, platform string) string {
 func BuildTokenInfoKey(accessToken string) string {
 	return fmt.Sprintf("token:info:%s", accessToken)
 }
+
+// ============== 房间相关 Key ==============
+
+// BuildRoomKey 构建房间信息 Key
+// Key: room:{roomId}
+// Value: JSON{Room}
+func BuildRoomKey(roomId string) string {
+	return fmt.Sprintf("room:%s", roomId)
+}
+
+// BuildUserRoomKey 构建用户所在房间映射 Key
+// Key: user_room:{userId}
+// Value: roomId
+func BuildUserRoomKey(userId int64) string {
+	return fmt.Sprintf("user_room:%d", userId)
+}
+
+// BuildRoomUsersKey 构建房间用户列表 Key (Set)
+// Key: room_users:{roomId}
+// Value: Set{userId1, userId2, ...}
+func BuildRoomUsersKey(roomId string) string {
+	return fmt.Sprintf("room_users:%s", roomId)
+}
+
+// BuildRoomLockKey 构建房间分布式锁 Key
+// Key: room_lock:{roomId}
+func BuildRoomLockKey(roomId string) string {
+	return fmt.Sprintf("room_lock:%s", roomId)
+}

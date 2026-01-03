@@ -104,9 +104,9 @@ func (s *DispatcherService) DispatchAckDirect(accessNodeId string, connId int64,
 	return nil
 }
 
-// DispatchRoomPush 分发房间推送
-func (s *DispatcherService) DispatchRoomPush(accessNodeId string, userId int64, event string, roomId string, roomInfo []byte) error {
-	roomPushMsg := s.buildDownstreamMessage(userId, 0, "", proto.DownstreamPayload{
+// DispatchRoomPushDirect 直接分发房间推送（使用 connId）
+func (s *DispatcherService) DispatchRoomPushDirect(accessNodeId string, connId int64, userId int64, event string, roomId string, roomInfo []byte) error {
+	roomPushMsg := s.buildDownstreamMessage(userId, connId, "", proto.DownstreamPayload{
 		RoomPush: &proto.RoomPush{
 			Event:    event,
 			RoomId:   roomId,
@@ -118,9 +118,33 @@ func (s *DispatcherService) DispatchRoomPush(accessNodeId string, userId int64, 
 	return s.publisher.PublishToAccess(accessNodeId, roomPushMsg)
 }
 
-// DispatchGamePush 分发游戏推送
-func (s *DispatcherService) DispatchGamePush(accessNodeId string, userId int64, roomId string, gameType string, gamePayload []byte) error {
-	gamePushMsg := s.buildDownstreamMessage(userId, 0, "", proto.DownstreamPayload{
+// DispatchRoomPushToLocations 分发房间推送到指定 locations
+func (s *DispatcherService) DispatchRoomPushToLocations(userId int64, locations []sharedModel.UserLocation, event string, roomId string, roomInfo []byte) error {
+	for _, loc := range locations {
+		roomPushMsg := s.buildDownstreamMessage(userId, loc.ConnId, loc.Platform, proto.DownstreamPayload{
+			RoomPush: &proto.RoomPush{
+				Event:    event,
+				RoomId:   roomId,
+				UserId:   userId,
+				RoomInfo: roomInfo,
+				ToUserId: userId,
+			},
+		})
+		if err := s.publisher.PublishToAccess(loc.AccessNodeId, roomPushMsg); err != nil {
+			s.logger.Warn("Failed to dispatch room push",
+				"userId", userId,
+				"platform", loc.Platform,
+				"accessNodeId", loc.AccessNodeId,
+				"error", err)
+			// 继续推送到其他设备
+		}
+	}
+	return nil
+}
+
+// DispatchGamePushDirect 直接分发游戏推送（使用 connId）
+func (s *DispatcherService) DispatchGamePushDirect(accessNodeId string, connId int64, userId int64, roomId string, gameType string, gamePayload []byte) error {
+	gamePushMsg := s.buildDownstreamMessage(userId, connId, "", proto.DownstreamPayload{
 		GamePush: &proto.GamePush{
 			RoomId:      roomId,
 			GameType:    gameType,
@@ -129,4 +153,27 @@ func (s *DispatcherService) DispatchGamePush(accessNodeId string, userId int64, 
 		},
 	})
 	return s.publisher.PublishToAccess(accessNodeId, gamePushMsg)
+}
+
+// DispatchGamePushToLocations 分发游戏推送到指定 locations
+func (s *DispatcherService) DispatchGamePushToLocations(userId int64, locations []sharedModel.UserLocation, roomId string, gameType string, gamePayload []byte) error {
+	for _, loc := range locations {
+		gamePushMsg := s.buildDownstreamMessage(userId, loc.ConnId, loc.Platform, proto.DownstreamPayload{
+			GamePush: &proto.GamePush{
+				RoomId:      roomId,
+				GameType:    gameType,
+				GamePayload: gamePayload,
+				ToUserId:    userId,
+			},
+		})
+		if err := s.publisher.PublishToAccess(loc.AccessNodeId, gamePushMsg); err != nil {
+			s.logger.Warn("Failed to dispatch game push",
+				"userId", userId,
+				"platform", loc.Platform,
+				"accessNodeId", loc.AccessNodeId,
+				"error", err)
+			// 继续推送到其他设备
+		}
+	}
+	return nil
 }
