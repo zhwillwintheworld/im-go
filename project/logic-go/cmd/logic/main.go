@@ -64,7 +64,7 @@ func main() {
 	defer db.Close()
 	logger.Info("Connected to PostgreSQL", "host", cfg.Database.Host)
 
-	// 初始化雪花ID生成器
+	// 初始化 雪花ID生成器
 	sfNode, err := snowflake.NewNode(1)
 	if err != nil {
 		logger.Error("Failed to create snowflake node", "error", err)
@@ -73,7 +73,14 @@ func main() {
 
 	// 初始化服务
 	publisher := imNats.NewMessagePublisher(natsClient.Conn())
-	routerService := service.NewRouterService(redisClient, publisher)
+
+	// 创建 LocationService 和 DispatcherService
+	locationService := service.NewLocationService(redisClient)
+	dispatcherService := service.NewDispatcherService(publisher)
+
+	// 创建 RouterService（编排层）
+	routerService := service.NewRouterService(locationService, dispatcherService)
+
 	groupService := service.NewGroupService(db)
 	messageService := service.NewMessageService(db)
 

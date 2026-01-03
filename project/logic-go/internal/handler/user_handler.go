@@ -11,13 +11,15 @@ import (
 // UserHandler 用户事件处理器
 type UserHandler struct {
 	conversationService *service.ConversationService
+	routerService       *service.RouterService
 	logger              *slog.Logger
 }
 
 // NewUserHandler 创建用户事件处理器
-func NewUserHandler(conversationService *service.ConversationService) *UserHandler {
+func NewUserHandler(conversationService *service.ConversationService, routerService *service.RouterService) *UserHandler {
 	return &UserHandler{
 		conversationService: conversationService,
+		routerService:       routerService,
 		logger:              slog.Default(),
 	}
 }
@@ -34,7 +36,9 @@ func (h *UserHandler) HandleUserOnline(ctx context.Context, event *proto.UserOnl
 
 // HandleUserOffline 处理用户下线
 func (h *UserHandler) HandleUserOffline(ctx context.Context, event *proto.UserOffline, accessNodeId string) {
-	// location 由 access-go 管理，这里只记录日志
+	// 清除位置缓存
+	h.routerService.InvalidateUserCache(event.UserId)
+
 	h.logger.Info("User offline",
 		"userId", event.UserId,
 		"accessNodeId", accessNodeId)

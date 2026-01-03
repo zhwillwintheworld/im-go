@@ -18,3 +18,4 @@ trigger: always_on
 14. go模块的代码被修改后要使用 scripts 目录下 check-go-quality.sh 脚本来检查质量 并解决错误与警告
 15. web模块的代码被修改后要使用 scripts 目录下的 check-go-quality.sh 脚本来检查质量 并处理错误与警告
 16. 所有对于 redis 的键值操作，都需要在 shared 模块的 redis 目录下的 keys.go 中定义方法定义 key
+17. 生成的 bak 文件必须删除

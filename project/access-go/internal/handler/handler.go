@@ -22,14 +22,14 @@ import (
 )
 
 const (
-	// 帧头大小：4 bytes length + 1 byte frame type
+	// FrameHeaderSize 帧头大小：4 bytes length + 1 byte frame type
 	FrameHeaderSize = 5
 
-	// 帧类型
+	// FrameTypeAuth 帧类型
 	FrameTypeAuth    byte = 1 // 认证请求（AuthRequest）
 	FrameTypeRequest byte = 2 // 普通请求（ClientRequest）
 
-	// 响应帧类型
+	// FrameTypeAuthAck 响应帧类型
 	FrameTypeAuthAck  byte = 3 // 认证响应
 	FrameTypeResponse byte = 4 // 普通响应（ClientResponse）
 

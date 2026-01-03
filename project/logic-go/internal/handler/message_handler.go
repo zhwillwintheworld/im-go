@@ -31,7 +31,7 @@ func NewMessageHandler(
 		chatHandler: NewChatHandler(messageBatcher, messageService, groupService, routerService, conversationService),
 		roomHandler: NewRoomHandler(redisClient, roomService),
 		gameHandler: NewGameHandler(redisClient),
-		userHandler: NewUserHandler(conversationService),
+		userHandler: NewUserHandler(conversationService, routerService),
 	}
 }
 
