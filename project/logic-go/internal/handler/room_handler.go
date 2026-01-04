@@ -50,7 +50,7 @@ func (h *RoomHandler) registerActionHandlers() {
 		routerService: h.roomService.GetRouterService(),
 		logger:        h.logger,
 	}
-	h.actionHandlers["LEAVE"] = &LeaveRoomHandler{logger: h.logger}
+	h.actionHandlers["LEAVE"] = &LeaveRoomHandler{roomService: h.roomService, logger: h.logger}
 	h.actionHandlers["READY"] = &ReadyRoomHandler{logger: h.logger}
 	h.actionHandlers["CHANGE_SEAT"] = &ChangeSeatHandler{logger: h.logger}
 	h.actionHandlers["START_GAME"] = &StartGameHandler{logger: h.logger}
@@ -87,20 +87,15 @@ func (h *CreateRoomHandler) Handle(ctx context.Context, req *proto.RoomRequest, 
 		"roomConfig", req.RoomConfig,
 		"accessNodeId", accessNodeId)
 
-	// 1. 创建房间
-	roomCreate, err := h.roomService.CreateRoom(ctx, req, accessNodeId)
+	// 创建房间（包含发送响应）
+	roomCreate, err := h.roomService.CreateRoom(ctx, req, accessNodeId, connId, platform)
 	if err != nil {
 		h.logger.Error("Failed to create room", "error", err, "userId", req.UserId)
-		// TODO: createRoom
+		// TODO: 发送创建失败响应
 		return nil // 不阻塞流程
 	}
 
-	// 2. 发送房间创建成功响应
-	if err := h.roomService.SendRoomCreatedResponse(ctx, roomCreate, accessNodeId, connId, platform); err != nil {
-		h.logger.Error("Failed to send room created response", "error", err, "roomId", roomCreate.RoomID)
-	}
-
-	h.logger.Info("Room created and response sent",
+	h.logger.Info("Room created successfully",
 		"roomId", roomCreate.RoomID,
 		"roomName", roomCreate.RoomName,
 		"userId", req.UserId)
@@ -192,7 +187,8 @@ func (h *JoinRoomHandler) mapErrorToCodeAndMsg(err error) (string, string) {
 
 // LeaveRoomHandler 离开房间
 type LeaveRoomHandler struct {
-	logger *slog.Logger
+	roomService *room.RoomService
+	logger      *slog.Logger
 }
 
 func (h *LeaveRoomHandler) Handle(ctx context.Context, req *proto.RoomRequest, accessNodeId string, connId int64, platform string) error {
@@ -201,7 +197,23 @@ func (h *LeaveRoomHandler) Handle(ctx context.Context, req *proto.RoomRequest, a
 		"reqId", req.ReqId,
 		"roomId", req.RoomId,
 		"accessNodeId", accessNodeId)
-	// TODO: 实现离开房间逻辑
+
+	// 调用 Service 层处理离开房间逻辑
+	err := h.roomService.LeaveRoom(ctx, room.LeaveRoomParams{
+		UserId:       req.UserId,
+		RoomId:       req.RoomId,
+		AccessNodeId: accessNodeId,
+		ConnId:       connId,
+		Platform:     platform,
+	})
+
+	if err != nil {
+		h.logger.Warn("Failed to leave room", "error", err, "userId", req.UserId, "roomId", req.RoomId)
+		// 不阻塞消息处理，只记录日志
+		return nil
+	}
+
+	h.logger.Info("User left room successfully", "userId", req.UserId, "roomId", req.RoomId)
 	return nil
 }
 

@@ -11,8 +11,8 @@ import (
 	sharedRedis "sudooom.im.shared/redis"
 )
 
-// CreateRoom 创建房间
-func (s *RoomService) CreateRoom(ctx context.Context, req *proto.RoomRequest, accessNodeId string) (*model.Room, error) {
+// CreateRoom 创建房间并发送响应
+func (s *RoomService) CreateRoom(ctx context.Context, req *proto.RoomRequest, accessNodeId string, connId int64, platform string) (*model.Room, error) {
 	// 1. 解析房间配置
 	var config model.RoomConfig
 	if req.RoomConfig != "" {
@@ -87,7 +87,14 @@ func (s *RoomService) CreateRoom(ctx context.Context, req *proto.RoomRequest, ac
 		s.logger.Warn("Failed to add user to room users list", "error", err, "roomId", roomID, "userId", req.UserId)
 	}
 	// 设置过期时间与房间一致
-	s.redisClient.Expire(ctx, roomUsersKey, 48*time.Hour)
+	s.redisClient.Expire(ctx, roomUsersKey, 24*time.Hour)
+
+	// 8. 发送房间创建成功响应
+	if err := s.SendRoomCreatedResponse(room, accessNodeId, connId, platform); err != nil {
+		s.logger.Error("Failed to send room created response", "error", err, "roomId", room.RoomID)
+		// 发送失败不影响房间创建成功，只记录日志
+	}
+
 	s.logger.Info("Room created successfully",
 		"roomId", roomID,
 		"roomName", room.RoomName,
@@ -98,7 +105,7 @@ func (s *RoomService) CreateRoom(ctx context.Context, req *proto.RoomRequest, ac
 }
 
 // SendRoomCreatedResponse 发送房间创建成功响应
-func (s *RoomService) SendRoomCreatedResponse(ctx context.Context, room *model.Room, accessNodeId string, connId int64, platform string) error {
+func (s *RoomService) SendRoomCreatedResponse(room *model.Room, accessNodeId string, connId int64, platform string) error {
 	// 将 Room 转换为 JSON
 	roomInfo, err := json.Marshal(room)
 	if err != nil {

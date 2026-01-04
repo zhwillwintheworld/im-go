@@ -80,7 +80,7 @@ func (s *RoomService) JoinRoom(ctx context.Context, params JoinRoomParams) (*mod
 // validateJoinConditions 校验加入房间的条件
 func (s *RoomService) validateJoinConditions(room *model.Room, params JoinRoomParams) error {
 	// 1. 检查房间类型和密码
-	if room.RoomType == "private" {
+	if room.RoomType == "private" && room.RoomPassword != "" {
 		if room.RoomPassword != params.Password {
 			s.logger.Warn("Invalid room password",
 				"roomId", room.RoomID,
