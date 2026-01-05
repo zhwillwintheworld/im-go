@@ -228,7 +228,6 @@ func (h *ReadyRoomHandler) Handle(ctx context.Context, req *proto.RoomRequest, a
 		"reqId", req.ReqId,
 		"roomId", req.RoomId,
 		"accessNodeId", accessNodeId)
-	// TODO: 实现准备逻辑
 	return nil
 }
 

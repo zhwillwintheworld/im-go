@@ -138,8 +138,15 @@ func (s *RoomService) allocateSeat(room *model.Room, requestedSeat int32) int32 
 		return requestedSeat
 	}
 
-	// 其他游戏：顺序分配座位
-	return int32(len(room.Players))
+	// 其他游戏：查找可用座位，考虑用户退出导致的座位空缺
+	maxSeat := int32(room.MaxPlayers - 1)
+	if requestedSeat >= 0 && requestedSeat <= maxSeat && !s.isSeatOccupied(room, requestedSeat) {
+		// 请求的座位有效且可用
+		return requestedSeat
+	}
+
+	// 查找第一个可用座位
+	return s.findAvailableSeat(room, 0, maxSeat)
 }
 
 // isSeatOccupied 检查座位是否被占用
