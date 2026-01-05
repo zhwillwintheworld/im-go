@@ -47,30 +47,64 @@ func (s *RoomService) JoinRoom(ctx context.Context, params JoinRoomParams) (*mod
 		return nil, err
 	}
 
-	// 4. 分配座位
-	seatIndex := s.allocateSeat(room, params.SeatIndex)
-
-	// 5. 将用户加入房间
-	if err := s.AddPlayerToRoom(ctx, room, params.UserId, seatIndex); err != nil {
-		s.logger.Error("Failed to add player to room",
-			"error", err,
-			"roomId", params.RoomId,
-			"userId", params.UserId)
-		return nil, err
+	// 4. 判断是新加入还是重新加入
+	isRejoin := false
+	if room.Status != "waiting" {
+		// 游戏中状态，这是重新加入
+		isRejoin = true
 	}
 
-	s.logger.Info("User joined room successfully",
-		"roomId", params.RoomId,
-		"userId", params.UserId,
-		"seatIndex", seatIndex)
+	var seatIndex int32
+	var eventName string
 
-	// 6. 获取更新后的房间信息
+	if isRejoin {
+		// 重新加入：只需要恢复用户映射关系，不修改 Players 列表
+		s.logger.Info("User rejoining room",
+			"roomId", params.RoomId,
+			"userId", params.UserId,
+			"status", room.Status)
+
+		// 恢复用户-房间映射
+		userRoomKey := sharedRedis.BuildUserRoomKey(params.UserId)
+		if err := s.redisClient.Set(ctx, userRoomKey, room.RoomID, 24*time.Hour).Err(); err != nil {
+			s.logger.Warn("Failed to save user room mapping", "error", err, "userId", params.UserId)
+		}
+
+		// 将用户重新加入到房间用户列表
+		roomUsersKey := sharedRedis.BuildRoomUsersKey(room.RoomID)
+		if err := s.redisClient.SAdd(ctx, roomUsersKey, params.UserId).Err(); err != nil {
+			s.logger.Warn("Failed to add user to room users list", "error", err, "roomId", room.RoomID, "userId", params.UserId)
+		}
+		s.redisClient.Expire(ctx, roomUsersKey, 24*time.Hour)
+
+		eventName = "USER_REJOINED"
+	} else {
+		// 新加入：需要分配座位并添加到 Players 列表
+		seatIndex = s.allocateSeat(room, params.SeatIndex)
+
+		if err := s.AddPlayerToRoom(ctx, room, params.UserId, seatIndex); err != nil {
+			s.logger.Error("Failed to add player to room",
+				"error", err,
+				"roomId", params.RoomId,
+				"userId", params.UserId)
+			return nil, err
+		}
+
+		s.logger.Info("User joined room successfully",
+			"roomId", params.RoomId,
+			"userId", params.UserId,
+			"seatIndex", seatIndex)
+
+		eventName = "USER_JOINED"
+	}
+
+	// 5. 获取更新后的房间信息
 	updatedRoom, _ := s.GetRoom(ctx, params.RoomId)
 	if updatedRoom != nil {
-		// 7. 向房间所有人广播加入消息
+		// 6. 向房间所有人广播消息
 		roomInfo, _ := json.Marshal(updatedRoom)
-		if err := s.BroadcastToRoom(ctx, params.RoomId, "USER_JOINED", roomInfo); err != nil {
-			s.logger.Warn("Failed to broadcast join event", "error", err, "roomId", params.RoomId)
+		if err := s.BroadcastToRoom(ctx, params.RoomId, eventName, roomInfo); err != nil {
+			s.logger.Warn("Failed to broadcast event", "error", err, "roomId", params.RoomId, "event", eventName)
 		}
 	}
 
@@ -89,7 +123,19 @@ func (s *RoomService) validateJoinConditions(room *model.Room, params JoinRoomPa
 		}
 	}
 
-	// 2. 检查房间是否已满
+	// 2. 根据房间状态进行不同的校验
+	if room.Status == "waiting" {
+		// 等待状态：正常的加入逻辑
+		return s.validateJoinWaitingRoom(room, params)
+	} else {
+		// 游戏中/已结束：只允许重新加入（曾经在房间但离开了）
+		return s.validateRejoinPlayingRoom(room, params)
+	}
+}
+
+// validateJoinWaitingRoom 校验加入等待中的房间
+func (s *RoomService) validateJoinWaitingRoom(room *model.Room, params JoinRoomParams) error {
+	// 1. 检查房间是否已满
 	if len(room.Players) >= room.MaxPlayers {
 		s.logger.Warn("Room is full",
 			"roomId", room.RoomID,
@@ -98,15 +144,7 @@ func (s *RoomService) validateJoinConditions(room *model.Room, params JoinRoomPa
 		return ErrRoomFull
 	}
 
-	// 3. 检查房间状态
-	if room.Status != "waiting" {
-		s.logger.Warn("Game already started",
-			"roomId", room.RoomID,
-			"status", room.Status)
-		return ErrGameStarted
-	}
-
-	// 4. 检查用户是否已在房间中
+	// 2. 检查用户是否已在房间中
 	for _, player := range room.Players {
 		if player.UserID == params.UserId {
 			s.logger.Warn("User already in room",
@@ -115,6 +153,34 @@ func (s *RoomService) validateJoinConditions(room *model.Room, params JoinRoomPa
 			return ErrAlreadyInRoom
 		}
 	}
+
+	return nil
+}
+
+// validateRejoinPlayingRoom 校验重新加入游戏中的房间
+func (s *RoomService) validateRejoinPlayingRoom(room *model.Room, params JoinRoomParams) error {
+	// 检查用户是否在玩家列表中（只有在玩家列表中的用户才能重新加入）
+	isPlayer := false
+	for _, player := range room.Players {
+		if player.UserID == params.UserId {
+			isPlayer = true
+			break
+		}
+	}
+
+	if !isPlayer {
+		s.logger.Warn("User is not a player in this game",
+			"roomId", room.RoomID,
+			"userId", params.UserId,
+			"status", room.Status)
+		return ErrGameStarted // 不是游戏玩家，不允许加入
+	}
+
+	// 是游戏玩家，允许重新加入（重新连接）
+	s.logger.Info("Player rejoining game",
+		"roomId", room.RoomID,
+		"userId", params.UserId,
+		"status", room.Status)
 
 	return nil
 }

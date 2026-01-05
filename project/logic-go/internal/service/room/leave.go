@@ -33,7 +33,22 @@ func (s *RoomService) LeaveRoom(ctx context.Context, params LeaveRoomParams) err
 	}
 	defer s.redisClient.Del(ctx, lockKey)
 
-	// 2. 获取房间信息
+	// 2. 检查用户是否在房间用户列表中（使用 Redis）
+	roomUsersKey := sharedRedis.BuildRoomUsersKey(params.RoomId)
+	isInRoom, err := s.redisClient.SIsMember(ctx, roomUsersKey, params.UserId).Result()
+	if err != nil {
+		s.logger.Error("Failed to check if user is in room", "error", err, "roomId", params.RoomId, "userId", params.UserId)
+		return err
+	}
+
+	if !isInRoom {
+		s.logger.Warn("User not in room users list", "userId", params.UserId, "roomId", params.RoomId)
+		// 清理可能存在的残留映射关系
+		s.cleanUserRoomMapping(ctx, params.UserId, params.RoomId)
+		return ErrNotInRoom
+	}
+
+	// 3. 获取房间信息
 	room, err := s.GetRoom(ctx, params.RoomId)
 	if err != nil {
 		s.logger.Warn("Room not found", "roomId", params.RoomId, "error", err)
@@ -42,7 +57,17 @@ func (s *RoomService) LeaveRoom(ctx context.Context, params LeaveRoomParams) err
 		return ErrRoomNotFound
 	}
 
-	// 3. 检查用户是否在房间中
+	// 4. 根据房间状态执行不同的离开逻辑
+	if room.Status == "waiting" {
+		return s.leaveWaitingRoom(ctx, room, params)
+	} else {
+		return s.leavePlayingRoom(ctx, room, params)
+	}
+}
+
+// leaveWaitingRoom 处理等待状态房间的离开逻辑
+func (s *RoomService) leaveWaitingRoom(ctx context.Context, room *model.Room, params LeaveRoomParams) error {
+	// 查找用户是否在玩家列表中（有座位）
 	playerIndex := -1
 	var leavingPlayer *model.RoomPlayer
 	for i, player := range room.Players {
@@ -53,31 +78,35 @@ func (s *RoomService) LeaveRoom(ctx context.Context, params LeaveRoomParams) err
 		}
 	}
 
+	// 清理用户映射关系
+	s.cleanUserRoomMapping(ctx, params.UserId, params.RoomId)
+
+	// 如果用户没有座位（例如观战者），只需要清理映射关系即可
 	if playerIndex == -1 {
-		s.logger.Warn("User not in room", "userId", params.UserId, "roomId", params.RoomId)
-		// 清理用户映射关系
-		s.cleanUserRoomMapping(ctx, params.UserId, params.RoomId)
-		return ErrNotInRoom
+		s.logger.Info("User without seat left waiting room",
+			"roomId", params.RoomId,
+			"userId", params.UserId)
+
+		// 向房间所有人广播观战者离开消息（简洁消息体）
+		leaveInfo := map[string]interface{}{
+			"room_id": params.RoomId,
+			"user_id": params.UserId,
+			"event":   "spectator_left",
+		}
+		leaveData, _ := json.Marshal(leaveInfo)
+		if err := s.BroadcastToRoom(ctx, params.RoomId, "USER_LEFT", leaveData); err != nil {
+			s.logger.Warn("Failed to broadcast spectator leave event", "error", err, "roomId", params.RoomId)
+		}
+
+		return nil
 	}
 
-	// 4. 根据房间状态执行不同的离开逻辑
-	if room.Status == "waiting" {
-		return s.leaveWaitingRoom(ctx, room, params, playerIndex, leavingPlayer)
-	} else {
-		return s.leavePlayingRoom(ctx, room, params)
-	}
-}
-
-// leaveWaitingRoom 处理等待状态房间的离开逻辑
-func (s *RoomService) leaveWaitingRoom(ctx context.Context, room *model.Room, params LeaveRoomParams, playerIndex int, leavingPlayer *model.RoomPlayer) error {
+	// 用户有座位，需要释放座位
 	isHost := leavingPlayer.IsHost
 	remainingPlayers := len(room.Players) - 1
 
 	// 从房间玩家列表中移除该玩家
 	room.Players = append(room.Players[:playerIndex], room.Players[playerIndex+1:]...)
-
-	// 清理用户映射关系
-	s.cleanUserRoomMapping(ctx, params.UserId, params.RoomId)
 
 	// 如果房间没人了，删除房间
 	if remainingPlayers == 0 {
@@ -114,6 +143,7 @@ func (s *RoomService) leaveWaitingRoom(ctx context.Context, room *model.Room, pa
 	s.logger.Info("User left waiting room",
 		"roomId", params.RoomId,
 		"userId", params.UserId,
+		"hadSeat", true,
 		"remainingPlayers", remainingPlayers)
 
 	return nil
