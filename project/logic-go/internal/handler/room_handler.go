@@ -51,8 +51,8 @@ func (h *RoomHandler) registerActionHandlers() {
 		logger:        h.logger,
 	}
 	h.actionHandlers["LEAVE"] = &LeaveRoomHandler{roomService: h.roomService, logger: h.logger}
-	h.actionHandlers["READY"] = &ReadyRoomHandler{logger: h.logger}
-	h.actionHandlers["CHANGE_SEAT"] = &ChangeSeatHandler{logger: h.logger}
+	h.actionHandlers["READY"] = &ReadyRoomHandler{roomService: h.roomService, logger: h.logger}
+	h.actionHandlers["CHANGE_SEAT"] = &ChangeSeatHandler{roomService: h.roomService, logger: h.logger}
 	h.actionHandlers["START_GAME"] = &StartGameHandler{logger: h.logger}
 }
 
@@ -219,21 +219,37 @@ func (h *LeaveRoomHandler) Handle(ctx context.Context, req *proto.RoomRequest, a
 
 // ReadyRoomHandler 准备/取消准备
 type ReadyRoomHandler struct {
-	logger *slog.Logger
+	roomService *room.RoomService
+	logger      *slog.Logger
 }
 
 func (h *ReadyRoomHandler) Handle(ctx context.Context, req *proto.RoomRequest, accessNodeId string, connId int64, platform string) error {
-	h.logger.Info("Ready in room",
+	h.logger.Info("Toggle ready in room",
 		"userId", req.UserId,
 		"reqId", req.ReqId,
 		"roomId", req.RoomId,
 		"accessNodeId", accessNodeId)
+
+	// 调用 Service 层处理准备状态切换
+	err := h.roomService.ToggleReady(ctx, room.ToggleReadyParams{
+		UserId: req.UserId,
+		RoomId: req.RoomId,
+	})
+
+	if err != nil {
+		h.logger.Warn("Failed to toggle ready", "error", err, "userId", req.UserId, "roomId", req.RoomId)
+		// 不阻塞消息处理，只记录日志
+		return nil
+	}
+
+	h.logger.Info("Ready state toggled successfully", "userId", req.UserId, "roomId", req.RoomId)
 	return nil
 }
 
 // ChangeSeatHandler 换座位
 type ChangeSeatHandler struct {
-	logger *slog.Logger
+	roomService *room.RoomService
+	logger      *slog.Logger
 }
 
 func (h *ChangeSeatHandler) Handle(ctx context.Context, req *proto.RoomRequest, accessNodeId string, connId int64, platform string) error {
@@ -243,7 +259,21 @@ func (h *ChangeSeatHandler) Handle(ctx context.Context, req *proto.RoomRequest, 
 		"roomId", req.RoomId,
 		"targetSeatIndex", req.SeatIndex,
 		"accessNodeId", accessNodeId)
-	// TODO: 实现换座位逻辑
+
+	// 调用 Service 层处理换座位
+	err := h.roomService.ChangeSeat(ctx, room.ChangeSeatParams{
+		UserId:     req.UserId,
+		RoomId:     req.RoomId,
+		TargetSeat: req.SeatIndex,
+	})
+
+	if err != nil {
+		h.logger.Warn("Failed to change seat", "error", err, "userId", req.UserId, "roomId", req.RoomId)
+		// 不阻塞消息处理，只记录日志
+		return nil
+	}
+
+	h.logger.Info("Seat changed successfully", "userId", req.UserId, "roomId", req.RoomId, "newSeat", req.SeatIndex)
 	return nil
 }
 

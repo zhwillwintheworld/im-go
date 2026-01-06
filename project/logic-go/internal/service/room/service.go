@@ -172,3 +172,25 @@ func (s *RoomService) BroadcastToRoom(ctx context.Context, roomId string, event 
 	// 使用新的广播API（会并发获取所有用户的locations并推送）
 	return s.routerService.SendRoomPushToUsers(ctx, userIds, event, roomId, roomInfo)
 }
+
+// CheckUserInRoom 检查用户是否在房间用户列表中（使用 Redis）
+func (s *RoomService) CheckUserInRoom(ctx context.Context, roomId string, userId int64) (bool, error) {
+	roomUsersKey := sharedRedis.BuildRoomUsersKey(roomId)
+	isInRoom, err := s.redisClient.SIsMember(ctx, roomUsersKey, userId).Result()
+	if err != nil {
+		s.logger.Error("Failed to check if user is in room", "error", err, "roomId", roomId, "userId", userId)
+		return false, err
+	}
+	return isInRoom, nil
+}
+
+// FindPlayerInRoom 在房间 Players 列表中查找用户
+// 返回：玩家指针、玩家索引（-1 表示未找到）
+func (s *RoomService) FindPlayerInRoom(room *model.Room, userId int64) (*model.RoomPlayer, int) {
+	for i, player := range room.Players {
+		if player.UserID == userId {
+			return &room.Players[i], i
+		}
+	}
+	return nil, -1
+}

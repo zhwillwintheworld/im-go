@@ -54,9 +54,6 @@ func (s *RoomService) JoinRoom(ctx context.Context, params JoinRoomParams) (*mod
 		isRejoin = true
 	}
 
-	var seatIndex int32
-	var eventName string
-
 	if isRejoin {
 		// 重新加入：只需要恢复用户映射关系，不修改 Players 列表
 		s.logger.Info("User rejoining room",
@@ -77,34 +74,51 @@ func (s *RoomService) JoinRoom(ctx context.Context, params JoinRoomParams) (*mod
 		}
 		s.redisClient.Expire(ctx, roomUsersKey, 24*time.Hour)
 
-		eventName = "USER_REJOINED"
-	} else {
-		// 新加入：需要分配座位并添加到 Players 列表
-		seatIndex = s.allocateSeat(room, params.SeatIndex)
+		// 重新加入不需要广播给所有人，但需要发送给重新加入的玩家
+		updatedRoom, _ := s.GetRoom(ctx, params.RoomId)
+		if updatedRoom != nil {
+			roomInfo, _ := json.Marshal(updatedRoom)
 
-		if err := s.AddPlayerToRoom(ctx, room, params.UserId, seatIndex); err != nil {
-			s.logger.Error("Failed to add player to room",
-				"error", err,
-				"roomId", params.RoomId,
-				"userId", params.UserId)
-			return nil, err
+			// 构造玩家位置信息
+			senderLoc := model.UserLocation{
+				AccessNodeId: params.AccessNodeId,
+				ConnId:       params.ConnId,
+				Platform:     params.Platform,
+				UserId:       params.UserId,
+			}
+
+			// 只发送给重新加入的玩家本人
+			if err := s.routerService.SendRoomPushToSelf(senderLoc, "USER_REJOINED", params.RoomId, roomInfo); err != nil {
+				s.logger.Warn("Failed to send rejoin response", "error", err, "userId", params.UserId)
+			}
 		}
 
-		s.logger.Info("User joined room successfully",
-			"roomId", params.RoomId,
-			"userId", params.UserId,
-			"seatIndex", seatIndex)
-
-		eventName = "USER_JOINED"
+		return updatedRoom, nil
 	}
+
+	// 新加入：需要分配座位并添加到 Players 列表
+	seatIndex := s.allocateSeat(room, params.SeatIndex)
+
+	if err := s.AddPlayerToRoom(ctx, room, params.UserId, seatIndex); err != nil {
+		s.logger.Error("Failed to add player to room",
+			"error", err,
+			"roomId", params.RoomId,
+			"userId", params.UserId)
+		return nil, err
+	}
+
+	s.logger.Info("User joined room successfully",
+		"roomId", params.RoomId,
+		"userId", params.UserId,
+		"seatIndex", seatIndex)
 
 	// 5. 获取更新后的房间信息
 	updatedRoom, _ := s.GetRoom(ctx, params.RoomId)
 	if updatedRoom != nil {
-		// 6. 向房间所有人广播消息
+		// 6. 向房间所有人广播新加入消息
 		roomInfo, _ := json.Marshal(updatedRoom)
-		if err := s.BroadcastToRoom(ctx, params.RoomId, eventName, roomInfo); err != nil {
-			s.logger.Warn("Failed to broadcast event", "error", err, "roomId", params.RoomId, "event", eventName)
+		if err := s.BroadcastToRoom(ctx, params.RoomId, "USER_JOINED", roomInfo); err != nil {
+			s.logger.Warn("Failed to broadcast join event", "error", err, "roomId", params.RoomId)
 		}
 	}
 
