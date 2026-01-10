@@ -7,9 +7,8 @@ import (
 	"log/slog"
 
 	"github.com/redis/go-redis/v9"
-	"sudooom.im.logic/internal/service"
-	"sudooom.im.logic/internal/service/room"
-	"sudooom.im.shared/model"
+	"sudooom.im.logic/internal/game"
+	"sudooom.im.logic/internal/room"
 	"sudooom.im.shared/proto"
 )
 
@@ -23,15 +22,17 @@ type RoomHandler struct {
 	actionHandlers map[string]RoomActionHandler
 	redisClient    *redis.Client
 	roomService    *room.RoomService
+	gameService    *game.GameService
 	logger         *slog.Logger
 }
 
 // NewRoomHandler 创建房间请求处理器
-func NewRoomHandler(redisClient *redis.Client, roomService *room.RoomService) *RoomHandler {
+func NewRoomHandler(redisClient *redis.Client, roomService *room.RoomService, gameService *game.GameService) *RoomHandler {
 	h := &RoomHandler{
 		actionHandlers: make(map[string]RoomActionHandler),
 		redisClient:    redisClient,
 		roomService:    roomService,
+		gameService:    gameService,
 		logger:         slog.Default(),
 	}
 
@@ -43,17 +44,31 @@ func NewRoomHandler(redisClient *redis.Client, roomService *room.RoomService) *R
 
 // registerActionHandlers 注册各种房间操作处理器
 func (h *RoomHandler) registerActionHandlers() {
-	h.actionHandlers["CREATE"] = &CreateRoomHandler{roomService: h.roomService, logger: h.logger}
-	h.actionHandlers["JOIN"] = &JoinRoomHandler{
-		redisClient:   h.redisClient,
-		roomService:   h.roomService,
-		routerService: h.roomService.GetRouterService(),
-		logger:        h.logger,
+	h.actionHandlers["CREATE"] = &CreateRoomHandler{
+		roomService: h.roomService,
+		logger:      h.logger,
 	}
-	h.actionHandlers["LEAVE"] = &LeaveRoomHandler{roomService: h.roomService, logger: h.logger}
-	h.actionHandlers["READY"] = &ReadyRoomHandler{roomService: h.roomService, logger: h.logger}
-	h.actionHandlers["CHANGE_SEAT"] = &ChangeSeatHandler{roomService: h.roomService, logger: h.logger}
-	h.actionHandlers["START_GAME"] = &StartGameHandler{logger: h.logger}
+	h.actionHandlers["JOIN"] = &JoinRoomHandler{
+		roomService: h.roomService,
+		logger:      h.logger,
+	}
+	h.actionHandlers["LEAVE"] = &LeaveRoomHandler{
+		roomService: h.roomService,
+		logger:      h.logger,
+	}
+	h.actionHandlers["READY"] = &ReadyRoomHandler{
+		roomService: h.roomService,
+		logger:      h.logger,
+	}
+	h.actionHandlers["CHANGE_SEAT"] = &ChangeSeatHandler{
+		roomService: h.roomService,
+		logger:      h.logger,
+	}
+	h.actionHandlers["START_GAME"] = &StartGameHandler{
+		roomService: h.roomService,
+		gameService: h.gameService,
+		logger:      h.logger,
+	}
 }
 
 // Handle 处理房间请求
@@ -87,8 +102,46 @@ func (h *CreateRoomHandler) Handle(ctx context.Context, req *proto.RoomRequest, 
 		"roomConfig", req.RoomConfig,
 		"accessNodeId", accessNodeId)
 
-	// 创建房间（包含发送响应）
-	roomCreate, err := h.roomService.CreateRoom(ctx, req, accessNodeId, connId, platform)
+	// 解析房间配置
+	var config map[string]string
+	if req.RoomConfig != "" {
+		if err := json.Unmarshal([]byte(req.RoomConfig), &config); err != nil {
+			h.logger.Error("Failed to parse room config", "error", err, "userId", req.UserId)
+			// TODO: 发送创建失败响应
+			return nil // 不阻塞流程
+		}
+	}
+	if config == nil {
+		config = make(map[string]string)
+	}
+
+	// 提取房间配置参数
+	roomName := config["roomName"]
+	if roomName == "" {
+		roomName = "房间" // 默认房间名
+	}
+	roomType := config["roomType"]
+	if roomType == "" {
+		roomType = "NORMAL" // 默认房间类型
+	}
+	roomPassword := config["roomPassword"]
+	maxPlayers := 4 // 默认最大玩家数
+	if maxPlayersStr, ok := config["maxPlayers"]; ok && maxPlayersStr != "" {
+		if n, err := json.Number(maxPlayersStr).Int64(); err == nil {
+			maxPlayers = int(n)
+		}
+	}
+
+	// 创建房间
+	roomCreate, err := h.roomService.CreateRoom(ctx, room.CreateRoomParams{
+		UserId:       req.UserId,
+		RoomName:     roomName,
+		RoomType:     roomType,
+		RoomPassword: roomPassword,
+		MaxPlayers:   maxPlayers,
+		GameType:     req.GameType,
+		GameSettings: config,
+	})
 	if err != nil {
 		h.logger.Error("Failed to create room", "error", err, "userId", req.UserId)
 		// TODO: 发送创建失败响应
@@ -104,10 +157,8 @@ func (h *CreateRoomHandler) Handle(ctx context.Context, req *proto.RoomRequest, 
 
 // JoinRoomHandler 加入房间
 type JoinRoomHandler struct {
-	redisClient   *redis.Client
-	roomService   *room.RoomService
-	routerService *service.RouterService
-	logger        *slog.Logger
+	roomService *room.RoomService
+	logger      *slog.Logger
 }
 
 func (h *JoinRoomHandler) Handle(ctx context.Context, req *proto.RoomRequest, accessNodeId string, connId int64, platform string) error {
@@ -120,13 +171,10 @@ func (h *JoinRoomHandler) Handle(ctx context.Context, req *proto.RoomRequest, ac
 
 	// 调用 Service 层处理业务逻辑
 	_, err := h.roomService.JoinRoom(ctx, room.JoinRoomParams{
-		UserId:       req.UserId,
-		RoomId:       req.RoomId,
-		Password:     req.RoomConfig, // RoomConfig 用于传递密码
-		SeatIndex:    req.SeatIndex,
-		AccessNodeId: accessNodeId,
-		ConnId:       connId,
-		Platform:     platform,
+		UserId:    req.UserId,
+		RoomId:    req.RoomId,
+		Password:  req.RoomConfig, // RoomConfig 用于传递密码
+		SeatIndex: req.SeatIndex,
 	})
 
 	if err != nil {
@@ -143,24 +191,9 @@ func (h *JoinRoomHandler) sendErrorResponse(ctx context.Context, accessNodeId st
 	// 将 error 映射到错误码和消息
 	errorCode, errorMsg := h.mapErrorToCodeAndMsg(err)
 
-	errorInfo := map[string]string{
-		"error_code": errorCode,
-		"error_msg":  errorMsg,
-	}
-	errorData, _ := json.Marshal(errorInfo)
-
-	// 构造 sender location
-	senderLoc := model.UserLocation{
-		AccessNodeId: accessNodeId,
-		ConnId:       connId,
-		Platform:     platform,
-		UserId:       userId,
-	}
-
-	// 发送给自己（只需快速响应，错误不需要多端同步）
-	if err := h.routerService.SendRoomPushToSelf(senderLoc, "JOIN_ROOM_ERROR", roomId, errorData); err != nil {
-		h.logger.Warn("Failed to send error response", "error", err, "userId", userId)
-	}
+	// TODO: 发送错误响应给客户端
+	// 错误响应暂时通过日志记录，后续可以通过 RouterService 发送
+	h.logger.Warn("Join room error", "userId", userId, "roomId", roomId, "errorCode", errorCode, "errorMsg", errorMsg)
 }
 
 // mapErrorToCodeAndMsg 将 error 映射到错误码和错误消息
@@ -199,12 +232,9 @@ func (h *LeaveRoomHandler) Handle(ctx context.Context, req *proto.RoomRequest, a
 		"accessNodeId", accessNodeId)
 
 	// 调用 Service 层处理离开房间逻辑
-	err := h.roomService.LeaveRoom(ctx, room.LeaveRoomParams{
-		UserId:       req.UserId,
-		RoomId:       req.RoomId,
-		AccessNodeId: accessNodeId,
-		ConnId:       connId,
-		Platform:     platform,
+	_, err := h.roomService.LeaveRoom(ctx, room.LeaveRoomParams{
+		UserId: req.UserId,
+		RoomId: req.RoomId,
 	})
 
 	if err != nil {
@@ -231,7 +261,7 @@ func (h *ReadyRoomHandler) Handle(ctx context.Context, req *proto.RoomRequest, a
 		"accessNodeId", accessNodeId)
 
 	// 调用 Service 层处理准备状态切换
-	err := h.roomService.ToggleReady(ctx, room.ToggleReadyParams{
+	_, err := h.roomService.ReadyRoom(ctx, room.ReadyRoomParams{
 		UserId: req.UserId,
 		RoomId: req.RoomId,
 	})
@@ -261,7 +291,7 @@ func (h *ChangeSeatHandler) Handle(ctx context.Context, req *proto.RoomRequest, 
 		"accessNodeId", accessNodeId)
 
 	// 调用 Service 层处理换座位
-	err := h.roomService.ChangeSeat(ctx, room.ChangeSeatParams{
+	_, err := h.roomService.ChangeSeat(ctx, room.ChangeSeatParams{
 		UserId:     req.UserId,
 		RoomId:     req.RoomId,
 		TargetSeat: req.SeatIndex,
@@ -279,7 +309,9 @@ func (h *ChangeSeatHandler) Handle(ctx context.Context, req *proto.RoomRequest, 
 
 // StartGameHandler 开始游戏
 type StartGameHandler struct {
-	logger *slog.Logger
+	roomService *room.RoomService
+	gameService *game.GameService
+	logger      *slog.Logger
 }
 
 func (h *StartGameHandler) Handle(ctx context.Context, req *proto.RoomRequest, accessNodeId string, connId int64, platform string) error {
@@ -289,6 +321,26 @@ func (h *StartGameHandler) Handle(ctx context.Context, req *proto.RoomRequest, a
 		"roomId", req.RoomId,
 		"gameType", req.GameType,
 		"accessNodeId", accessNodeId)
-	// TODO: 实现开始游戏逻辑
+
+	// 调用 Service 层进行验证并更新房间状态
+	room, err := h.roomService.StartGame(ctx, room.StartGameParams{
+		UserId: req.UserId,
+		RoomId: req.RoomId,
+	})
+
+	if err != nil {
+		h.logger.Warn("Failed to start game", "error", err, "userId", req.UserId, "roomId", req.RoomId)
+		// 不阻塞消息处理，只记录日志
+		return nil
+	}
+
+	// 调用 GameService 启动游戏（初始化游戏状态并广播）
+	if err := h.gameService.StartGame(ctx, room); err != nil {
+		h.logger.Warn("Failed to initialize game", "error", err, "roomId", req.RoomId)
+		// 不阻塞消息处理，只记录日志
+		return nil
+	}
+
+	h.logger.Info("Game started successfully", "userId", req.UserId, "roomId", req.RoomId, "gameType", room.GameType)
 	return nil
 }

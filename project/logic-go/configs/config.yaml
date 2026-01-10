@@ -44,3 +44,9 @@ redis:
 batch:
   size: 100           # 批量大小阈值
   flush_interval: 10s # 强制刷新间隔
+
+# 房间管理配置
+room:
+  max_rooms: 5000          # 最大房间数
+  evict_check_interval: 60s # 房间清理检查间隔
+  evict_timeout: 30m       # 房间无响应超时时间

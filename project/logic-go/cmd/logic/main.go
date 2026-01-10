@@ -13,10 +13,11 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"sudooom.im.logic/internal/config"
+	"sudooom.im.logic/internal/game"
 	"sudooom.im.logic/internal/handler"
 	imNats "sudooom.im.logic/internal/nats"
+	imRoom "sudooom.im.logic/internal/room"
 	"sudooom.im.logic/internal/service"
-	"sudooom.im.logic/internal/service/room"
 	"sudooom.im.shared/snowflake"
 )
 
@@ -95,8 +96,24 @@ func main() {
 	// 创建会话服务
 	conversationService := service.NewConversationService(redisClient)
 
+	// 创建房间管理器
+	roomManager := imRoom.NewRoomManager(
+		cfg.Room.MaxRooms,
+		cfg.Room.EvictTimeout,
+		cfg.Room.EvictCheckInterval,
+	)
+
 	// 创建房间服务
-	roomService := room.NewRoomService(redisClient, sfNode, routerService)
+	roomService := imRoom.NewRoomService(roomManager, redisClient, sfNode, routerService)
+
+	// 设置 RoomManager 的 RoomService 引用（用于发送清理通知）
+	roomManager.SetRoomService(roomService)
+
+	// 创建游戏管理器
+	gameManager := game.NewGameManager(5000, 30*time.Minute)
+
+	// 创建游戏服务
+	gameService := game.NewGameService(gameManager, redisClient, routerService)
 
 	// 创建消息处理器
 	msgHandler := handler.NewMessageHandler(
@@ -107,6 +124,7 @@ func main() {
 		conversationService,
 		redisClient,
 		roomService,
+		gameService,
 	)
 
 	// 启动订阅者

@@ -14,6 +14,7 @@ type Config struct {
 	Database DatabaseConfig `mapstructure:"database"`
 	Redis    RedisConfig    `mapstructure:"redis"`
 	Batch    BatchConfig    `mapstructure:"batch"`
+	Room     RoomConfig     `mapstructure:"room"`
 }
 
 type AppConfig struct {
@@ -51,6 +52,12 @@ type RedisConfig struct {
 type BatchConfig struct {
 	Size          int           `mapstructure:"size"`           // 批量大小阈值
 	FlushInterval time.Duration `mapstructure:"flush_interval"` // 强制刷新间隔
+}
+
+type RoomConfig struct {
+	MaxRooms           int           `mapstructure:"max_rooms"`            // 最大房间数
+	EvictCheckInterval time.Duration `mapstructure:"evict_check_interval"` // 房间清理检查间隔
+	EvictTimeout       time.Duration `mapstructure:"evict_timeout"`        // 房间无响应超时时间
 }
 
 // Load 从指定路径加载配置
@@ -104,4 +111,9 @@ func (c *Config) applyEnv() {
 	// Batch
 	c.Batch.Size = sharedConfig.GetEnvInt("BATCH_SIZE", c.Batch.Size)
 	c.Batch.FlushInterval = sharedConfig.GetEnvDuration("BATCH_FLUSH_INTERVAL", c.Batch.FlushInterval)
+
+	// Room
+	c.Room.MaxRooms = sharedConfig.GetEnvInt("ROOM_MAX_ROOMS", c.Room.MaxRooms)
+	c.Room.EvictCheckInterval = sharedConfig.GetEnvDuration("ROOM_EVICT_CHECK_INTERVAL", c.Room.EvictCheckInterval)
+	c.Room.EvictTimeout = sharedConfig.GetEnvDuration("ROOM_EVICT_TIMEOUT", c.Room.EvictTimeout)
 }

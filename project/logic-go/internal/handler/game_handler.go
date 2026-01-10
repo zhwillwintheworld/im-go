@@ -5,20 +5,20 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/redis/go-redis/v9"
+	"sudooom.im.logic/internal/game"
 	"sudooom.im.shared/proto"
 )
 
 // GameHandler 游戏请求处理器
 type GameHandler struct {
-	redisClient *redis.Client
+	gameService *game.GameService
 	logger      *slog.Logger
 }
 
 // NewGameHandler 创建游戏请求处理器
-func NewGameHandler(redisClient *redis.Client) *GameHandler {
+func NewGameHandler(gameService *game.GameService) *GameHandler {
 	return &GameHandler{
-		redisClient: redisClient,
+		gameService: gameService,
 		logger:      slog.Default(),
 	}
 }

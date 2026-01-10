@@ -4,8 +4,9 @@ import (
 	"context"
 
 	"github.com/redis/go-redis/v9"
+	"sudooom.im.logic/internal/game"
+	"sudooom.im.logic/internal/room"
 	"sudooom.im.logic/internal/service"
-	"sudooom.im.logic/internal/service/room"
 	"sudooom.im.shared/proto"
 )
 
@@ -27,11 +28,12 @@ func NewMessageHandler(
 	conversationService *service.ConversationService,
 	redisClient *redis.Client,
 	roomService *room.RoomService,
+	gameService *game.GameService,
 ) *MessageHandler {
 	return &MessageHandler{
 		chatHandler: NewChatHandler(messageBatcher, messageService, groupService, routerService, conversationService),
-		roomHandler: NewRoomHandler(redisClient, roomService),
-		gameHandler: NewGameHandler(redisClient),
+		roomHandler: NewRoomHandler(redisClient, roomService, gameService),
+		gameHandler: NewGameHandler(gameService),
 		userHandler: NewUserHandler(conversationService, routerService),
 	}
 }
