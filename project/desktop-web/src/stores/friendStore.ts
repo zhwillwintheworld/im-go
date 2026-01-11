@@ -4,24 +4,24 @@ import { apiClient } from '@/services/api';
 // 好友信息
 export interface Friend {
     id: string;           // 好友关系 ID
-    friend_id: string;    // 好友用户 ID
+    friendId: string;     // 好友用户 ID
     username: string;
     nickname: string;
     avatar: string;
     remark: string;
-    create_at: string;
+    createAt: string;
 }
 
 // 好友请求
 export interface FriendRequest {
     id: string;
-    from_user_id: string;
-    from_username: string;
-    from_nickname: string;
-    from_avatar: string;
+    fromUserId: string;
+    fromUsername: string;
+    fromNickname: string;
+    fromAvatar: string;
     message: string;
     status: number;
-    create_at: string;
+    createAt: string;
 }
 
 interface FriendState {
@@ -82,7 +82,7 @@ export const useFriendStore = create<FriendState>((set, get) => ({
     sendFriendRequest: async (friendId: string, message?: string) => {
         try {
             const response = await apiClient.post('/friends/request', {
-                friend_id: parseInt(friendId),
+                friendId: parseInt(friendId),
                 message: message || '',
             });
             if (response.data.code === 0) {

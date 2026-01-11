@@ -10,8 +10,8 @@ type User struct {
 	Nickname     string    `json:"nickname" db:"nickname"`
 	Avatar       string    `json:"avatar" db:"avatar"`
 	Status       int       `json:"status" db:"status"`
-	CreateAt     time.Time `json:"create_at" db:"create_at"`
-	UpdateAt     time.Time `json:"update_at" db:"update_at"`
+	CreateAt     time.Time `json:"createAt" db:"create_at"`
+	UpdateAt     time.Time `json:"updateAt" db:"update_at"`
 	Deleted      int       `json:"-" db:"deleted"`
 }
 

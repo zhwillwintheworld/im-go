@@ -92,9 +92,9 @@ function Mahjong() {
             const config = JSON.stringify({
                 name: roomSettings.roomName,
                 password: roomSettings.password,
-                max_players: roomSettings.maxPlayers,
-                allow_spectators: roomSettings.allowSpectators,
-                auto_start: roomSettings.autoStart,
+                maxPlayers: roomSettings.maxPlayers,
+                allowSpectators: roomSettings.allowSpectators,
+                autoStart: roomSettings.autoStart,
             });
             await mahjongRoomService.createRoom(config);
             // 成功后会通过 onRoomUpdate 监听器跳转

@@ -26,10 +26,10 @@ interface ApiResponse<T> {
 }
 
 interface LoginResponse {
-    access_token: string;
-    refresh_token: string;
-    user_id: string;  // 使用 string 防止大整数精度丢失
-    expires_at: number;
+    accessToken: string;
+    refreshToken: string;
+    userId: string;  // 使用 string 防止大整数精度丢失
+    expiresAt: number;
 }
 
 // 生成设备ID
@@ -57,7 +57,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             body: JSON.stringify({
                 username,
                 password,
-                device_id: getDeviceId(),
+                deviceId: getDeviceId(),
                 platform: 'web',
             }),
         });
@@ -68,22 +68,22 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             throw new Error(result.message || '登录失败');
         }
 
-        const { access_token, refresh_token, user_id } = result.data;
+        const { accessToken, refreshToken, userId } = result.data;
 
         // 保存 token
-        localStorage.setItem('token', access_token);
-        localStorage.setItem('refresh_token', refresh_token);
+        localStorage.setItem('token', accessToken);
+        localStorage.setItem('refresh_token', refreshToken);
 
         set({
-            token: access_token,
-            refreshToken: refresh_token,
+            token: accessToken,
+            refreshToken: refreshToken,
             isAuthenticated: true,
         });
 
         // 获取用户信息
         const profileResponse = await fetch(`${config.apiBaseUrl}/api/v1/user/profile`, {
             headers: {
-                'Authorization': access_token,
+                'Authorization': accessToken,
             },
         });
 
@@ -95,7 +95,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             // 如果获取用户信息失败，使用基本信息
             set({
                 user: {
-                    id: String(user_id),
+                    id: String(userId),
                     username,
                     nickname: username,
                     avatar: '',

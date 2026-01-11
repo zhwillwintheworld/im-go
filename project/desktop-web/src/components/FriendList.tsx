@@ -53,7 +53,7 @@ const FriendList: React.FC<FriendListProps> = ({ onStartChat }) => {
             {friendList.map((friend) => (
                 <div key={friend.id} className="friend-item">
                     <Avatar
-                        src={friend.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${friend.friend_id}`}
+                        src={friend.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${friend.friendId}`}
                         icon={<UserOutlined />}
                         className="friend-avatar"
                     />
@@ -72,7 +72,7 @@ const FriendList: React.FC<FriendListProps> = ({ onStartChat }) => {
                         />
                         <Popconfirm
                             title="确定删除该好友？"
-                            onConfirm={() => handleDeleteFriend(friend.friend_id)}
+                            onConfirm={() => handleDeleteFriend(friend.friendId)}
                             okText="确定"
                             cancelText="取消"
                         >

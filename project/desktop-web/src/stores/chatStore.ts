@@ -52,18 +52,18 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     // 从好友创建对话
     addConversationFromFriend: (friend: Friend) => {
-        const existing = get().conversations.find((c) => c.id === friend.friend_id);
+        const existing = get().conversations.find((c) => c.id === friend.friendId);
         if (existing) {
             // 已存在，直接设为当前对话
-            set({ activeConversationId: friend.friend_id });
+            set({ activeConversationId: friend.friendId });
             return;
         }
 
         // 创建新对话
         const newConversation: Conversation = {
-            id: friend.friend_id,
+            id: friend.friendId,
             name: friend.remark || friend.nickname || friend.username,
-            avatar: friend.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${friend.friend_id}`,
+            avatar: friend.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${friend.friendId}`,
             lastMessage: '',
             unreadCount: 0,
             updatedAt: Date.now(),
@@ -71,7 +71,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
         set((state) => ({
             conversations: [newConversation, ...state.conversations],
-            activeConversationId: friend.friend_id,
+            activeConversationId: friend.friendId,
         }));
     },
 
