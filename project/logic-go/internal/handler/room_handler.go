@@ -166,15 +166,13 @@ func (h *JoinRoomHandler) Handle(ctx context.Context, req *proto.RoomRequest, ac
 		"userId", req.UserId,
 		"reqId", req.ReqId,
 		"roomId", req.RoomId,
-		"seatIndex", req.SeatIndex,
 		"accessNodeId", accessNodeId)
 
 	// 调用 Service 层处理业务逻辑
 	_, err := h.roomService.JoinRoom(ctx, room.JoinRoomParams{
-		UserId:    req.UserId,
-		RoomId:    req.RoomId,
-		Password:  req.RoomConfig, // RoomConfig 用于传递密码
-		SeatIndex: req.SeatIndex,
+		UserId:   req.UserId,
+		RoomId:   req.RoomId,
+		Password: req.RoomConfig, // RoomConfig 用于传递密码
 	})
 
 	if err != nil {

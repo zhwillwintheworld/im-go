@@ -23,10 +23,9 @@ type CreateRoomParams struct {
 
 // JoinRoomParams 加入房间参数
 type JoinRoomParams struct {
-	UserId    int64
-	RoomId    string
-	Password  string
-	SeatIndex int32
+	UserId   int64
+	RoomId   string
+	Password string
 }
 
 // LeaveRoomParams 离开房间参数
@@ -73,13 +72,25 @@ func (s *RoomService) CreateRoom(ctx context.Context, params CreateRoomParams) (
 	}
 
 	// 创建房间（通过 RoomManager）
-	room := s.roomManager.GetOrCreate(roomId, params.UserId, config)
+	room := s.roomManager.GetOrCreate(roomId, params.UserId, config, params.GameType)
+
+	// 获取策略
+	strategy, err := s.getGameTypeStrategy(params.GameType)
+	if err != nil {
+		return nil, err
+	}
+
+	seatIndex, err := strategy.AllocateSeat(room.roomInfo)
+	if err != nil {
+		s.logger.Error("Failed to allocate seat for creator", "error", err, "roomId", roomId)
+		return nil, err
+	}
 
 	// 获取用户信息
 	userInfo := s.getUserInfo(ctx, params.UserId)
 
 	// 房主自动加入房间
-	if err := room.Join(ctx, params.UserId, 0, userInfo); err != nil {
+	if err := room.Join(params.UserId, seatIndex, userInfo); err != nil {
 		s.logger.Error("Failed to join room as creator", "error", err, "roomId", roomId)
 		return nil, err
 	}
@@ -97,20 +108,36 @@ func (s *RoomService) JoinRoom(ctx context.Context, params JoinRoomParams) (*mod
 		return nil, ErrRoomNotFound
 	}
 
+	// 获取策略（直接访问 roomInfo，避免不必要的拷贝）
+	strategy, err := s.getGameTypeStrategy(room.roomInfo.GameType)
+	if err != nil {
+		return nil, err
+	}
+
+	// 使用策略自动分配座位
+	seatIndex, err := strategy.AllocateSeat(room.roomInfo)
+	if err != nil {
+		s.logger.Warn("Failed to allocate seat", "error", err, "userId", params.UserId, "roomId", params.RoomId)
+		return nil, err
+	}
+
 	// 获取用户信息
 	userInfo := s.getUserInfo(ctx, params.UserId)
 
 	// 加入房间
-	if err := room.Join(ctx, params.UserId, params.SeatIndex, userInfo); err != nil {
+	if err := room.Join(params.UserId, seatIndex, userInfo); err != nil {
 		s.logger.Warn("Failed to join room", "error", err, "userId", params.UserId, "roomId", params.RoomId)
 		return nil, err
 	}
 
-	s.logger.Info("User joined room", "userId", params.UserId, "roomId", params.RoomId)
+	s.logger.Info("User joined room", "userId", params.UserId, "roomId", params.RoomId, "seatIndex", seatIndex)
 
 	// 广播房间更新
 	snapshot := room.GetSnapshot()
-	s.BroadcastToRoom(ctx, params.RoomId, "ROOM_UPDATED", snapshot)
+	err = s.BroadcastToRoom(ctx, params.RoomId, "ROOM_UPDATED", snapshot)
+	if err != nil {
+		return nil, err
+	}
 
 	return snapshot, nil
 }
@@ -124,7 +151,7 @@ func (s *RoomService) LeaveRoom(ctx context.Context, params LeaveRoomParams) (*m
 	}
 
 	// 离开房间
-	if err := room.Leave(ctx, params.UserId); err != nil {
+	if err := room.Leave(params.UserId); err != nil {
 		s.logger.Warn("Failed to leave room", "error", err, "userId", params.UserId, "roomId", params.RoomId)
 		return nil, err
 	}
@@ -133,7 +160,10 @@ func (s *RoomService) LeaveRoom(ctx context.Context, params LeaveRoomParams) (*m
 
 	// 广播房间更新
 	snapshot := room.GetSnapshot()
-	s.BroadcastToRoom(ctx, params.RoomId, "ROOM_UPDATED", snapshot)
+	err := s.BroadcastToRoom(ctx, params.RoomId, "ROOM_UPDATED", snapshot)
+	if err != nil {
+		return nil, err
+	}
 
 	return snapshot, nil
 }
@@ -147,7 +177,7 @@ func (s *RoomService) ReadyRoom(ctx context.Context, params ReadyRoomParams) (*m
 	}
 
 	// 切换准备状态
-	if err := room.Ready(ctx, params.UserId); err != nil {
+	if err := room.Ready(params.UserId); err != nil {
 		s.logger.Warn("Failed to ready", "error", err, "userId", params.UserId, "roomId", params.RoomId)
 		return nil, err
 	}
@@ -156,7 +186,10 @@ func (s *RoomService) ReadyRoom(ctx context.Context, params ReadyRoomParams) (*m
 
 	// 广播房间更新
 	snapshot := room.GetSnapshot()
-	s.BroadcastToRoom(ctx, params.RoomId, "ROOM_UPDATED", snapshot)
+	err := s.BroadcastToRoom(ctx, params.RoomId, "ROOM_UPDATED", snapshot)
+	if err != nil {
+		return nil, err
+	}
 
 	return snapshot, nil
 }
@@ -170,7 +203,7 @@ func (s *RoomService) ChangeSeat(ctx context.Context, params ChangeSeatParams) (
 	}
 
 	// 换座位
-	if err := room.ChangeSeat(ctx, params.UserId, params.TargetSeat); err != nil {
+	if err := room.ChangeSeat(params.UserId, params.TargetSeat); err != nil {
 		s.logger.Warn("Failed to change seat", "error", err, "userId", params.UserId, "roomId", params.RoomId)
 		return nil, err
 	}
@@ -179,7 +212,10 @@ func (s *RoomService) ChangeSeat(ctx context.Context, params ChangeSeatParams) (
 
 	// 广播房间更新
 	snapshot := room.GetSnapshot()
-	s.BroadcastToRoom(ctx, params.RoomId, "ROOM_UPDATED", snapshot)
+	err := s.BroadcastToRoom(ctx, params.RoomId, "ROOM_UPDATED", snapshot)
+	if err != nil {
+		return nil, err
+	}
 
 	return snapshot, nil
 }
@@ -192,15 +228,14 @@ func (s *RoomService) StartGame(ctx context.Context, params StartGameParams) (*m
 		return nil, ErrRoomNotFound
 	}
 
-	// 获取策略
-	snapshot := r.GetSnapshot()
-	strategy, err := s.getGameTypeStrategy(snapshot.GameType)
+	// 获取策略（直接访问 roomInfo）
+	strategy, err := s.getGameTypeStrategy(r.roomInfo.GameType)
 	if err != nil {
 		return nil, err
 	}
 
 	// 开始游戏（策略验证在 Room.StartGame 内部）
-	if err := r.StartGame(ctx, params.UserId, strategy); err != nil {
+	if err := r.StartGame(params.UserId, strategy); err != nil {
 		s.logger.Warn("Failed to start game", "error", err, "userId", params.UserId, "roomId", params.RoomId)
 		return nil, err
 	}
@@ -208,8 +243,11 @@ func (s *RoomService) StartGame(ctx context.Context, params StartGameParams) (*m
 	s.logger.Info("Game started successfully", "userId", params.UserId, "roomId", params.RoomId)
 
 	// 广播游戏开始
-	snapshot = r.GetSnapshot()
-	s.BroadcastToRoom(ctx, params.RoomId, "GAME_STARTED", snapshot)
+	snapshot := r.GetSnapshot()
+	err = s.BroadcastToRoom(ctx, params.RoomId, "GAME_STARTED", snapshot)
+	if err != nil {
+		return nil, err
+	}
 
 	return snapshot, nil
 }

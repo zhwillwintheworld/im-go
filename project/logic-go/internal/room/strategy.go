@@ -6,6 +6,7 @@ import "sudooom.im.shared/model"
 type GameTypeStrategy interface {
 	ValidatePlayers(r *model.Room) error
 	GetRequiredPlayerCount() int
+	AllocateSeat(r *model.Room) (int32, error)
 }
 
 // MahjongGameStrategy 麻将游戏策略
@@ -38,4 +39,23 @@ func (s *MahjongGameStrategy) ValidatePlayers(r *model.Room) error {
 
 func (s *MahjongGameStrategy) GetRequiredPlayerCount() int {
 	return 4
+}
+
+func (s *MahjongGameStrategy) AllocateSeat(r *model.Room) (int32, error) {
+	// 麻将座位：0=东, 1=南, 2=西, 3=北
+	occupied := make(map[int32]bool)
+	for _, p := range r.Players {
+		if p.SeatIndex != -1 {
+			occupied[p.SeatIndex] = true
+		}
+	}
+
+	// 分配第一个空闲座位
+	for i := int32(0); i < 4; i++ {
+		if !occupied[i] {
+			return i, nil
+		}
+	}
+
+	return -1, ErrNoAvailableSeat
 }

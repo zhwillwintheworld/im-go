@@ -21,4 +21,5 @@ var (
 	ErrUnsupportedGameType = errors.New("UNSUPPORTED_GAME_TYPE")
 	ErrCannotStartGame     = errors.New("CANNOT_START_GAME")
 	ErrLockFailed          = errors.New("LOCK_FAILED")
+	ErrNoAvailableSeat     = errors.New("NO_AVAILABLE_SEAT")
 )
