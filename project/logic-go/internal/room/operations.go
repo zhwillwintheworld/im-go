@@ -97,7 +97,7 @@ func (s *RoomService) CreateRoom(ctx context.Context, params CreateRoomParams) (
 
 	s.logger.Info("Room created", "roomId", roomId, "creator", params.UserId)
 
-	return room.GetSnapshot(), nil
+	return room.CopyRoomInfo(), nil
 }
 
 // JoinRoom 加入房间
@@ -133,7 +133,7 @@ func (s *RoomService) JoinRoom(ctx context.Context, params JoinRoomParams) (*mod
 	s.logger.Info("User joined room", "userId", params.UserId, "roomId", params.RoomId, "seatIndex", seatIndex)
 
 	// 广播房间更新
-	snapshot := room.GetSnapshot()
+	snapshot := room.CopyRoomInfo()
 	err = s.BroadcastToRoom(ctx, params.RoomId, "ROOM_UPDATED", snapshot)
 	if err != nil {
 		return nil, err
@@ -159,7 +159,7 @@ func (s *RoomService) LeaveRoom(ctx context.Context, params LeaveRoomParams) (*m
 	s.logger.Info("User left room", "userId", params.UserId, "roomId", params.RoomId)
 
 	// 广播房间更新
-	snapshot := room.GetSnapshot()
+	snapshot := room.CopyRoomInfo()
 	err := s.BroadcastToRoom(ctx, params.RoomId, "ROOM_UPDATED", snapshot)
 	if err != nil {
 		return nil, err
@@ -185,7 +185,7 @@ func (s *RoomService) ReadyRoom(ctx context.Context, params ReadyRoomParams) (*m
 	s.logger.Info("User ready status changed", "userId", params.UserId, "roomId", params.RoomId)
 
 	// 广播房间更新
-	snapshot := room.GetSnapshot()
+	snapshot := room.CopyRoomInfo()
 	err := s.BroadcastToRoom(ctx, params.RoomId, "ROOM_UPDATED", snapshot)
 	if err != nil {
 		return nil, err
@@ -211,7 +211,7 @@ func (s *RoomService) ChangeSeat(ctx context.Context, params ChangeSeatParams) (
 	s.logger.Info("User changed seat", "userId", params.UserId, "roomId", params.RoomId, "targetSeat", params.TargetSeat)
 
 	// 广播房间更新
-	snapshot := room.GetSnapshot()
+	snapshot := room.CopyRoomInfo()
 	err := s.BroadcastToRoom(ctx, params.RoomId, "ROOM_UPDATED", snapshot)
 	if err != nil {
 		return nil, err
@@ -243,7 +243,7 @@ func (s *RoomService) StartGame(ctx context.Context, params StartGameParams) (*m
 	s.logger.Info("Game started successfully", "userId", params.UserId, "roomId", params.RoomId)
 
 	// 广播游戏开始
-	snapshot := r.GetSnapshot()
+	snapshot := r.CopyRoomInfo()
 	err = s.BroadcastToRoom(ctx, params.RoomId, "GAME_STARTED", snapshot)
 	if err != nil {
 		return nil, err

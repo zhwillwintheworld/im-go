@@ -121,8 +121,10 @@ func (h *CreateRoomHandler) Handle(ctx context.Context, req *proto.RoomRequest, 
 		roomName = "房间" // 默认房间名
 	}
 	roomType := config["roomType"]
-	if roomType == "" {
-		roomType = "NORMAL" // 默认房间类型
+	if roomType == "" && config["roomPassword"] == "" {
+		roomType = "public" // 默认房间类型
+	} else {
+		roomType = "private"
 	}
 	roomPassword := config["roomPassword"]
 	maxPlayers := 4 // 默认最大玩家数

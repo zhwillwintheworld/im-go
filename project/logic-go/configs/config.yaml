@@ -47,6 +47,6 @@ batch:
 
 # 房间管理配置
 room:
-  max_rooms: 5000          # 最大房间数
+  max_rooms: 50000          # 最大房间数
   evict_check_interval: 60s # 房间清理检查间隔
   evict_timeout: 30m       # 房间无响应超时时间

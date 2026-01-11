@@ -7,25 +7,25 @@ import (
 	"sudooom.im.shared/model"
 )
 
-// RoomInstance 房间实例对象
+// Room 房间实例对象
 // 在内存中管理房间状态，使用 RWMutex 保证并发安全
-// 与 model.Room（数据传输对象）区分，RoomInstance 负责并发控制和生命周期管理
+// 与 model.Room（数据传输对象）区分，Room 负责并发控制和生命周期管理
 //
 // 使用示例：
 //
 //	room := NewRoom("room123", createParams)
 //	err := room.Join(joinParams)
 //	err := room.Ready(userId)
-type RoomInstance struct {
+type Room struct {
 	mu         sync.RWMutex // 读写锁，保护房间状态
 	roomInfo   *model.Room  // 房间数据
 	lastActive time.Time    // 最后活跃时间（用于淘汰策略）
 }
 
 // NewRoom 创建房间实例
-func NewRoom(roomID string, creatorID int64, config *model.RoomConfig, gameType string) *RoomInstance {
+func NewRoom(roomID string, creatorID int64, config *model.RoomConfig, gameType string) *Room {
 	now := time.Now()
-	return &RoomInstance{
+	return &Room{
 		roomInfo: &model.Room{
 			RoomID:       roomID,
 			RoomName:     config.RoomName,
@@ -44,19 +44,19 @@ func NewRoom(roomID string, creatorID int64, config *model.RoomConfig, gameType 
 	}
 }
 
-// GetSnapshot 获取房间快照（只读）
-func (r *RoomInstance) GetSnapshot() *model.Room {
+// CopyRoomInfo 复制房间信息（需要在持有锁的情况下调用）
+// 返回深拷贝的房间数据，用于返回给外部
+func (r *Room) CopyRoomInfo() *model.Room {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	// 深拷贝房间信息
 	snapshot := *r.roomInfo
 	snapshot.Players = append([]model.RoomPlayer{}, r.roomInfo.Players...)
 	return &snapshot
 }
 
 // Join 加入房间
-func (r *RoomInstance) Join(userId int64, seatIndex int32, userInfo *model.User) error {
+func (r *Room) Join(userId int64, seatIndex int32, userInfo *model.User) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -97,7 +97,7 @@ func (r *RoomInstance) Join(userId int64, seatIndex int32, userInfo *model.User)
 }
 
 // Leave 离开房间
-func (r *RoomInstance) Leave(userId int64) error {
+func (r *Room) Leave(userId int64) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -122,7 +122,7 @@ func (r *RoomInstance) Leave(userId int64) error {
 }
 
 // Ready 准备/取消准备
-func (r *RoomInstance) Ready(userId int64) error {
+func (r *Room) Ready(userId int64) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -139,7 +139,7 @@ func (r *RoomInstance) Ready(userId int64) error {
 }
 
 // ChangeSeat 换座位
-func (r *RoomInstance) ChangeSeat(userId int64, targetSeat int32) error {
+func (r *Room) ChangeSeat(userId int64, targetSeat int32) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -181,7 +181,7 @@ func (r *RoomInstance) ChangeSeat(userId int64, targetSeat int32) error {
 }
 
 // StartGame 开始游戏
-func (r *RoomInstance) StartGame(userId int64, strategy GameTypeStrategy) error {
+func (r *Room) StartGame(userId int64, strategy GameTypeStrategy) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -213,7 +213,7 @@ func (r *RoomInstance) StartGame(userId int64, strategy GameTypeStrategy) error 
 }
 
 // LastActiveTime 获取最后活跃时间
-func (r *RoomInstance) LastActiveTime() time.Time {
+func (r *Room) LastActiveTime() time.Time {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return r.lastActive

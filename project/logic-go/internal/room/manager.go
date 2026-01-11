@@ -18,7 +18,7 @@ import (
 //	room := manager.GetOrCreate(roomId, createParams)
 //	manager.Remove(roomId)
 type RoomManager struct {
-	rooms sync.Map // roomId -> *RoomInstance
+	rooms sync.Map // roomId -> *Room
 
 	// LRU 配置
 	maxRooms     int
@@ -52,23 +52,23 @@ func (m *RoomManager) SetRoomService(rs interface{}) {
 }
 
 // GetOrCreate 获取或创建房间
-func (m *RoomManager) GetOrCreate(roomId string, creatorID int64, config *model.RoomConfig, gameType string) *RoomInstance {
+func (m *RoomManager) GetOrCreate(roomId string, creatorID int64, config *model.RoomConfig, gameType string) *Room {
 	if val, ok := m.rooms.Load(roomId); ok {
-		return val.(*RoomInstance)
+		return val.(*Room)
 	}
 
 	room := NewRoom(roomId, creatorID, config, gameType)
 	actual, _ := m.rooms.LoadOrStore(roomId, room)
-	return actual.(*RoomInstance)
+	return actual.(*Room)
 }
 
 // Get 获取房间
-func (m *RoomManager) Get(roomId string) (*RoomInstance, bool) {
+func (m *RoomManager) Get(roomId string) (*Room, bool) {
 	val, ok := m.rooms.Load(roomId)
 	if !ok {
 		return nil, false
 	}
-	return val.(*RoomInstance), true
+	return val.(*Room), true
 }
 
 // Remove 移除房间
@@ -101,7 +101,7 @@ func (m *RoomManager) evictInactive() {
 
 	m.rooms.Range(func(key, value interface{}) bool {
 		roomId := key.(string)
-		room := value.(*RoomInstance)
+		room := value.(*Room)
 
 		if now.Sub(room.LastActiveTime()) > m.evictTimeout {
 			toEvict = append(toEvict, roomId)
@@ -112,7 +112,7 @@ func (m *RoomManager) evictInactive() {
 
 	for _, roomId := range toEvict {
 		if val, ok := m.rooms.Load(roomId); ok {
-			room := val.(*RoomInstance)
+			room := val.(*Room)
 
 			// 向房间所有用户发送退出房间消息
 			if m.roomService != nil {

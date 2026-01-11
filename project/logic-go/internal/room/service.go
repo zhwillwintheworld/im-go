@@ -75,7 +75,7 @@ func (s *RoomService) BroadcastToRoom(ctx context.Context, roomId string, event 
 		return ErrRoomNotFound
 	}
 
-	snapshot := r.GetSnapshot()
+	snapshot := r.CopyRoomInfo()
 
 	// 提取用户 ID 列表
 	userIds := make([]int64, 0, len(snapshot.Players))
@@ -106,5 +106,5 @@ func (s *RoomService) GetRoom(ctx context.Context, roomId string) (*model.Room, 
 		return nil, ErrRoomNotFound
 	}
 
-	return r.GetSnapshot(), nil
+	return r.CopyRoomInfo(), nil
 }
