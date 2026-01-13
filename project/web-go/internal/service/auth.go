@@ -28,16 +28,16 @@ type RegisterRequest struct {
 type LoginRequest struct {
 	Username string `json:"username" binding:"required" example:"zhangsan"`                                           // 用户名
 	Password string `json:"password" binding:"required" example:"123456"`                                             // 密码
-	DeviceID string `json:"device_id" binding:"required" example:"device-uuid-123"`                                   // 设备ID
+	DeviceID string `json:"deviceId" binding:"required" example:"device-uuid-123"`                                    // 设备ID
 	Platform string `json:"platform" binding:"required" example:"web" enums:"unknown,android,ios,web,desktop,wechat"` // 平台类型
 }
 
 // LoginResponse 登录响应
 type LoginResponse struct {
-	UserID       int64  `json:"user_id,string" example:"1234567890123456789"`            // 用户ID (使用string传输防止JS精度丢失)
-	AccessToken  string `json:"access_token" example:"eyJhbGciOiJIUzI1NiIsInR5cCI6..."`  // 访问令牌
-	RefreshToken string `json:"refresh_token" example:"eyJhbGciOiJIUzI1NiIsInR5cCI6..."` // 刷新令牌
-	ExpiresAt    int64  `json:"expires_at" example:"1702915200"`                         // 过期时间戳
+	UserID       int64  `json:"userId,string" example:"1234567890123456789"`            // 用户ID (使用string传输防止JS精度丢失)
+	AccessToken  string `json:"accessToken" example:"eyJhbGciOiJIUzI1NiIsInR5cCI6..."`  // 访问令牌
+	RefreshToken string `json:"refreshToken" example:"eyJhbGciOiJIUzI1NiIsInR5cCI6..."` // 刷新令牌
+	ExpiresAt    int64  `json:"expiresAt" example:"1702915200"`                         // 过期时间戳
 }
 
 // AuthService 认证服务

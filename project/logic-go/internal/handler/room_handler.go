@@ -9,6 +9,8 @@ import (
 	"github.com/redis/go-redis/v9"
 	"sudooom.im.logic/internal/game"
 	"sudooom.im.logic/internal/room"
+	"sudooom.im.logic/internal/service"
+	sharedModel "sudooom.im.shared/model"
 	"sudooom.im.shared/proto"
 )
 
@@ -23,16 +25,18 @@ type RoomHandler struct {
 	redisClient    *redis.Client
 	roomService    *room.RoomService
 	gameService    *game.GameService
+	routerService  *service.RouterService
 	logger         *slog.Logger
 }
 
 // NewRoomHandler 创建房间请求处理器
-func NewRoomHandler(redisClient *redis.Client, roomService *room.RoomService, gameService *game.GameService) *RoomHandler {
+func NewRoomHandler(redisClient *redis.Client, roomService *room.RoomService, gameService *game.GameService, routerService *service.RouterService) *RoomHandler {
 	h := &RoomHandler{
 		actionHandlers: make(map[string]RoomActionHandler),
 		redisClient:    redisClient,
 		roomService:    roomService,
 		gameService:    gameService,
+		routerService:  routerService,
 		logger:         slog.Default(),
 	}
 
@@ -45,29 +49,35 @@ func NewRoomHandler(redisClient *redis.Client, roomService *room.RoomService, ga
 // registerActionHandlers 注册各种房间操作处理器
 func (h *RoomHandler) registerActionHandlers() {
 	h.actionHandlers["CREATE"] = &CreateRoomHandler{
-		roomService: h.roomService,
-		logger:      h.logger,
+		roomService:   h.roomService,
+		routerService: h.routerService,
+		logger:        h.logger,
 	}
 	h.actionHandlers["JOIN"] = &JoinRoomHandler{
-		roomService: h.roomService,
-		logger:      h.logger,
+		roomService:   h.roomService,
+		routerService: h.routerService,
+		logger:        h.logger,
 	}
 	h.actionHandlers["LEAVE"] = &LeaveRoomHandler{
-		roomService: h.roomService,
-		logger:      h.logger,
+		roomService:   h.roomService,
+		routerService: h.routerService,
+		logger:        h.logger,
 	}
 	h.actionHandlers["READY"] = &ReadyRoomHandler{
-		roomService: h.roomService,
-		logger:      h.logger,
+		roomService:   h.roomService,
+		routerService: h.routerService,
+		logger:        h.logger,
 	}
 	h.actionHandlers["CHANGE_SEAT"] = &ChangeSeatHandler{
-		roomService: h.roomService,
-		logger:      h.logger,
+		roomService:   h.roomService,
+		routerService: h.routerService,
+		logger:        h.logger,
 	}
 	h.actionHandlers["START_GAME"] = &StartGameHandler{
-		roomService: h.roomService,
-		gameService: h.gameService,
-		logger:      h.logger,
+		roomService:   h.roomService,
+		gameService:   h.gameService,
+		routerService: h.routerService,
+		logger:        h.logger,
 	}
 }
 
@@ -90,8 +100,9 @@ func (h *RoomHandler) Handle(ctx context.Context, req *proto.RoomRequest, access
 
 // CreateRoomHandler 创建房间
 type CreateRoomHandler struct {
-	roomService *room.RoomService
-	logger      *slog.Logger
+	roomService   *room.RoomService
+	routerService *service.RouterService
+	logger        *slog.Logger
 }
 
 func (h *CreateRoomHandler) Handle(ctx context.Context, req *proto.RoomRequest, accessNodeId string, connId int64, platform string) error {
@@ -107,7 +118,7 @@ func (h *CreateRoomHandler) Handle(ctx context.Context, req *proto.RoomRequest, 
 	if req.RoomConfig != "" {
 		if err := json.Unmarshal([]byte(req.RoomConfig), &config); err != nil {
 			h.logger.Error("Failed to parse room config", "error", err, "userId", req.UserId)
-			// TODO: 发送创建失败响应
+			h.sendErrorResponse(ctx, accessNodeId, connId, platform, req.UserId, "", err)
 			return nil // 不阻塞流程
 		}
 	}
@@ -146,7 +157,7 @@ func (h *CreateRoomHandler) Handle(ctx context.Context, req *proto.RoomRequest, 
 	})
 	if err != nil {
 		h.logger.Error("Failed to create room", "error", err, "userId", req.UserId)
-		// TODO: 发送创建失败响应
+		h.sendErrorResponse(ctx, accessNodeId, connId, platform, req.UserId, "", err)
 		return nil // 不阻塞流程
 	}
 
@@ -157,10 +168,60 @@ func (h *CreateRoomHandler) Handle(ctx context.Context, req *proto.RoomRequest, 
 	return nil
 }
 
+// sendErrorResponse 发送错误响应
+func (h *CreateRoomHandler) sendErrorResponse(ctx context.Context, accessNodeId string, connId int64, platform string, userId int64, roomId string, err error) {
+	// 将 error 映射到错误码和消息
+	errorCode, errorMsg := h.mapErrorToCodeAndMsg(err)
+
+	// 构建错误响应的 RoomInfo（使用 JSON）
+	errorInfo := map[string]interface{}{
+		"errorCode": errorCode,
+		"errorMsg":  errorMsg,
+		"roomId":    roomId,
+	}
+	roomInfoBytes, marshalErr := json.Marshal(errorInfo)
+	if marshalErr != nil {
+		h.logger.Error("Failed to marshal error info", "error", marshalErr)
+		return
+	}
+
+	// 通过 RouterService 发送错误响应
+	senderLoc := sharedModel.UserLocation{
+		AccessNodeId: accessNodeId,
+		ConnId:       connId,
+		Platform:     platform,
+		UserId:       userId,
+	}
+
+	if sendErr := h.routerService.SendRoomPushToSelf(senderLoc, "ERROR", roomId, roomInfoBytes); sendErr != nil {
+		h.logger.Warn("Failed to send error response", "userId", userId, "roomId", roomId, "error", sendErr)
+	}
+}
+
+// mapErrorToCodeAndMsg 将 error 映射到错误码和错误消息
+func (h *CreateRoomHandler) mapErrorToCodeAndMsg(err error) (string, string) {
+	// 创建房间的特定错误
+	if err != nil {
+		errMsg := err.Error()
+		// 根据错误信息判断错误类型
+		if errors.Is(err, room.ErrRoomBusy) {
+			return "ROOM_BUSY", "房间正在处理其他操作"
+		}
+		// JSON 解析错误
+		if json.Unmarshal([]byte(""), &map[string]string{}) != nil {
+			return "INVALID_CONFIG", "房间配置格式错误"
+		}
+		// 其他通用错误
+		return "CREATE_FAILED", "创建房间失败: " + errMsg
+	}
+	return "CREATE_FAILED", "创建房间失败"
+}
+
 // JoinRoomHandler 加入房间
 type JoinRoomHandler struct {
-	roomService *room.RoomService
-	logger      *slog.Logger
+	roomService   *room.RoomService
+	routerService *service.RouterService
+	logger        *slog.Logger
 }
 
 func (h *JoinRoomHandler) Handle(ctx context.Context, req *proto.RoomRequest, accessNodeId string, connId int64, platform string) error {
@@ -191,9 +252,29 @@ func (h *JoinRoomHandler) sendErrorResponse(ctx context.Context, accessNodeId st
 	// 将 error 映射到错误码和消息
 	errorCode, errorMsg := h.mapErrorToCodeAndMsg(err)
 
-	// TODO: 发送错误响应给客户端
-	// 错误响应暂时通过日志记录，后续可以通过 RouterService 发送
-	h.logger.Warn("Join room error", "userId", userId, "roomId", roomId, "errorCode", errorCode, "errorMsg", errorMsg)
+	// 构建错误响应的 RoomInfo（使用 JSON）
+	errorInfo := map[string]interface{}{
+		"errorCode": errorCode,
+		"errorMsg":  errorMsg,
+		"roomId":    roomId,
+	}
+	roomInfoBytes, marshalErr := json.Marshal(errorInfo)
+	if marshalErr != nil {
+		h.logger.Error("Failed to marshal error info", "error", marshalErr)
+		return
+	}
+
+	// 通过 RouterService 发送错误响应
+	senderLoc := sharedModel.UserLocation{
+		AccessNodeId: accessNodeId,
+		ConnId:       connId,
+		Platform:     platform,
+		UserId:       userId,
+	}
+
+	if sendErr := h.routerService.SendRoomPushToSelf(senderLoc, "ERROR", roomId, roomInfoBytes); sendErr != nil {
+		h.logger.Warn("Failed to send error response", "userId", userId, "roomId", roomId, "error", sendErr)
+	}
 }
 
 // mapErrorToCodeAndMsg 将 error 映射到错误码和错误消息
@@ -220,8 +301,9 @@ func (h *JoinRoomHandler) mapErrorToCodeAndMsg(err error) (string, string) {
 
 // LeaveRoomHandler 离开房间
 type LeaveRoomHandler struct {
-	roomService *room.RoomService
-	logger      *slog.Logger
+	roomService   *room.RoomService
+	routerService *service.RouterService
+	logger        *slog.Logger
 }
 
 func (h *LeaveRoomHandler) Handle(ctx context.Context, req *proto.RoomRequest, accessNodeId string, connId int64, platform string) error {
@@ -249,8 +331,9 @@ func (h *LeaveRoomHandler) Handle(ctx context.Context, req *proto.RoomRequest, a
 
 // ReadyRoomHandler 准备/取消准备
 type ReadyRoomHandler struct {
-	roomService *room.RoomService
-	logger      *slog.Logger
+	roomService   *room.RoomService
+	routerService *service.RouterService
+	logger        *slog.Logger
 }
 
 func (h *ReadyRoomHandler) Handle(ctx context.Context, req *proto.RoomRequest, accessNodeId string, connId int64, platform string) error {
@@ -278,8 +361,9 @@ func (h *ReadyRoomHandler) Handle(ctx context.Context, req *proto.RoomRequest, a
 
 // ChangeSeatHandler 换座位
 type ChangeSeatHandler struct {
-	roomService *room.RoomService
-	logger      *slog.Logger
+	roomService   *room.RoomService
+	routerService *service.RouterService
+	logger        *slog.Logger
 }
 
 func (h *ChangeSeatHandler) Handle(ctx context.Context, req *proto.RoomRequest, accessNodeId string, connId int64, platform string) error {
@@ -309,9 +393,10 @@ func (h *ChangeSeatHandler) Handle(ctx context.Context, req *proto.RoomRequest, 
 
 // StartGameHandler 开始游戏
 type StartGameHandler struct {
-	roomService *room.RoomService
-	gameService *game.GameService
-	logger      *slog.Logger
+	roomService   *room.RoomService
+	gameService   *game.GameService
+	routerService *service.RouterService
+	logger        *slog.Logger
 }
 
 func (h *StartGameHandler) Handle(ctx context.Context, req *proto.RoomRequest, accessNodeId string, connId int64, platform string) error {

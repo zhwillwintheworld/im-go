@@ -4,170 +4,152 @@
 
 # macOS 系统文件
 .DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows 系统文件
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
 
 # 通用临时文件和备份
 *.swp
+*.swo
 *.bak
+*.orig
 tmp/
 *.tmp
-build/
-
-# Go 二进制文件
-project/**/bin/
-project/**/certs/
-
-# 通用日志文件
-*.log
-
-# 环境变量文件 - 常包含敏感信息
-.env
-.env.local
-.env.*.local
+temp/
+.cache/
+*~
 
 ###############################################################################
-# IDE 和编辑器配置 - 适用于整个仓库
+# IDE 和编辑器配置
 ###############################################################################
 
-# VS Code
-.vscode/
-.project
-
-# JetBrains IDEs (IntelliJ, PyCharm, WebStorm等)
-**/.idea/
+# JetBrains IDEs (GoLand, IntelliJ IDEA, WebStorm, PyCharm 等)
+# 保留项目级别的配置，忽略个人设置
+.idea/
+# 模块文件
 *.iml
 *.ipr
 *.iws
 .idea_modules/
 
+# CMake
+cmake-build-*/
+# VS Code
+.vscode/*
+
+# Sublime Text
+*.sublime-workspace
+*.sublime-project
+
+# Vim
+[._]*.s[a-v][a-z]
+[._]*.sw[a-p]
+[._]s[a-rt-v][a-z]
+[._]ss[a-gi-z]
+[._]sw[a-p]
+
+# Emacs
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+
 ###############################################################################
-# Python 相关 - 主要应用于 Python 项目目录
+# Go 语言相关
 ###############################################################################
 
-# 字节编译/优化文件
-__pycache__/
-*.py[cod]
-*$py.class
-
-# C扩展
+# 二进制文件
+*.exe
+*.exe~
+*.dll
 *.so
+*.dylib
 
-# 分发/打包
-project/**/build/
-project/**/develop-eggs/
-project/**/dist/
-project/**/downloads/
-project/**/eggs/
-project/**/.eggs/
-project/**/parts/
-project/**/sdist/
-project/**/var/
-project/**/wheels/
-project/**/share/python-wheels/
-project/**/*.egg-info/
-project/**/.installed.cfg
-project/**/*.egg
-project/**/MANIFEST
+# Go 测试和覆盖率
+*.test
+*.out
+coverage.txt
+coverage.html
+*.cover
+*.coverprofile
 
-# PyInstaller
-project/**/*.manifest
-project/**/*.spec
+# Go 构建产物
+project/access-go/bin/
+project/logic-go/bin/
+project/web-go/bin/
+project/shared/bin/
+bin/
+vendor/
+dist/
 
-# 安装日志
-project/**/pip-log.txt
-project/**/pip-delete-this-directory.txt
+# Go 工具生成的文件
+*.prof
 
-# 单元测试/覆盖率报告
-project/**/htmlcov/
-project/**/.tox/
-project/**/.nox/
-project/**/.coverage
-project/**/.coverage.*
-project/**/.cache
-project/**/nosetests.xml
-project/**/coverage.xml
-project/**/*.cover
-project/**/*.py,cover
-project/**/.hypothesis/
-project/**/.pytest_cache/
-project/**/cover/
+# Air 热重载工具
+.air.toml.local
 
-# 翻译
-project/**/*.mo
-project/**/*.pot
-
-# Django
-project/**/local_settings.py
-project/**/db.sqlite3
-project/**/db.sqlite3-journal
-
-# Flask
-project/**/instance/
-project/**/.webassets-cache
-
-# Scrapy
-project/**/.scrapy
-
-# Sphinx
-project/**/docs/_build/
-
-# PyBuilder
-project/**/.pybuilder/
-project/**/target/
-
-# Jupyter & IPython
-project/**/.ipynb_checkpoints
-project/**/profile_default/
-project/**/ipython_config.py
-
-# 虚拟环境
-project/**/.venv
-project/**/env/
-project/**/venv/
-project/**/ENV/
-project/**/env.bak/
-project/**/venv.bak/
-
-# Python 工具
-project/**/.mypy_cache/
-project/**/.dmypy.json
-project/**/dmypy.json
-project/**/.pyre/
-project/**/.pytype/
-project/**/cython_debug/
-project/**/__pypackages__/
-project/**/.pdm.toml
-
-# Celery
-project/**/celerybeat-schedule
-project/**/celerybeat.pid
+# 证书和密钥文件
+project/**/certs/
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
 
 ###############################################################################
-# JavaScript/Node.js 相关 - 主要应用于JS项目目录
+# JavaScript/TypeScript/Node.js 相关
 ###############################################################################
 
 # 依赖目录
 node_modules/
 node_modules_docker/
+jspm_packages/
 
-# 包管理器日志
+# 包管理器文件和日志
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+.pnpm-debug.log
 
-# 构建输出
-project/**/dist/
-project/**/build/
-project/**/build_dist/
-project/**/uploads_dist/
-project/**/coverage/
-
-# Yarn 特定文件 - 保留某些Yarn文件
+# Yarn 特定文件
 .yarn/*
+!.yarn/cache
 !.yarn/patches
 !.yarn/plugins
 !.yarn/releases
 !.yarn/sdks
 !.yarn/versions
+.pnp.*
+
+# 构建输出
+project/desktop-web/dist/
+project/desktop-web/build/
+project/**/build_dist/
+project/**/uploads_dist/
+build/
+out/
+
+# 测试和覆盖率
+project/**/coverage/
+.nyc_output
+*.lcov
+
+# TypeScript 编译产物
+*.tsbuildinfo
+
+# Vite
+.vite/
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
 
 # Playwright 测试
 project/**/test-results/
@@ -176,113 +158,84 @@ project/**/blob-report/
 project/**/playwright/.cache/
 
 # Next.js
-.next
+.next/
+next-env.d.ts
+
+# Nuxt.js
+.nuxt/
+.output/
 
 ###############################################################################
-# Java/Kotlin/Android 相关
+# 环境变量和配置文件
 ###############################################################################
 
-# 构建文件和目录
-project/**/.gradle/
-project/**/build/
-project/**/out/
-project/**/target/
+# 环境变量文件 - 常包含敏感信息
+.env
+.env.*
+.env.local
+.env.*.local
+.env.development.local
+.env.test.local
+.env.production.local
 
-# 本地属性
-project/**/local.properties
-
-# Android 特定
-project/**/*.hprof
-project/**/.cxx/
-project/**/*.keystore
-!project/**/debug.keystore
-
-###############################################################################
-# iOS/Swift 相关
-###############################################################################
-
-# Xcode
-project/**/xcuserdata/
-project/**/*.xcscmblueprint
-project/**/*.xccheckout
-project/**/build/
-project/**/DerivedData/
-project/**/*.moved-aside
-project/**/*.pbxuser
-!project/**/default.pbxuser
-project/**/*.mode1v3
-!project/**/default.mode1v3
-project/**/*.mode2v3
-!project/**/default.mode2v3
-project/**/*.perspectivev3
-!project/**/default.perspectivev3
-project/**/*.xcuserstate
-project/**/.xcode.env.local
-
-# App 打包
-project/**/*.ipa
-project/**/*.dSYM.zip
-project/**/*.dSYM
-
-# Swift 特定
-project/**/timeline.xctimeline
-project/**/playground.xcworkspace
-project/**/.build/
-
-# CocoaPods
-project/**/Pods/
-project/**/mobile-app/native/vendor/bundle/
-
-# Swift Package Manager
-# Packages/
-# Package.pins
-# Package.resolved
-# *.xcodeproj
-
-# Carthage
-project/**/Carthage/Build/
-
-# Accio
-project/**/Dependencies/
-project/**/.accio/
-
-# 代码注入
-project/**/iOSInjectionProject/
+# 本地配置
+config.local.yaml
+config.local.yml
+*.local.yaml
+*.local.yml
 
 ###############################################################################
-# React Native 特定
+# 数据库和数据文件
 ###############################################################################
 
-# Bundle
-project/**/*.jsbundle
+# 数据库文件
+*.db
+*.sqlite
+*.sqlite3
+*.db-shm
+*.db-wal
 
-# Fastlane
-project/**/fastlane/report.xml
-project/**/fastlane/Preview.html
-project/**/fastlane/screenshots
-project/**/fastlane/test_output
-
-# Metro
-project/**/.metro-health-check*
+# 数据目录
+data/
+postgres-data/
+redis-data/
 
 ###############################################################################
-# 其他项目特定文件
+# 日志和调试
 ###############################################################################
 
-# Sentry
-.sentryclirc
-sentry.properties
+# 日志文件
+*.log
+logs/
+*.log.*
 
-# 自定义临时文件
-mysql_playground_temp.sql
-tmp/upload/*
+# 调试工具
+.vscode/launch.json.bak
 
-# Aider (AI工具)
-.aider*
-/.gradle
-/env/dev-env/mysql/data
-/project/.kotlin
-/project/api-server/bin
+###############################################################################
+# 协议和代码生成
+###############################################################################
 
-# Android app
-project/mobile-app-android/app/flavor*
+# FlatBuffers 生成的临时文件
+*.bfbs
+schema/*.bak
+
+###############################################################################
+# 项目特定
+###############################################################################
+
+# 脚本生成的备份
+scripts/*.bak
+
+# 临时上传目录
+uploads/
+temp_uploads/
+
+# 文档构建产物
+docs/build/
+docs/.vuepress/dist/
+
+# 杂项
+.DS_Store?
+ehthumbs.db
+Icon?

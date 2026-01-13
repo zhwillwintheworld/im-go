@@ -11,8 +11,8 @@ import (
 
 // UserTokenInfo 存储在Redis中的 Token 信息（仅认证字段）
 type UserTokenInfo struct {
-	UserID   int64  `json:"user_id"`
-	DeviceID string `json:"device_id"`
+	UserID   int64  `json:"userId"`
+	DeviceID string `json:"deviceId"`
 	Platform string `json:"platform"`
 }
 
@@ -140,7 +140,7 @@ func (r *TokenRepository) RefreshTokenExpire(ctx context.Context, userInfo *User
 func (r *TokenRepository) SaveUserInfo(ctx context.Context, userID int64, username, nickname, avatar string) error {
 	userInfoKey := sharedRedis.BuildUserInfoKey(userID)
 	userInfo := map[string]interface{}{
-		"user_id":  userID,
+		"userId":   userID,
 		"username": username,
 		"nickname": nickname,
 		"avatar":   avatar,

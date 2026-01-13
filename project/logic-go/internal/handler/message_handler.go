@@ -32,7 +32,7 @@ func NewMessageHandler(
 ) *MessageHandler {
 	return &MessageHandler{
 		chatHandler: NewChatHandler(messageBatcher, messageService, groupService, routerService, conversationService),
-		roomHandler: NewRoomHandler(redisClient, roomService, gameService),
+		roomHandler: NewRoomHandler(redisClient, roomService, gameService, routerService),
 		gameHandler: NewGameHandler(gameService),
 		userHandler: NewUserHandler(conversationService, routerService),
 	}
