@@ -4,27 +4,40 @@ import "sort"
 
 // Hand 手牌管理器
 type Hand struct {
-	tiles []Mahjong // 手牌列表
+	tiles    []Mahjong   // 手牌列表
+	countMap map[int]int // 牌数量缓存，用于加速查找（O(1)）
 }
 
 // NewHand 创建新的手牌管理器
 func NewHand() *Hand {
 	return &Hand{
-		tiles: make([]Mahjong, 0, StandardHandSize+1),
+		tiles:    make([]Mahjong, 0, StandardHandSize+1),
+		countMap: make(map[int]int),
 	}
 }
 
 // Add 添加牌到手牌
 func (h *Hand) Add(tile Mahjong) error {
 	h.tiles = append(h.tiles, tile)
+	h.countMap[tile.Number]++
 	return nil
 }
 
 // Remove 移除指定的牌
 func (h *Hand) Remove(tile Mahjong) error {
+	// 先检查 countMap，快速判断是否存在
+	if h.countMap[tile.Number] == 0 {
+		return ErrTileNotInHand.WithContext("tile", tile.Number)
+	}
+
+	// 线性查找并删除
 	for i, t := range h.tiles {
 		if t.Equals(tile) {
 			h.tiles = append(h.tiles[:i], h.tiles[i+1:]...)
+			h.countMap[tile.Number]--
+			if h.countMap[tile.Number] == 0 {
+				delete(h.countMap, tile.Number)
+			}
 			return nil
 		}
 	}
@@ -33,9 +46,19 @@ func (h *Hand) Remove(tile Mahjong) error {
 
 // RemoveByNumber 根据数字移除牌
 func (h *Hand) RemoveByNumber(number int) error {
+	// 先检查 countMap，快速判断是否存在
+	if h.countMap[number] == 0 {
+		return ErrTileNotInHand.WithContext("number", number)
+	}
+
+	// 线性查找并删除
 	for i, t := range h.tiles {
 		if t.Number == number {
 			h.tiles = append(h.tiles[:i], h.tiles[i+1:]...)
+			h.countMap[number]--
+			if h.countMap[number] == 0 {
+				delete(h.countMap, number)
+			}
 			return nil
 		}
 	}
@@ -62,15 +85,9 @@ func (h *Hand) ContainsNumber(number int) bool {
 	return false
 }
 
-// Count 统计指定数字的牌的数量
+// Count 统计指定数字的牌的数量（O(1)优化）
 func (h *Hand) Count(number int) int {
-	count := 0
-	for _, t := range h.tiles {
-		if t.Number == number {
-			count++
-		}
-	}
-	return count
+	return h.countMap[number]
 }
 
 // Size 获取手牌数量
@@ -91,6 +108,7 @@ func (h *Hand) IsFull() bool {
 // Clear 清空手牌
 func (h *Hand) Clear() {
 	h.tiles = h.tiles[:0]
+	h.countMap = make(map[int]int)
 }
 
 // GetTiles 获取手牌列表（返回副本，防止外部修改）
@@ -121,13 +139,14 @@ func (h *Hand) ToNumbers() []int {
 	return numbers
 }
 
-// ToCountMap 转换为计数映射
+// ToCountMap 转换为计数映射（直接返回缓存的 countMap）
 func (h *Hand) ToCountMap() map[int]int {
-	countMap := make(map[int]int, len(h.tiles))
-	for _, t := range h.tiles {
-		countMap[t.Number]++
+	// 返回副本以防止外部修改
+	result := make(map[int]int, len(h.countMap))
+	for k, v := range h.countMap {
+		result[k] = v
 	}
-	return countMap
+	return result
 }
 
 // Clone 克隆手牌
@@ -135,18 +154,31 @@ func (h *Hand) Clone() *Hand {
 	newHand := NewHand()
 	newHand.tiles = make([]Mahjong, len(h.tiles))
 	copy(newHand.tiles, h.tiles)
+	// 复制 countMap
+	for k, v := range h.countMap {
+		newHand.countMap[k] = v
+	}
 	return newHand
 }
 
 // AddMultiple 批量添加牌
 func (h *Hand) AddMultiple(tiles []Mahjong) {
 	h.tiles = append(h.tiles, tiles...)
+	// 更新 countMap
+	for _, t := range tiles {
+		h.countMap[t.Number]++
+	}
 }
 
 // SetTiles 设置手牌（用于初始化）
 func (h *Hand) SetTiles(tiles []Mahjong) {
 	h.tiles = make([]Mahjong, len(tiles))
 	copy(h.tiles, tiles)
+	// 重建 countMap
+	h.countMap = make(map[int]int)
+	for _, t := range tiles {
+		h.countMap[t.Number]++
+	}
 }
 
 // GetColorDistribution 获取颜色分布

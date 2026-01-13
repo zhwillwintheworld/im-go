@@ -1,5 +1,11 @@
 package htmajong
 
+import (
+	"fmt"
+	"sort"
+	"sync"
+)
+
 // 麻将算法相关常量
 const (
 	// 标准手牌数量（不包括摸到的牌）
@@ -19,6 +25,30 @@ const (
 
 // Algorithm 麻将算法类
 type Algorithm struct{}
+
+// 全局缓存（使用 sync.Map 保证并发安全）
+var winningHandCache sync.Map
+
+// generateCacheKey 生成缓存键
+func generateCacheKey(tileCounts map[int]int, hasPair bool) string {
+	// 将 map 转换为排序后的字符串
+	keys := make([]int, 0, len(tileCounts))
+	for k := range tileCounts {
+		keys = append(keys, k)
+	}
+	sort.Ints(keys)
+
+	key := ""
+	for _, k := range keys {
+		if tileCounts[k] > 0 {
+			key += fmt.Sprintf("%d:%d,", k, tileCounts[k])
+		}
+	}
+	if hasPair {
+		key += "P"
+	}
+	return key
+}
 
 // ========== 辅助函数 ==========
 
@@ -72,7 +102,7 @@ func isTwoFiveEightNumber(num int) bool {
 
 // CheckPublic 检查是否可以报听
 func CheckPublic(table *Table, seat *Seat) bool {
-	if seat.Step().Load() != 1 {
+	if seat.Step() != 1 {
 		return false
 	}
 
@@ -89,8 +119,9 @@ func CheckPublic(table *Table, seat *Seat) bool {
 	// 检查所有可能胡的牌
 	mahjongList := Generate(1)
 	publicWinList := make([]Mahjong, 0, 27) // 预分配容量（最多27种牌）
+	currentSeat := table.GetCurrentSeat()
 	for _, mahjong := range mahjongList {
-		if CheckHuForPublic(CATCH, table.CurrentSeat, seat, mahjong) {
+		if CheckHuForPublic(CATCH, currentSeat, seat, mahjong) {
 			publicWinList = append(publicWinList, mahjong)
 		}
 	}
@@ -163,7 +194,11 @@ func checkBaoTing(table *Table, supplierType SupplierType, seat *Seat) bool {
 		return seat.IsPublic()
 	}
 	if supplierType == OUT {
-		return seat.IsPublic() || table.Lease.HappenedUser.IsPublic()
+		claim := table.GetClaim()
+		if claim != nil {
+			happenedUser := claim.GetHappenedUser()
+			return seat.IsPublic() || (happenedUser != nil && happenedUser.IsPublic())
+		}
 	}
 	return false
 }
@@ -180,7 +215,7 @@ func CheckPeng(supplierType SupplierType, supplierUser *Seat, seat *Seat, mahjon
 // 返回值：GangTypeNone(0)-不能杠，GangTypeNormal(1)-杠，GangTypePublic(2)-公杠，GangTypePrivate(3)-暗杠
 func CheckGang(table *Table, supplierType SupplierType, supplierUser *Seat, seat *Seat, mahjong Mahjong) int {
 	// 无牌不让杠
-	if len(table.Extra) == 0 {
+	if table.GetExtraCount() == 0 {
 		return GangTypeNone
 	}
 
@@ -356,6 +391,25 @@ func checkPengPengHu(seat *Seat, mahjong Mahjong) bool {
 
 // CanFormWinningHand 检查是否是通用胡牌牌型 例如 AA BCD BCD BCD BCD
 func CanFormWinningHand(tileCountsOrig map[int]int, hasPair bool) bool {
+	// 生成缓存键
+	cacheKey := generateCacheKey(tileCountsOrig, hasPair)
+
+	// 检查缓存
+	if cached, ok := winningHandCache.Load(cacheKey); ok {
+		return cached.(bool)
+	}
+
+	// 计算结果
+	result := canFormWinningHandInternal(tileCountsOrig, hasPair)
+
+	// 存入缓存
+	winningHandCache.Store(cacheKey, result)
+
+	return result
+}
+
+// canFormWinningHandInternal 内部实现（不使用缓存）
+func canFormWinningHandInternal(tileCountsOrig map[int]int, hasPair bool) bool {
 	// 过滤掉数量为0的牌
 	tileCounts := make(map[int]int)
 	for k, v := range tileCountsOrig {
@@ -373,7 +427,7 @@ func CanFormWinningHand(tileCountsOrig map[int]int, hasPair bool) bool {
 		// 尝试组成刻子
 		if number >= 3 {
 			tileCounts[key] = number - 3
-			if CanFormWinningHand(tileCounts, hasPair) {
+			if canFormWinningHandInternal(tileCounts, hasPair) {
 				return true
 			}
 			tileCounts[key] = number
@@ -382,7 +436,7 @@ func CanFormWinningHand(tileCountsOrig map[int]int, hasPair bool) bool {
 		// 尝试组成将
 		if !hasPair && tileCounts[key] >= 2 {
 			tileCounts[key] = tileCounts[key] - 2
-			if CanFormWinningHand(tileCounts, true) {
+			if canFormWinningHandInternal(tileCounts, true) {
 				return true
 			}
 			tileCounts[key] = number
@@ -394,7 +448,7 @@ func CanFormWinningHand(tileCountsOrig map[int]int, hasPair bool) bool {
 				tileCounts[key] = number - 1
 				tileCounts[key+1] = tileCounts[key+1] - 1
 				tileCounts[key+2] = tileCounts[key+2] - 1
-				if CanFormWinningHand(tileCounts, hasPair) {
+				if canFormWinningHandInternal(tileCounts, hasPair) {
 					return true
 				}
 				tileCounts[key] = number
@@ -487,6 +541,6 @@ func noJiang(supplierType SupplierType, seat *Seat, mahjong Mahjong) bool {
 // checkSpecial 检查是否是第一次上手 有碰 有杠就算破坏了
 func checkSpecial(supplierType SupplierType, seat *Seat) bool {
 	return supplierType == CATCH &&
-		seat.Step().Load() == 1 &&
+		seat.Step() == 1 &&
 		len(seat.ExtraList()) == StandardHandSize
 }

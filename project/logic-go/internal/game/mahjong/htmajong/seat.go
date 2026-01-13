@@ -2,7 +2,6 @@ package htmajong
 
 import (
 	"sync"
-	"sync/atomic"
 
 	"sudooom.im.shared/model"
 )
@@ -29,7 +28,7 @@ type Seat struct {
 
 	// 游戏状态
 	points         int             // 分数
-	step           atomic.Int32    // 下了多少手
+	step           int32           // 下了多少手（统一使用锁保护）
 	listeningState *ListeningState // 报听状态
 }
 
@@ -94,7 +93,7 @@ func (s *Seat) DiscardTile(tile Mahjong) error {
 	}
 
 	s.discardPile.Add(tile)
-	s.step.Add(1)
+	s.step++
 	return nil
 }
 
@@ -113,7 +112,7 @@ func (s *Seat) DiscardTileByNumber(number int) error {
 
 	tile, _ := GenerateByNumber(number)
 	s.discardPile.Add(tile)
-	s.step.Add(1)
+	s.step++
 	return nil
 }
 
@@ -219,7 +218,7 @@ func (s *Seat) DeclareListening(tiles []Mahjong) error {
 
 	s.listeningState.IsListening = true
 	s.listeningState.ListeningTiles = tiles
-	s.listeningState.ListeningAtRound = s.step.Load()
+	s.listeningState.ListeningAtRound = s.step
 	return nil
 }
 
@@ -245,7 +244,7 @@ func (s *Seat) CanDeclareListening() bool {
 	defer s.mu.RUnlock()
 
 	// 必须是第一手
-	if s.step.Load() != 1 {
+	if s.step != 1 {
 		return false
 	}
 
@@ -280,12 +279,16 @@ func (s *Seat) AddPoints(points int) {
 
 // GetStep 获取回合数
 func (s *Seat) GetStep() int32 {
-	return s.step.Load()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.step
 }
 
 // IsFirstRound 判断是否是第一回合
 func (s *Seat) IsFirstRound() bool {
-	return s.step.Load() == 1
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.step == 1
 }
 
 // ========== 内部访问（供算法使用） ==========
@@ -313,13 +316,13 @@ func GenerateSeat(user *model.User, position Position) *Seat {
 func FindNextSeat(table *Table, seat *Seat) *Seat {
 	switch seat.position {
 	case EAST:
-		return table.North
+		return table.GetNorth()
 	case SOUTH:
-		return table.East
+		return table.GetEast()
 	case WEST:
-		return table.South
+		return table.GetSouth()
 	case NORTH:
-		return table.West
+		return table.GetWest()
 	default:
 		return nil
 	}
@@ -329,13 +332,13 @@ func FindNextSeat(table *Table, seat *Seat) *Seat {
 func FindSeat(table *Table, position Position) *Seat {
 	switch position {
 	case EAST:
-		return table.East
+		return table.GetEast()
 	case SOUTH:
-		return table.South
+		return table.GetSouth()
 	case WEST:
-		return table.West
+		return table.GetWest()
 	case NORTH:
-		return table.North
+		return table.GetNorth()
 	default:
 		return nil
 	}
@@ -343,17 +346,17 @@ func FindSeat(table *Table, position Position) *Seat {
 
 // FindSeatByUserID 根据用户ID查找座位
 func FindSeatByUserID(table *Table, userID int64) *Seat {
-	if table.East != nil && table.East.GetUserID() == userID {
-		return table.East
+	if east := table.GetEast(); east != nil && east.GetUserID() == userID {
+		return east
 	}
-	if table.South != nil && table.South.GetUserID() == userID {
-		return table.South
+	if south := table.GetSouth(); south != nil && south.GetUserID() == userID {
+		return south
 	}
-	if table.West != nil && table.West.GetUserID() == userID {
-		return table.West
+	if west := table.GetWest(); west != nil && west.GetUserID() == userID {
+		return west
 	}
-	if table.North != nil && table.North.GetUserID() == userID {
-		return table.North
+	if north := table.GetNorth(); north != nil && north.GetUserID() == userID {
+		return north
 	}
 	return nil
 }
@@ -384,8 +387,8 @@ func (s *Seat) IsPublic() bool {
 }
 
 // Step 获取步数（向后兼容）
-func (s *Seat) Step() *atomic.Int32 {
-	return &s.step
+func (s *Seat) Step() int32 {
+	return s.GetStep()
 }
 
 // PublicWinMahjong 获取报听可胡的牌（向后兼容）
