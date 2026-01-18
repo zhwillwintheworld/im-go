@@ -130,6 +130,8 @@ type Player struct {
 	Melds    []Meld      `json:"melds"`    // 明牌组合
 	State    PlayerState `json:"state"`    // 自定义状态
 	Score    int         `json:"score"`    // 分数
+	IsTing   bool        `json:"isTing"`   // 是否听牌
+	IsAuto   bool        `json:"isAuto"`   // 是否托管
 }
 
 // Task 任务 (其他玩家可以执行的动作)

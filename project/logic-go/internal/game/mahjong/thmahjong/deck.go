@@ -55,15 +55,6 @@ func (d *DeckGenerator) GenerateDeck() []core.Tile {
 			})
 		}
 	}
-
-	// 生成花牌8张 (春夏秋冬梅兰竹菊各1张)
-	for value := int8(1); value <= 8; value++ {
-		tiles = append(tiles, core.Tile{
-			Suit:  core.TileSuitFlower,
-			Value: value,
-		})
-	}
-
 	return tiles
 }
 
