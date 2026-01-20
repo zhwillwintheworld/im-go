@@ -117,10 +117,15 @@ func (s *GameService) StartGame(ctx context.Context, room *model.Room) error {
 	}
 }
 
-// startMahjongGame 启动麻将游戏（委托给 mahjong service）
+// startMahjongGame 广播麻将游戏开始事件
+// 注意：实际的游戏初始化应由 MahjongService.StartGame() 完成
+// 调用顺序：
+//  1. 外部调用 MahjongService.StartGame() 初始化游戏引擎
+//  2. 然后调用此方法广播游戏开始事件
 func (s *GameService) startMahjongGame(ctx context.Context, room *model.Room) error {
-	// TODO: 这里将委托给 MahjongService 处理
-	// 目前先实现简单的广播逻辑
+	s.logger.Info("Broadcasting mahjong game start event",
+		"roomId", room.RoomID,
+		"gameType", room.GameType)
 
 	// 广播游戏开始事件
 	gameStartData := map[string]interface{}{
@@ -131,9 +136,9 @@ func (s *GameService) startMahjongGame(ctx context.Context, room *model.Room) er
 	}
 
 	if err := s.BroadcastGameEvent(ctx, room.RoomID, "GAME_STARTED", gameStartData); err != nil {
-		return err
+		return fmt.Errorf("failed to broadcast game start event: %w", err)
 	}
 
-	s.logger.Info("Game started successfully", "roomId", room.RoomID)
+	s.logger.Info("Game start event broadcasted", "roomId", room.RoomID)
 	return nil
 }

@@ -16,6 +16,8 @@ type GameManager struct {
 	evictTimeout time.Duration
 	evictTicker  *time.Ticker
 
+	stopChan chan struct{} // 停止信号通道
+
 	logger *slog.Logger
 }
 
@@ -25,6 +27,7 @@ func NewGameManager(maxGames int, evictTimeout time.Duration) *GameManager {
 		maxGames:     maxGames,
 		evictTimeout: evictTimeout,
 		evictTicker:  time.NewTicker(60 * time.Second),
+		stopChan:     make(chan struct{}),
 		logger:       slog.Default().With("component", "GameManager"),
 	}
 
@@ -73,8 +76,14 @@ func (m *GameManager) Count() int {
 
 // evictLoop 淘汰循环
 func (m *GameManager) evictLoop() {
-	for range m.evictTicker.C {
-		m.evictInactive()
+	for {
+		select {
+		case <-m.evictTicker.C:
+			m.evictInactive()
+		case <-m.stopChan:
+			m.logger.Info("Evict loop stopped")
+			return
+		}
 	}
 }
 
@@ -111,8 +120,15 @@ func (m *GameManager) evictInactive() {
 
 // Shutdown 关闭管理器
 func (m *GameManager) Shutdown(ctx context.Context) error {
+	m.logger.Info("Shutting down GameManager")
+
+	// 发送停止信号给 evictLoop
+	close(m.stopChan)
+
+	// 停止定时器
 	m.evictTicker.Stop()
 
+	// 保存所有脏游戏
 	m.games.Range(func(key, value interface{}) bool {
 		game := value.(*Game)
 		if game.IsDirty() {
