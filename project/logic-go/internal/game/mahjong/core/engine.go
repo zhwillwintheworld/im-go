@@ -103,6 +103,12 @@ func (e *Engine) HandleAction(ctx context.Context, action Action) error {
 		"playerID", action.PlayerID,
 		"actionType", action.Type.String())
 
+	// 流局检查：摸牌请求但牌堆为空，触发流局结算
+	if action.Type == ActionDraw && len(e.state.Deck) == 0 {
+		e.handleExhaust()
+		return nil
+	}
+
 	// 验证动作
 	if err := e.actionHandler.ValidateAction(e.state, action); err != nil {
 		return fmt.Errorf("动作验证失败: %w", err)
@@ -183,6 +189,37 @@ func (e *Engine) handleWin(action Action) {
 		"winner", action.PlayerID,
 		"winType", winType.String(),
 		"totalScore", settlement.TotalScore)
+}
+
+// handleExhaust 处理流局（牌堆耗尽无人胡牌）
+func (e *Engine) handleExhaust() {
+	e.logger.Info("流局：牌堆耗尽")
+
+	settlement := &Settlement{
+		WinnerID:   "",
+		LoserID:    "",
+		WinType:    WinTypeExhaust,
+		Patterns:   []WinPattern{},
+		BaseScore:  0,
+		TotalScore: 0,
+		Transfers:  []Transfer{},
+	}
+
+	e.state.IsGameOver = true
+	e.state.Settlement = settlement
+}
+
+// HasPendingTasks 检查是否有待处理任务
+func (e *Engine) HasPendingTasks() bool {
+	if e.state == nil {
+		return false
+	}
+	return len(e.state.PendingTasks) > 0
+}
+
+// GetTaskTimeout 获取任务超时时间
+func (e *Engine) GetTaskTimeout() time.Duration {
+	return e.taskTimeout
 }
 
 // GetState 获取游戏状态

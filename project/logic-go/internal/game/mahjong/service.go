@@ -10,6 +10,7 @@ import (
 	"sudooom.im.logic/internal/game/mahjong/core"
 	"sudooom.im.logic/internal/game/mahjong/htmajong"
 	"sudooom.im.logic/internal/game/mahjong/thmahjong"
+	"sudooom.im.shared/model"
 )
 
 // GameType 麻将游戏类型
@@ -48,4 +49,10 @@ func (s *MahjongService) CreateEngine(ctx context.Context, gameType GameType) (c
 	default:
 		return nil, fmt.Errorf("不支持的游戏类型: %s", gameType)
 	}
+}
+
+// StartGameByType 实现 game.GameStarter 接口
+// 由 GameService 在 StartGame 流程中调用
+func (s *MahjongService) StartGameByType(ctx context.Context, room *model.Room, internalGameType string) error {
+	return s.StartGame(ctx, room, GameType(internalGameType))
 }

@@ -4,12 +4,14 @@ import (
 	"context"
 	"log/slog"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
 // GameManager 游戏管理器
 type GameManager struct {
-	games sync.Map // gameId -> *Game
+	games     sync.Map     // roomID -> *Game
+	gameCount atomic.Int64 // 原子计数器
 
 	// LRU 配置
 	maxGames     int
@@ -37,16 +39,27 @@ func NewGameManager(maxGames int, evictTimeout time.Duration) *GameManager {
 }
 
 // GetOrCreate 获取或创建游戏
-func (m *GameManager) GetOrCreate(roomID string, gameType string) *Game {
-	gameId := roomID // 一个房间一个游戏
-
-	if val, ok := m.games.Load(gameId); ok {
-		return val.(*Game)
+func (m *GameManager) GetOrCreate(roomID string, gameType string) (*Game, error) {
+	// 快路径：已存在则直接返回
+	if val, ok := m.games.Load(roomID); ok {
+		return val.(*Game), nil
 	}
 
-	game := NewGame(roomID, gameType)
-	actual, _ := m.games.LoadOrStore(gameId, game)
-	return actual.(*Game)
+	// 慢路径：需要创建，先检查容量
+	if m.maxGames > 0 && m.gameCount.Load() >= int64(m.maxGames) {
+		m.logger.Warn("Max games limit reached",
+			"maxGames", m.maxGames,
+			"current", m.gameCount.Load())
+		return nil, ErrMaxGamesReached
+	}
+
+	g := NewGame(roomID, gameType)
+	actual, loaded := m.games.LoadOrStore(roomID, g)
+	if !loaded {
+		// 新创建的，递增计数器
+		m.gameCount.Add(1)
+	}
+	return actual.(*Game), nil
 }
 
 // Get 获取游戏
@@ -60,18 +73,17 @@ func (m *GameManager) Get(roomID string) (*Game, bool) {
 
 // Remove 移除游戏
 func (m *GameManager) Remove(roomID string) {
-	m.games.Delete(roomID)
-	m.logger.Info("Removed game", "roomId", roomID)
+	if val, loaded := m.games.LoadAndDelete(roomID); loaded {
+		g := val.(*Game)
+		g.Close()
+		m.gameCount.Add(-1)
+		m.logger.Info("Removed game", "roomId", roomID)
+	}
 }
 
 // Count 返回当前游戏数
 func (m *GameManager) Count() int {
-	count := 0
-	m.games.Range(func(key, value interface{}) bool {
-		count++
-		return true
-	})
-	return count
+	return int(m.gameCount.Load())
 }
 
 // evictLoop 淘汰循环
@@ -90,30 +102,35 @@ func (m *GameManager) evictLoop() {
 // evictInactive 淘汰不活跃的游戏
 func (m *GameManager) evictInactive() {
 	now := time.Now()
-	toEvict := []string{}
+	var toEvict []string
 
 	m.games.Range(func(key, value interface{}) bool {
-		gameId := key.(string)
-		game := value.(*Game)
+		roomID := key.(string)
+		g := value.(*Game)
 
-		if now.Sub(game.LastActiveTime()) > m.evictTimeout {
-			toEvict = append(toEvict, gameId)
+		if now.Sub(g.LastActiveTime()) > m.evictTimeout {
+			toEvict = append(toEvict, roomID)
 		}
 
 		return true
 	})
 
-	for _, gameId := range toEvict {
-		if val, ok := m.games.Load(gameId); ok {
-			game := val.(*Game)
+	for _, roomID := range toEvict {
+		if val, ok := m.games.Load(roomID); ok {
+			g := val.(*Game)
 
-			if game.IsDirty() {
-				// TODO: 保存到数据库
-				m.logger.Info("Saving game before eviction", "gameId", gameId)
+			// 重新检查活跃时间，避免误淘汰刚变活跃的游戏
+			if now.Sub(g.LastActiveTime()) <= m.evictTimeout {
+				continue
 			}
 
-			m.Remove(gameId)
-			m.logger.Info("Evicted inactive game", "gameId", gameId)
+			if g.IsDirty() {
+				// TODO: 保存到数据库
+				m.logger.Info("Saving game before eviction", "roomId", roomID)
+			}
+
+			m.Remove(roomID)
+			m.logger.Info("Evicted inactive game", "roomId", roomID)
 		}
 	}
 }
@@ -128,13 +145,14 @@ func (m *GameManager) Shutdown(ctx context.Context) error {
 	// 停止定时器
 	m.evictTicker.Stop()
 
-	// 保存所有脏游戏
+	// 保存所有脏游戏并关闭
 	m.games.Range(func(key, value interface{}) bool {
-		game := value.(*Game)
-		if game.IsDirty() {
+		g := value.(*Game)
+		if g.IsDirty() {
 			// TODO: 保存到数据库
-			m.logger.Info("Saving game on shutdown", "gameId", game.roomID)
+			m.logger.Info("Saving game on shutdown", "roomId", g.roomID)
 		}
+		g.Close()
 		return true
 	})
 

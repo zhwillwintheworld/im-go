@@ -3,6 +3,7 @@ package room
 import (
 	"context"
 
+	"sudooom.im.logic/internal/game"
 	"sudooom.im.shared/model"
 )
 
@@ -255,7 +256,7 @@ func (s *RoomService) StartGame(ctx context.Context, params StartGameParams) (*m
 // getGameTypeStrategy 根据游戏类型获取对应的策略
 func (s *RoomService) getGameTypeStrategy(gameType string) (GameTypeStrategy, error) {
 	switch gameType {
-	case "HT_MAHJONG":
+	case game.GameTypeHTMahjong:
 		return &MahjongGameStrategy{}, nil
 	default:
 		return nil, ErrUnsupportedGameType

@@ -19,4 +19,7 @@ var (
 
 	// ErrEngineNotSupported 引擎不支持该操作
 	ErrEngineNotSupported = errors.New("engine does not support this operation")
+
+	// ErrMaxGamesReached 游戏数量达到上限
+	ErrMaxGamesReached = errors.New("max games limit reached")
 )

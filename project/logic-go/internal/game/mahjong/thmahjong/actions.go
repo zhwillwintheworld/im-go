@@ -44,13 +44,10 @@ func (h *ActionHandler) ValidateAction(state *core.GameState, action core.Action
 }
 
 // validateDraw 验证摸牌
+// 注意：牌堆为空的流局判断已移至 core.Engine.HandleAction 前置检查
 func (h *ActionHandler) validateDraw(state *core.GameState, player *core.Player) error {
 	if state.GetCurrentPlayer() != player {
 		return fmt.Errorf("不是当前玩家")
-	}
-
-	if len(state.Deck) == 0 {
-		return fmt.Errorf("牌堆已空")
 	}
 
 	return nil
@@ -226,11 +223,8 @@ func (h *ActionHandler) ExecuteAction(state *core.GameState, action core.Action)
 }
 
 // executeDraw 执行摸牌
+// 注意：牌堆为空的流局判断已移至 core.Engine.HandleAction 前置检查
 func (h *ActionHandler) executeDraw(state *core.GameState, player *core.Player) error {
-	if len(state.Deck) == 0 {
-		return fmt.Errorf("牌堆已空")
-	}
-
 	tile := state.Deck[0]
 	state.Deck = state.Deck[1:]
 

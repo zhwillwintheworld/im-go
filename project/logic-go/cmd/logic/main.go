@@ -14,6 +14,7 @@ import (
 
 	"sudooom.im.logic/internal/config"
 	"sudooom.im.logic/internal/game"
+	"sudooom.im.logic/internal/game/mahjong"
 	"sudooom.im.logic/internal/handler"
 	imNats "sudooom.im.logic/internal/nats"
 	imRoom "sudooom.im.logic/internal/room"
@@ -112,8 +113,13 @@ func main() {
 	// 创建游戏管理器
 	gameManager := game.NewGameManager(5000, 30*time.Minute)
 
-	// 创建游戏服务
+	// 创建麻将服务
+	mahjongService := mahjong.NewMahjongService(redisClient, gameManager)
+
+	// 创建游戏服务并注册游戏启动器
 	gameService := game.NewGameService(gameManager, redisClient, routerService)
+	gameService.RegisterGameStarter(game.GameTypeHTMahjong, mahjongService)
+	gameService.RegisterGameStarter(game.GameTypeTHMahjong, mahjongService)
 
 	// 创建消息处理器
 	msgHandler := handler.NewMessageHandler(

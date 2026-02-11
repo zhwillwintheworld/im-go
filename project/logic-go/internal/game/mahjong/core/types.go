@@ -151,6 +151,7 @@ const (
 	WinTypeDiscard                  // 点炮
 	WinTypeTing                     // 报听胡
 	WinTypeQiangKong                // 抢杠胡
+	WinTypeExhaust                  // 流局（牌堆耗尽，无人胡牌）
 )
 
 // String 返回胡牌类型的字符串表示
@@ -164,6 +165,8 @@ func (w WinType) String() string {
 		return "报听胡"
 	case WinTypeQiangKong:
 		return "抢杠胡"
+	case WinTypeExhaust:
+		return "流局"
 	default:
 		return "未知"
 	}

@@ -34,7 +34,7 @@ func (h *GameHandler) Handle(ctx context.Context, req *proto.GameRequest, access
 
 	// 根据游戏类型分发
 	switch req.GameType {
-	case "HT_MAHJONG":
+	case game.GameTypeHTMahjong:
 		return h.handleMahjongGame(ctx, req, accessNodeId, connId, platform)
 	default:
 		h.logger.Warn("Unknown game type", "gameType", req.GameType)
