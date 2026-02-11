@@ -267,13 +267,26 @@ func (w *WinningAlgorithm) checkAllTriplets(tiles []core.Tile) bool {
 }
 
 // checkDaDiaoChe 检查大吊车 (单吊将牌)
+// 大吊车：手牌全部组成面子（4组），最后一张单吊与 newTile 组成将牌
 func (w *WinningAlgorithm) checkDaDiaoChe(hand []core.Tile, newTile *core.Tile) bool {
 	if newTile == nil || len(hand) != 13 {
 		return false
 	}
 
-	// 检查手牌能否组成4个面子
-	return w.checkMianZi(hand)
+	// 遍历手牌，尝试找一张与 newTile 相同的牌作为将牌
+	for i, tile := range hand {
+		if tile.Equal(*newTile) {
+			// 移除这张牌，剩余 12 张必须全部组成面子（4组）
+			remaining := make([]core.Tile, 0, 12)
+			remaining = append(remaining, hand[:i]...)
+			remaining = append(remaining, hand[i+1:]...)
+			if w.checkMianZi(remaining) {
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 // checkWuHuaGuoZiMo 检查无花果自摸

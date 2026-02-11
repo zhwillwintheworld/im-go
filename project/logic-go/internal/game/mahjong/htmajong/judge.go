@@ -102,10 +102,3 @@ func (j *TaskJudge) GetTaskPriority(task core.Task) int {
 
 	return priority
 }
-
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
