@@ -6,11 +6,13 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"sudooom.im.logic/internal/task"
 )
 
-// GameManager 游戏管理器
-type GameManager struct {
-	games     sync.Map     // roomID -> *Game
+// MultiRoundGameManager 多轮游戏管理器（管理 MultiRoundGame）
+type MultiRoundGameManager struct {
+	games     sync.Map     // roomID -> *MultiRoundGame
 	gameCount atomic.Int64 // 原子计数器
 
 	// LRU 配置
@@ -20,17 +22,20 @@ type GameManager struct {
 
 	stopChan chan struct{} // 停止信号通道
 
+	scheduler *task.Scheduler // 任务调度器
+
 	logger *slog.Logger
 }
 
-// NewGameManager 创建游戏管理器
-func NewGameManager(maxGames int, evictTimeout time.Duration) *GameManager {
-	m := &GameManager{
+// NewMultiRoundGameManager 创建多轮游戏管理器
+func NewMultiRoundGameManager(maxGames int, evictTimeout time.Duration, scheduler *task.Scheduler) *MultiRoundGameManager {
+	m := &MultiRoundGameManager{
 		maxGames:     maxGames,
 		evictTimeout: evictTimeout,
 		evictTicker:  time.NewTicker(60 * time.Second),
 		stopChan:     make(chan struct{}),
-		logger:       slog.Default().With("component", "GameManager"),
+		scheduler:    scheduler,
+		logger:       slog.Default().With("component", "MultiRoundGameManager"),
 	}
 
 	go m.evictLoop()
@@ -38,14 +43,14 @@ func NewGameManager(maxGames int, evictTimeout time.Duration) *GameManager {
 	return m
 }
 
-// GetOrCreate 获取或创建游戏
-func (m *GameManager) GetOrCreate(roomID string, gameType string) (*Game, error) {
-	// 快路径：已存在则直接返回
-	if val, ok := m.games.Load(roomID); ok {
-		return val.(*Game), nil
+// CreateGame 创建游戏
+func (m *MultiRoundGameManager) CreateGame(roomID string, gameType string, config GameConfig) (*MultiRoundGame, error) {
+	// 检查是否已存在
+	if _, ok := m.games.Load(roomID); ok {
+		return nil, ErrGameAlreadyExists
 	}
 
-	// 慢路径：需要创建，先检查容量
+	// 检查容量
 	if m.maxGames > 0 && m.gameCount.Load() >= int64(m.maxGames) {
 		m.logger.Warn("Max games limit reached",
 			"maxGames", m.maxGames,
@@ -53,28 +58,32 @@ func (m *GameManager) GetOrCreate(roomID string, gameType string) (*Game, error)
 		return nil, ErrMaxGamesReached
 	}
 
-	g := NewGame(roomID, gameType)
+	// 创建游戏
+	gameID := roomID + ":game:" + time.Now().Format("20060102150405")
+	g := NewMultiRoundGame(gameID, roomID, gameType, config, m.scheduler)
+
 	actual, loaded := m.games.LoadOrStore(roomID, g)
 	if !loaded {
-		// 新创建的，递增计数器
 		m.gameCount.Add(1)
+		m.logger.Info("Created game", "roomId", roomID, "gameId", gameID)
 	}
-	return actual.(*Game), nil
+
+	return actual.(*MultiRoundGame), nil
 }
 
 // Get 获取游戏
-func (m *GameManager) Get(roomID string) (*Game, bool) {
+func (m *MultiRoundGameManager) Get(roomID string) (*MultiRoundGame, bool) {
 	val, ok := m.games.Load(roomID)
 	if !ok {
 		return nil, false
 	}
-	return val.(*Game), true
+	return val.(*MultiRoundGame), true
 }
 
 // Remove 移除游戏
-func (m *GameManager) Remove(roomID string) {
+func (m *MultiRoundGameManager) Remove(roomID string) {
 	if val, loaded := m.games.LoadAndDelete(roomID); loaded {
-		g := val.(*Game)
+		g := val.(*MultiRoundGame)
 		g.Close()
 		m.gameCount.Add(-1)
 		m.logger.Info("Removed game", "roomId", roomID)
@@ -82,12 +91,12 @@ func (m *GameManager) Remove(roomID string) {
 }
 
 // Count 返回当前游戏数
-func (m *GameManager) Count() int {
+func (m *MultiRoundGameManager) Count() int {
 	return int(m.gameCount.Load())
 }
 
 // evictLoop 淘汰循环
-func (m *GameManager) evictLoop() {
+func (m *MultiRoundGameManager) evictLoop() {
 	for {
 		select {
 		case <-m.evictTicker.C:
@@ -100,13 +109,13 @@ func (m *GameManager) evictLoop() {
 }
 
 // evictInactive 淘汰不活跃的游戏
-func (m *GameManager) evictInactive() {
+func (m *MultiRoundGameManager) evictInactive() {
 	now := time.Now()
 	var toEvict []string
 
 	m.games.Range(func(key, value interface{}) bool {
 		roomID := key.(string)
-		g := value.(*Game)
+		g := value.(*MultiRoundGame)
 
 		if now.Sub(g.LastActiveTime()) > m.evictTimeout {
 			toEvict = append(toEvict, roomID)
@@ -117,9 +126,9 @@ func (m *GameManager) evictInactive() {
 
 	for _, roomID := range toEvict {
 		if val, ok := m.games.Load(roomID); ok {
-			g := val.(*Game)
+			g := val.(*MultiRoundGame)
 
-			// 重新检查活跃时间，避免误淘汰刚变活跃的游戏
+			// 重新检查活跃时间
 			if now.Sub(g.LastActiveTime()) <= m.evictTimeout {
 				continue
 			}
@@ -136,10 +145,10 @@ func (m *GameManager) evictInactive() {
 }
 
 // Shutdown 关闭管理器
-func (m *GameManager) Shutdown(ctx context.Context) error {
-	m.logger.Info("Shutting down GameManager")
+func (m *MultiRoundGameManager) Shutdown(ctx context.Context) error {
+	m.logger.Info("Shutting down MultiRoundGameManager")
 
-	// 发送停止信号给 evictLoop
+	// 发送停止信号
 	close(m.stopChan)
 
 	// 停止定时器
@@ -147,15 +156,15 @@ func (m *GameManager) Shutdown(ctx context.Context) error {
 
 	// 保存所有脏游戏并关闭
 	m.games.Range(func(key, value interface{}) bool {
-		g := value.(*Game)
+		g := value.(*MultiRoundGame)
 		if g.IsDirty() {
 			// TODO: 保存到数据库
-			m.logger.Info("Saving game on shutdown", "roomId", g.roomID)
+			m.logger.Info("Saving game on shutdown", "roomId", g.RoomID)
 		}
 		g.Close()
 		return true
 	})
 
-	m.logger.Info("GameManager shutdown complete")
+	m.logger.Info("MultiRoundGameManager shutdown complete")
 	return nil
 }

@@ -6,7 +6,6 @@ import (
 	"log/slog"
 
 	"github.com/redis/go-redis/v9"
-	"sudooom.im.logic/internal/game"
 	"sudooom.im.logic/internal/game/mahjong/core"
 	"sudooom.im.logic/internal/game/mahjong/htmajong"
 	"sudooom.im.logic/internal/game/mahjong/thmahjong"
@@ -21,15 +20,26 @@ const (
 	GameTypeTaiHu   GameType = "taihu"   // 太湖麻将
 )
 
+// GameManager 游戏管理器接口（避免循环依赖）
+type GameManager interface {
+	GetOrCreate(roomID string, gameType string) (interface{}, error)
+}
+
+// GameObject 游戏对象接口（避免循环依赖）
+type GameObject interface {
+	SetEngine(engine interface{})
+	InitGame(ctx context.Context, playerIDs []string) error
+}
+
 // MahjongService 麻将游戏服务
 type MahjongService struct {
 	redisClient *redis.Client
-	gameManager *game.GameManager // 游戏管理器
+	gameManager GameManager // 游戏管理器接口
 	logger      *slog.Logger
 }
 
 // NewMahjongService 创建麻将游戏服务
-func NewMahjongService(redisClient *redis.Client, gameManager *game.GameManager) *MahjongService {
+func NewMahjongService(redisClient *redis.Client, gameManager GameManager) *MahjongService {
 	return &MahjongService{
 		redisClient: redisClient,
 		gameManager: gameManager,

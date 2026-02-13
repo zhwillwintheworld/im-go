@@ -10,6 +10,7 @@ var (
 	ErrRoomBusy            = errors.New("ROOM_BUSY")
 	ErrInvalidPassword     = errors.New("INVALID_PASSWORD")
 	ErrGameStarted         = errors.New("GAME_STARTED")
+	ErrGameNotStarted      = errors.New("GAME_NOT_STARTED")
 	ErrAlreadyInRoom       = errors.New("ALREADY_IN_ROOM")
 	ErrNotInRoom           = errors.New("NOT_IN_ROOM")
 	ErrNotRoomHost         = errors.New("NOT_ROOM_HOST")

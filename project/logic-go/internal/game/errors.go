@@ -8,6 +8,9 @@ var (
 	// ErrGameNotFound 游戏不存在
 	ErrGameNotFound = errors.New("game not found")
 
+	// ErrGameAlreadyExists 游戏已存在
+	ErrGameAlreadyExists = errors.New("game already exists")
+
 	// ErrInvalidGameState 无效的游戏状态
 	ErrInvalidGameState = errors.New("invalid game state")
 

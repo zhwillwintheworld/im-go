@@ -15,9 +15,15 @@ func (s *MahjongService) StartGame(ctx context.Context, room *model.Room, gameTy
 		"playerCount", len(room.Players))
 
 	// 1. 从 GameManager 获取或创建 Game 对象
-	gameObj, err := s.gameManager.GetOrCreate(room.RoomID, string(gameType))
+	gameObjInterface, err := s.gameManager.GetOrCreate(room.RoomID, string(gameType))
 	if err != nil {
 		return fmt.Errorf("获取游戏对象失败: %w", err)
+	}
+
+	// 类型断言为 GameObject
+	gameObj, ok := gameObjInterface.(GameObject)
+	if !ok {
+		return fmt.Errorf("游戏对象类型错误")
 	}
 
 	// 2. 创建 mahjong engine

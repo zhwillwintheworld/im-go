@@ -19,7 +19,7 @@ func NewDeckGenerator() *DeckGenerator {
 	}
 }
 
-// GenerateDeck 生成牌堆 (136张: 万条筒各36张 + 风牌16张 + 箭牌12张 + 花牌8张)
+// GenerateDeck 生成牌堆 (136张: 万条筒各36张 + 风牌16张 + 箭牌12张 )
 func (d *DeckGenerator) GenerateDeck() []core.Tile {
 	tiles := make([]core.Tile, 0, 144)
 

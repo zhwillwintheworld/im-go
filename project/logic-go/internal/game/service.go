@@ -22,7 +22,6 @@ type GameStarter interface {
 
 // GameService 游戏服务
 type GameService struct {
-	gameManager   *GameManager
 	redisClient   *redis.Client
 	routerService *service.RouterService
 	gameStarters  map[string]GameStarter // 外部游戏类型 → 启动器
@@ -31,12 +30,10 @@ type GameService struct {
 
 // NewGameService 创建游戏服务
 func NewGameService(
-	gameManager *GameManager,
 	redisClient *redis.Client,
 	routerService *service.RouterService,
 ) *GameService {
 	return &GameService{
-		gameManager:   gameManager,
 		redisClient:   redisClient,
 		routerService: routerService,
 		gameStarters:  make(map[string]GameStarter),

@@ -11,6 +11,11 @@ import (
 // 在内存中管理房间状态，使用 RWMutex 保证并发安全
 // 与 model.Room（数据传输对象）区分，Room 负责并发控制和生命周期管理
 //
+// 架构说明：
+// - Room 持有当前活跃的 Game（1:1 关系）
+// - Game 结束后可以开始新的 Game（支持切换）
+// - 历史 Game 记录通过数据库查询，不在内存中保存
+//
 // 使用示例：
 //
 //	room := NewRoom("room123", createParams)
@@ -217,4 +222,28 @@ func (r *Room) LastActiveTime() time.Time {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return r.lastActive
+}
+
+// FinishGame 结束游戏（Game 结束后调用）
+// 将房间状态从 playing 回到 waiting
+// 清空准备状态，玩家需要重新准备才能开始新游戏
+func (r *Room) FinishGame() error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.roomInfo.Status != "playing" {
+		return ErrGameNotStarted
+	}
+
+	// 重置房间状态
+	r.roomInfo.Status = "waiting"
+
+	// 清空所有玩家的准备状态
+	for i := range r.roomInfo.Players {
+		r.roomInfo.Players[i].IsReady = false
+	}
+
+	r.lastActive = time.Now()
+
+	return nil
 }

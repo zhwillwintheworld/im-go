@@ -19,6 +19,7 @@ import (
 	imNats "sudooom.im.logic/internal/nats"
 	imRoom "sudooom.im.logic/internal/room"
 	"sudooom.im.logic/internal/service"
+	"sudooom.im.logic/internal/task"
 	"sudooom.im.shared/snowflake"
 )
 
@@ -110,14 +111,19 @@ func main() {
 	// 设置 RoomManager 的 RoomService 引用（用于发送清理通知）
 	roomManager.SetRoomService(roomService)
 
-	// 创建游戏管理器
-	gameManager := game.NewGameManager(5000, 30*time.Minute)
+	// 创建任务调度器
+	taskScheduler := task.NewScheduler(10) // 10个工作协程
+	if err := taskScheduler.Start(); err != nil {
+		logger.Error("Failed to start task scheduler", "error", err)
+		os.Exit(1)
+	}
+	logger.Info("Task scheduler started")
 
 	// 创建麻将服务
-	mahjongService := mahjong.NewMahjongService(redisClient, gameManager)
+	mahjongService := mahjong.NewMahjongService(redisClient, nil) // 暂时传 nil，后续会重构
 
 	// 创建游戏服务并注册游戏启动器
-	gameService := game.NewGameService(gameManager, redisClient, routerService)
+	gameService := game.NewGameService(redisClient, routerService)
 	gameService.RegisterGameStarter(game.GameTypeHTMahjong, mahjongService)
 	gameService.RegisterGameStarter(game.GameTypeTHMahjong, mahjongService)
 
@@ -156,6 +162,7 @@ func main() {
 		logger.Error("Failed to stop subscriber", "error", err)
 	}
 	messageBatcher.Stop()
+	taskScheduler.Stop()
 	logger.Info("Logic service stopped")
 }
 

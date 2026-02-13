@@ -113,8 +113,14 @@ func (a ActionType) String() string {
 type Action struct {
 	Type     ActionType `json:"type"`     // 动作类型
 	PlayerID string     `json:"playerId"` // 玩家ID
+	TaskID   string     `json:"taskId"`   // 任务ID（响应任务时必填，主动动作时为空）
 	Tile     *Tile      `json:"tile"`     // 相关的牌 (出牌/摸牌时使用)
 	Tiles    []Tile     `json:"tiles"`    // 相关的多张牌 (吃/碰/杠时使用)
+}
+
+// IsTaskResponse 判断是否为任务响应动作
+func (a *Action) IsTaskResponse() bool {
+	return a.TaskID != ""
 }
 
 // PlayerState 玩家状态接口 (允许各麻将类型扩展)
@@ -136,11 +142,66 @@ type Player struct {
 
 // Task 任务 (其他玩家可以执行的动作)
 type Task struct {
+	ID             string       `json:"id"`             // 任务ID（全局唯一）
 	PlayerID       string       `json:"playerId"`       // 任务所属玩家
 	AvailableTypes []ActionType `json:"availableTypes"` // 可执行的动作类型
 	RelatedTile    *Tile        `json:"relatedTile"`    // 相关的牌
 	Priority       int          `json:"priority"`       // 优先级 (胡>杠>碰>吃)
 	Timeout        time.Time    `json:"timeout"`        // 超时时间
+}
+
+// TaskResponse 任务响应（收集多个玩家的反馈）
+type TaskResponse struct {
+	TaskID    string            `json:"taskId"`    // 任务ID
+	Responses map[string]Action `json:"responses"` // 玩家ID -> 动作
+}
+
+// AddResponse 添加玩家响应
+func (tr *TaskResponse) AddResponse(action Action) {
+	if tr.Responses == nil {
+		tr.Responses = make(map[string]Action)
+	}
+	tr.Responses[action.PlayerID] = action
+}
+
+// GetHighestPriorityAction 获取最高优先级的动作
+// 优先级：胡 > 杠 > 碰 > 吃 > 过
+func (tr *TaskResponse) GetHighestPriorityAction() *Action {
+	if len(tr.Responses) == 0 {
+		return nil
+	}
+
+	var highest *Action
+	highestPriority := -1
+
+	for _, action := range tr.Responses {
+		priority := getActionPriority(action.Type)
+		if priority > highestPriority {
+			highestPriority = priority
+			actionCopy := action
+			highest = &actionCopy
+		}
+	}
+
+	return highest
+}
+
+// getActionPriority 获取动作优先级
+func getActionPriority(actionType ActionType) int {
+	switch actionType {
+	case ActionWin, ActionQiangKong:
+		return 100 // 胡牌最高
+	case ActionKong:
+		return 50 // 杠
+	case ActionPong:
+		return 30 // 碰
+	case ActionChi:
+		return 20 // 吃
+	case ActionPass:
+		return 0 // 过
+	default:
+		return -1
+	}
 }
 
 // WinType 胡牌类型
@@ -206,16 +267,40 @@ type GameConfig struct {
 
 // GameState 游戏状态
 type GameState struct {
-	Players       []*Player   `json:"players"`       // 玩家列表
-	Deck          []Tile      `json:"deck"`          // 牌堆
-	CurrentPlayer int         `json:"currentPlayer"` // 当前玩家索引
-	LastAction    *Action     `json:"lastAction"`    // 上一个动作
-	Round         int         `json:"round"`         // 当前轮次
-	DealerIndex   int         `json:"dealerIndex"`   // 庄家索引
-	Config        GameConfig  `json:"config"`        // 游戏配置
-	IsGameOver    bool        `json:"isGameOver"`    // 游戏是否结束
-	Settlement    *Settlement `json:"settlement"`    // 结算结果
-	PendingTasks  []Task      `json:"pendingTasks"`  // 待处理任务
+	Players       []*Player     `json:"players"`       // 玩家列表
+	Deck          []Tile        `json:"deck"`          // 牌堆
+	CurrentPlayer int           `json:"currentPlayer"` // 当前玩家索引
+	LastAction    *Action       `json:"lastAction"`    // 上一个动作
+	Round         int           `json:"round"`         // 当前轮次
+	DealerIndex   int           `json:"dealerIndex"`   // 庄家索引
+	Config        GameConfig    `json:"config"`        // 游戏配置
+	IsGameOver    bool          `json:"isGameOver"`    // 游戏是否结束
+	Settlement    *Settlement   `json:"settlement"`    // 结算结果
+	PendingTasks  []Task        `json:"pendingTasks"`  // 待处理任务
+	CurrentTaskID string        `json:"currentTaskId"` // 当前任务ID
+	TaskResponses *TaskResponse `json:"taskResponses"` // 任务响应收集
+}
+
+// GetTask 根据ID获取任务
+func (s *GameState) GetTask(taskID string) *Task {
+	for i := range s.PendingTasks {
+		if s.PendingTasks[i].ID == taskID {
+			return &s.PendingTasks[i]
+		}
+	}
+	return nil
+}
+
+// HasPendingTasks 是否有待处理任务
+func (s *GameState) HasPendingTasks() bool {
+	return len(s.PendingTasks) > 0
+}
+
+// ClearPendingTasks 清除待处理任务
+func (s *GameState) ClearPendingTasks() {
+	s.PendingTasks = []Task{}
+	s.CurrentTaskID = ""
+	s.TaskResponses = nil
 }
 
 // GetPlayer 根据ID获取玩家
