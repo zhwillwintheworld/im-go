@@ -14,7 +14,6 @@ import (
 
 	"sudooom.im.logic/internal/config"
 	"sudooom.im.logic/internal/game"
-	"sudooom.im.logic/internal/game/mahjong"
 	"sudooom.im.logic/internal/handler"
 	imNats "sudooom.im.logic/internal/nats"
 	imRoom "sudooom.im.logic/internal/room"
@@ -119,13 +118,14 @@ func main() {
 	}
 	logger.Info("Task scheduler started")
 
-	// 创建麻将服务（gameManager 暂时传 nil，后续会接入 MultiRoundGameManager）
-	mahjongService := mahjong.NewMahjongService(nil)
-
-	// 创建游戏服务并注册游戏启动器
-	gameService := game.NewGameService(roomService, routerService)
-	gameService.RegisterGameStarter(game.GameTypeHTMahjong, mahjongService)
-	gameService.RegisterGameStarter(game.GameTypeTHMahjong, mahjongService)
+	// 创建游戏管理器（统一管理游戏实例和引擎创建）
+	gameManager := game.NewGameManager(
+		cfg.Room.MaxRooms,     // 最大游戏数（复用房间配置）
+		cfg.Room.EvictTimeout, // 淘汰超时
+		roomService,           // 房间广播器
+		routerService,         // 路由服务
+		taskScheduler,         // 任务调度器
+	)
 
 	// 创建消息处理器
 	msgHandler := handler.NewMessageHandler(
@@ -136,7 +136,7 @@ func main() {
 		conversationService,
 		redisClient,
 		roomService,
-		gameService,
+		gameManager,
 	)
 
 	// 启动订阅者

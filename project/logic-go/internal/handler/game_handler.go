@@ -11,14 +11,14 @@ import (
 
 // GameHandler 游戏请求处理器
 type GameHandler struct {
-	gameService *game.GameService
+	gameManager *game.GameManager
 	logger      *slog.Logger
 }
 
 // NewGameHandler 创建游戏请求处理器
-func NewGameHandler(gameService *game.GameService) *GameHandler {
+func NewGameHandler(gameManager *game.GameManager) *GameHandler {
 	return &GameHandler{
-		gameService: gameService,
+		gameManager: gameManager,
 		logger:      slog.Default(),
 	}
 }

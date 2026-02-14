@@ -28,12 +28,12 @@ func NewMessageHandler(
 	conversationService *service.ConversationService,
 	redisClient *redis.Client,
 	roomService *room.RoomService,
-	gameService *game.GameService,
+	gameManager *game.GameManager,
 ) *MessageHandler {
 	return &MessageHandler{
 		chatHandler: NewChatHandler(messageBatcher, messageService, groupService, routerService, conversationService),
-		roomHandler: NewRoomHandler(redisClient, roomService, gameService, routerService),
-		gameHandler: NewGameHandler(gameService),
+		roomHandler: NewRoomHandler(roomService, gameManager, routerService),
+		gameHandler: NewGameHandler(gameManager),
 		userHandler: NewUserHandler(conversationService, routerService),
 	}
 }

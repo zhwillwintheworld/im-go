@@ -97,7 +97,7 @@ func (m *RoomManager) evictLoop() {
 // evictInactive 淘汰不活跃的房间
 func (m *RoomManager) evictInactive() {
 	now := time.Now()
-	toEvict := []string{}
+	var toEvict []string
 
 	m.rooms.Range(func(key, value interface{}) bool {
 		roomId := key.(string)
