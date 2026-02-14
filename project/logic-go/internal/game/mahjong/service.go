@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/redis/go-redis/v9"
 	"sudooom.im.logic/internal/game/mahjong/core"
 	"sudooom.im.logic/internal/game/mahjong/htmajong"
 	"sudooom.im.logic/internal/game/mahjong/thmahjong"
@@ -32,16 +31,15 @@ type GameObject interface {
 }
 
 // MahjongService 麻将游戏服务
+// 注意：不使用 Redis，所有数据在内存中（通过 GameManager 管理）
 type MahjongService struct {
-	redisClient *redis.Client
 	gameManager GameManager // 游戏管理器接口
 	logger      *slog.Logger
 }
 
 // NewMahjongService 创建麻将游戏服务
-func NewMahjongService(redisClient *redis.Client, gameManager GameManager) *MahjongService {
+func NewMahjongService(gameManager GameManager) *MahjongService {
 	return &MahjongService{
-		redisClient: redisClient,
 		gameManager: gameManager,
 		logger:      slog.Default(),
 	}

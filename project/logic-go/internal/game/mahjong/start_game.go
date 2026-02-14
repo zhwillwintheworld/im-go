@@ -32,11 +32,11 @@ func (s *MahjongService) StartGame(ctx context.Context, room *model.Room, gameTy
 		return fmt.Errorf("创建游戏引擎失败: %w", err)
 	}
 
-	// 3. 包装为线程安全的 engine
-	safeEngine := NewSafeMahjongEngine(mahjongEngine, string(gameType))
+	// 3. 创建适配器（不包含锁，依赖 Round.opMu 保证并发安全）
+	engineAdapter := NewMahjongEngineAdapter(mahjongEngine, string(gameType))
 
-	// 4. 存储到 Game 对象（SafeMahjongEngine 实现了 game.GameEngine 接口）
-	gameObj.SetEngine(safeEngine)
+	// 4. 存储到 Game 对象（MahjongEngineAdapter 实现了 game.RoundEngine 接口）
+	gameObj.SetEngine(engineAdapter)
 
 	// 5. 初始化游戏
 	playerIDs := make([]string, len(room.Players))

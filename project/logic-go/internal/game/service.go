@@ -7,10 +7,8 @@ import (
 	"log/slog"
 	"sync"
 
-	"github.com/redis/go-redis/v9"
 	"sudooom.im.logic/internal/service"
 	"sudooom.im.shared/model"
-	sharedRedis "sudooom.im.shared/redis"
 )
 
 // GameStarter 游戏启动器接口
@@ -20,24 +18,32 @@ type GameStarter interface {
 	StartGameByType(ctx context.Context, room *model.Room, internalGameType string) error
 }
 
+// RoomBroadcaster 房间广播接口（避免循环依赖）
+type RoomBroadcaster interface {
+	BroadcastToRoom(ctx context.Context, roomId string, event string, data interface{}) error
+	GetRoom(ctx context.Context, roomId string) (*model.Room, error)
+}
+
 // GameService 游戏服务
+// 注意：GameService 不使用 Redis，所有数据都在内存中（通过 RoomManager 管理）
+// NATS 的一致性 Hash 保证同一房间的请求路由到同一 Logic 节点
 type GameService struct {
-	redisClient   *redis.Client
-	routerService *service.RouterService
-	gameStarters  map[string]GameStarter // 外部游戏类型 → 启动器
-	logger        *slog.Logger
+	roomBroadcaster RoomBroadcaster        // 房间广播器（RoomService）
+	routerService   *service.RouterService // 路由服务（用于消息分发）
+	gameStarters    map[string]GameStarter // 外部游戏类型 → 启动器
+	logger          *slog.Logger
 }
 
 // NewGameService 创建游戏服务
 func NewGameService(
-	redisClient *redis.Client,
+	roomBroadcaster RoomBroadcaster,
 	routerService *service.RouterService,
 ) *GameService {
 	return &GameService{
-		redisClient:   redisClient,
-		routerService: routerService,
-		gameStarters:  make(map[string]GameStarter),
-		logger:        slog.Default(),
+		roomBroadcaster: roomBroadcaster,
+		routerService:   routerService,
+		gameStarters:    make(map[string]GameStarter),
+		logger:          slog.Default(),
 	}
 }
 
@@ -47,42 +53,14 @@ func (s *GameService) RegisterGameStarter(gameType string, starter GameStarter) 
 }
 
 // BroadcastGameEvent 广播游戏事件给房间所有玩家（所有人收到相同消息）
+// 通过 RoomBroadcaster 获取房间玩家列表（从内存中的 RoomManager）
 func (s *GameService) BroadcastGameEvent(ctx context.Context, roomId string, event string, data interface{}) error {
-	eventData, err := json.Marshal(data)
-	if err != nil {
-		s.logger.Error("Failed to marshal game event data", "error", err, "event", event)
-		return err
-	}
-
-	// 获取房间所有用户ID
-	roomUsersKey := sharedRedis.BuildRoomUsersKey(roomId)
-	userIdStrs, err := s.redisClient.SMembers(ctx, roomUsersKey).Result()
-	if err != nil {
-		s.logger.Warn("Failed to get room users", "error", err, "roomId", roomId)
-		return err
-	}
-
-	// 转换为 int64 数组
-	userIds := make([]int64, 0, len(userIdStrs))
-	for _, userIdStr := range userIdStrs {
-		var userId int64
-		if _, err := fmt.Sscanf(userIdStr, "%d", &userId); err != nil {
-			s.logger.Warn("Invalid user id in room users", "userIdStr", userIdStr)
-			continue
-		}
-		userIds = append(userIds, userId)
-	}
-
-	// 广播事件
-	if err := s.routerService.SendRoomPushToUsers(ctx, userIds, event, roomId, eventData); err != nil {
-		s.logger.Warn("Failed to broadcast game event", "error", err, "event", event, "roomId", roomId)
-		return err
-	}
-
-	return nil
+	// 直接委托给 RoomBroadcaster
+	return s.roomBroadcaster.BroadcastToRoom(ctx, roomId, event, data)
 }
 
 // SendPersonalizedGameEvents 给每个玩家发送个性化的游戏事件（并行发送）
+// 注意：这里直接使用 routerService，因为需要给不同玩家发送不同的数据
 func (s *GameService) SendPersonalizedGameEvents(ctx context.Context, roomId string, event string, userDataMap map[int64]interface{}) error {
 	var wg sync.WaitGroup
 
@@ -98,6 +76,7 @@ func (s *GameService) SendPersonalizedGameEvents(ctx context.Context, roomId str
 				return
 			}
 
+			// 直接使用 routerService 发送个性化消息
 			if err := s.routerService.SendRoomPushToUsers(ctx, []int64{uid}, event, roomId, eventData); err != nil {
 				s.logger.Warn("Failed to send personalized event",
 					"error", err, "event", event, "userId", uid, "roomId", roomId)

@@ -3,80 +3,64 @@ package mahjong
 import (
 	"context"
 	"strconv"
-	"sync"
 	"time"
 
 	"sudooom.im.logic/internal/game/mahjong/core"
 	"sudooom.im.logic/internal/game/types"
 )
 
-// SafeMahjongEngine 线程安全的麻将引擎包装
-// 实现 game.RoundEngine 接口
-type SafeMahjongEngine struct {
-	mu       sync.RWMutex
+// MahjongEngineAdapter 麻将引擎适配器
+// 将 core.GameEngine 适配为 game.RoundEngine 接口
+// 不包含锁，依赖 Round.opMu 保证并发安全
+type MahjongEngineAdapter struct {
 	engine   core.GameEngine // mahjong/core 的引擎
 	gameType string
 }
 
-// NewSafeMahjongEngine 创建线程安全的麻将引擎
-func NewSafeMahjongEngine(engine core.GameEngine, gameType string) *SafeMahjongEngine {
-	return &SafeMahjongEngine{
+// NewMahjongEngineAdapter 创建麻将引擎适配器
+func NewMahjongEngineAdapter(engine core.GameEngine, gameType string) *MahjongEngineAdapter {
+	return &MahjongEngineAdapter{
 		engine:   engine,
 		gameType: gameType,
 	}
 }
 
 // Initialize 初始化（转换参数，实现 game.RoundEngine）
-func (e *SafeMahjongEngine) Initialize(ctx context.Context, playerIDs []string) error {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
+func (a *MahjongEngineAdapter) Initialize(ctx context.Context, playerIDs []string) error {
 	config := core.GameConfig{
 		PlayerCount: len(playerIDs),
 		BaseScore:   10,
 		Extra:       make(map[string]any),
 	}
 
-	return e.engine.Initialize(ctx, playerIDs, config)
+	return a.engine.Initialize(ctx, playerIDs, config)
 }
 
 // HandleAction 处理动作（实现 game.RoundEngine）
 // 使用 playerID 参数覆盖 action.PlayerID，确保玩家身份一致
-func (e *SafeMahjongEngine) HandleAction(ctx context.Context, playerID string, action core.Action) error {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
+func (a *MahjongEngineAdapter) HandleAction(ctx context.Context, playerID string, action core.Action) error {
 	action.PlayerID = playerID
-	return e.engine.HandleAction(ctx, action)
+	return a.engine.HandleAction(ctx, action)
 }
 
 // GetState 获取状态（实现 game.RoundEngine）
-func (e *SafeMahjongEngine) GetState() *core.GameState {
-	e.mu.RLock()
-	defer e.mu.RUnlock()
-
-	return e.engine.GetState()
+func (a *MahjongEngineAdapter) GetState() *core.GameState {
+	return a.engine.GetState()
 }
 
 // IsRoundOver 检查单局是否结束（实现 game.RoundEngine）
-func (e *SafeMahjongEngine) IsRoundOver() bool {
-	e.mu.RLock()
-	defer e.mu.RUnlock()
-
-	return e.engine.IsGameOver()
+func (a *MahjongEngineAdapter) IsRoundOver() bool {
+	return a.engine.IsGameOver()
 }
 
 // ProcessTaskTimeout 处理任务超时（实现 game.RoundEngine）
-func (e *SafeMahjongEngine) ProcessTaskTimeout() {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
+func (a *MahjongEngineAdapter) ProcessTaskTimeout() {
 	// 通过接口断言访问 core.Engine 的方法
 	type taskProcessor interface {
 		ProcessTaskTimeout()
 	}
 
-	proc, ok := e.engine.(taskProcessor)
+	proc, ok := a.engine.(taskProcessor)
 	if !ok {
 		return
 	}
@@ -86,11 +70,8 @@ func (e *SafeMahjongEngine) ProcessTaskTimeout() {
 
 // GetSettlement 获取结算结果（实现 game.RoundEngine）
 // 返回 interface{} 避免循环依赖
-func (e *SafeMahjongEngine) GetSettlement() interface{} {
-	e.mu.RLock()
-	defer e.mu.RUnlock()
-
-	coreSettlement := e.engine.GetSettlement()
+func (a *MahjongEngineAdapter) GetSettlement() interface{} {
+	coreSettlement := a.engine.GetSettlement()
 	if coreSettlement == nil {
 		return nil
 	}
@@ -126,7 +107,7 @@ func (e *SafeMahjongEngine) GetSettlement() interface{} {
 	settlement.FanScore = totalFan
 
 	// 获取赢家手牌和胡牌
-	state := e.engine.GetState()
+	state := a.engine.GetState()
 	if coreSettlement.WinnerID != "" {
 		for _, player := range state.Players {
 			if player.ID == coreSettlement.WinnerID {
@@ -173,14 +154,11 @@ func (e *SafeMahjongEngine) GetSettlement() interface{} {
 }
 
 // GetGameType 获取游戏类型
-func (e *SafeMahjongEngine) GetGameType() string {
-	return e.gameType
+func (a *MahjongEngineAdapter) GetGameType() string {
+	return a.gameType
 }
 
 // GetCoreSettlement 获取 core.Settlement（用于兼容旧代码）
-func (e *SafeMahjongEngine) GetCoreSettlement() *core.Settlement {
-	e.mu.RLock()
-	defer e.mu.RUnlock()
-
-	return e.engine.GetSettlement()
+func (a *MahjongEngineAdapter) GetCoreSettlement() *core.Settlement {
+	return a.engine.GetSettlement()
 }

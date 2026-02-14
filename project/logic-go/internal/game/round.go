@@ -15,7 +15,8 @@ import (
 type RoundSettlement interface{}
 
 // RoundEngine 单局游戏引擎接口
-// 由具体游戏引擎（如 SafeMahjongEngine）实现
+// 由具体游戏引擎适配器（如 MahjongEngineAdapter）实现
+// 注意：实现此接口的类型不需要包含锁，Round.opMu 已保证操作串行化
 type RoundEngine interface {
 	// Initialize 初始化单局游戏
 	Initialize(ctx context.Context, playerIDs []string) error

@@ -3,68 +3,42 @@ package room
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log/slog"
 
-	"github.com/redis/go-redis/v9"
 	"sudooom.im.logic/internal/service"
 	"sudooom.im.shared/model"
-	sharedRedis "sudooom.im.shared/redis"
 	"sudooom.im.shared/snowflake"
 )
 
 // RoomService 房间服务
-// 简化为使用 RoomManager，不再直接操作 Redis
+// 注意：房间数据在内存中（RoomManager），用户信息从 UserInfoProvider 获取
 type RoomService struct {
-	roomManager   *RoomManager
-	redisClient   *redis.Client // 仅用于获取用户信息
-	sfNode        *snowflake.Node
-	routerService *service.RouterService
-	logger        *slog.Logger
+	roomManager      *RoomManager
+	userInfoProvider UserInfoProvider // 用户信息提供者（可以是 Redis、数据库或其他）
+	sfNode           *snowflake.Node
+	routerService    *service.RouterService
+	logger           *slog.Logger
 }
 
 // NewRoomService 创建房间服务
 func NewRoomService(
 	roomManager *RoomManager,
-	redisClient *redis.Client,
+	userInfoProvider UserInfoProvider,
 	sfNode *snowflake.Node,
 	routerService *service.RouterService,
 ) *RoomService {
 	return &RoomService{
-		roomManager:   roomManager,
-		redisClient:   redisClient,
-		sfNode:        sfNode,
-		routerService: routerService,
-		logger:        slog.Default(),
+		roomManager:      roomManager,
+		userInfoProvider: userInfoProvider,
+		sfNode:           sfNode,
+		routerService:    routerService,
+		logger:           slog.Default(),
 	}
 }
 
-// getUserInfo 从 Redis 获取用户基本信息
+// getUserInfo 获取用户信息（委托给 UserInfoProvider）
 func (s *RoomService) getUserInfo(ctx context.Context, userId int64) *model.User {
-	userInfoKey := sharedRedis.BuildUserInfoKey(userId)
-	data, err := s.redisClient.Get(ctx, userInfoKey).Result()
-	if err != nil {
-		s.logger.Warn("Failed to get user info from Redis, using default", "userId", userId, "error", err)
-		return &model.User{
-			UserID:   userId,
-			Username: fmt.Sprintf("user_%d", userId),
-			Nickname: fmt.Sprintf("玩家%d", userId),
-			Avatar:   "",
-		}
-	}
-
-	var user model.User
-	if err := json.Unmarshal([]byte(data), &user); err != nil {
-		s.logger.Warn("Failed to unmarshal user info", "userId", userId, "error", err)
-		return &model.User{
-			UserID:   userId,
-			Username: fmt.Sprintf("user_%d", userId),
-			Nickname: fmt.Sprintf("玩家%d", userId),
-			Avatar:   "",
-		}
-	}
-
-	return &user
+	return s.userInfoProvider.GetUserInfo(ctx, userId)
 }
 
 // BroadcastToRoom 广播消息给房间所有用户

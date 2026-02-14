@@ -106,7 +106,7 @@ func main() {
 	)
 
 	// 创建房间服务
-	roomService := imRoom.NewRoomService(roomManager, redisClient, sfNode, routerService)
+	roomService := imRoom.NewRoomService(roomManager, imRoom.NewRedisUserInfoProvider(redisClient), sfNode, routerService)
 
 	// 设置 RoomManager 的 RoomService 引用（用于发送清理通知）
 	roomManager.SetRoomService(roomService)
@@ -119,11 +119,11 @@ func main() {
 	}
 	logger.Info("Task scheduler started")
 
-	// 创建麻将服务
-	mahjongService := mahjong.NewMahjongService(redisClient, nil) // 暂时传 nil，后续会重构
+	// 创建麻将服务（gameManager 暂时传 nil，后续会接入 MultiRoundGameManager）
+	mahjongService := mahjong.NewMahjongService(nil)
 
 	// 创建游戏服务并注册游戏启动器
-	gameService := game.NewGameService(redisClient, routerService)
+	gameService := game.NewGameService(roomService, routerService)
 	gameService.RegisterGameStarter(game.GameTypeHTMahjong, mahjongService)
 	gameService.RegisterGameStarter(game.GameTypeTHMahjong, mahjongService)
 

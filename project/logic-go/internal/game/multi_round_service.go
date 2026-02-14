@@ -97,16 +97,16 @@ func (s *MultiRoundGameService) createEngineForGameType(gameType string) RoundEn
 	case "HT_MAHJONG":
 		// 会同麻将
 		coreEngine := htmajong.NewEngine()
-		return mahjong.NewSafeMahjongEngine(coreEngine, gameType)
+		return mahjong.NewMahjongEngineAdapter(coreEngine, gameType)
 	case "TH_MAHJONG":
 		// 太湖麻将
 		coreEngine := thmahjong.NewEngine()
-		return mahjong.NewSafeMahjongEngine(coreEngine, gameType)
+		return mahjong.NewMahjongEngineAdapter(coreEngine, gameType)
 	default:
 		// 默认使用会同麻将
 		s.logger.Warn("Unknown game type, using default", "gameType", gameType)
 		coreEngine := htmajong.NewEngine()
-		return mahjong.NewSafeMahjongEngine(coreEngine, "HT_MAHJONG")
+		return mahjong.NewMahjongEngineAdapter(coreEngine, "HT_MAHJONG")
 	}
 }
 

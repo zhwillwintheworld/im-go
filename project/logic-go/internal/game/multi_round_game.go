@@ -48,9 +48,8 @@ type MultiRoundGame struct {
 	Config   GameConfig
 
 	// 轮次管理
-	rounds       []*Round // 所有轮次
-	currentRound *Round   // 当前轮次
-	roundNumber  int      // 当前轮次号
+	currentRound *Round // 当前轮次
+	roundNumber  int    // 当前轮次号（从 1 开始）
 
 	// 分数统计
 	playerScores map[int64]int // 玩家ID → 总分（累计）
@@ -75,7 +74,6 @@ func NewMultiRoundGame(gameID string, roomID string, gameType string, config Gam
 		RoomID:       roomID,
 		GameType:     gameType,
 		Config:       config,
-		rounds:       make([]*Round, 0),
 		playerScores: make(map[int64]int),
 		status:       MultiRoundGameStatusPlaying,
 		startTime:    time.Now(),
@@ -117,8 +115,7 @@ func (g *MultiRoundGame) StartNewRound(ctx context.Context, playerIDs []int64, e
 		return nil, fmt.Errorf("failed to initialize round: %w", err)
 	}
 
-	// 保存
-	g.rounds = append(g.rounds, round)
+	// 保存当前轮次（历史轮次会在 FinishCurrentRound 中持久化到 DB）
 	g.currentRound = round
 	g.lastActive = time.Now()
 	g.dirty = true
@@ -127,7 +124,7 @@ func (g *MultiRoundGame) StartNewRound(ctx context.Context, playerIDs []int64, e
 }
 
 // FinishCurrentRound 完成当前局
-func (g *MultiRoundGame) FinishCurrentRound(ctx context.Context) error {
+func (g *MultiRoundGame) FinishCurrentRound(_ context.Context) error {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
