@@ -11,11 +11,9 @@ import (
 )
 
 // MessageHandler 消息处理器组合器
-// 实现 nats.MessageHandler 接口,将请求委托给各个子 handler
 type MessageHandler struct {
 	chatHandler *ChatHandler
 	roomHandler *RoomHandler
-	gameHandler *GameHandler
 	userHandler *UserHandler
 }
 
@@ -33,7 +31,6 @@ func NewMessageHandler(
 	return &MessageHandler{
 		chatHandler: NewChatHandler(messageBatcher, messageService, groupService, routerService, conversationService),
 		roomHandler: NewRoomHandler(roomService, gameManager, routerService),
-		gameHandler: NewGameHandler(gameManager),
 		userHandler: NewUserHandler(conversationService, routerService),
 	}
 }
@@ -65,5 +62,5 @@ func (h *MessageHandler) HandleRoomRequest(ctx context.Context, req *proto.RoomR
 
 // HandleGameRequest 处理游戏请求
 func (h *MessageHandler) HandleGameRequest(ctx context.Context, req *proto.GameRequest, accessNodeId string, connId int64, platform string) {
-	_ = h.gameHandler.Handle(ctx, req, accessNodeId, connId, platform)
+	_ = h.roomHandler.HandleGameRequest(ctx, req, accessNodeId, connId, platform)
 }
