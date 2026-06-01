@@ -115,7 +115,7 @@ func (s *Server) Start(ctx context.Context) error {
 		func(conn *connection.Connection) {
 			// 超时回调：清理用户位置并通知 Logic
 			if conn.UserID() > 0 {
-				err := s.redisClient.UnregisterUserLocation(ctx, conn.UserID(), conn.Platform())
+				err := s.redisClient.UnregisterUserLocation(ctx, conn.UserID(), conn.Platform(), conn.ID())
 				if err != nil {
 					s.logger.Error("UnregisterUserLocation", "error", err)
 				}
@@ -139,7 +139,7 @@ func (s *Server) handleSession(ctx context.Context, session *webtransport.Sessio
 	defer func() {
 		// 连接关闭时清理用户位置
 		if c.UserID() > 0 {
-			err := s.redisClient.UnregisterUserLocation(ctx, c.UserID(), c.Platform())
+			err := s.redisClient.UnregisterUserLocation(ctx, c.UserID(), c.Platform(), c.ID())
 			if err != nil {
 				s.logger.Error("Failed to unregister user location", "error", err)
 				return
@@ -183,14 +183,18 @@ func (s *Server) subscribeDownstream() {
 	nodeID := s.getNodeID()
 	subject := sharedNats.BuildAccessDownstreamSubject(nodeID)
 
-	s.natsClient.Subscribe(subject, func(data []byte) {
+	if err := s.natsClient.Subscribe(subject, func(data []byte) {
 		s.handler.HandleDownstream(data)
-	})
+	}); err != nil {
+		s.logger.Error("Failed to subscribe downstream", "subject", subject, "error", err)
+	}
 
 	// 订阅广播
-	s.natsClient.Subscribe(sharedNats.SubjectAccessBroadcast, func(data []byte) {
+	if err := s.natsClient.Subscribe(sharedNats.SubjectAccessBroadcast, func(data []byte) {
 		s.handler.HandleDownstream(data)
-	})
+	}); err != nil {
+		s.logger.Error("Failed to subscribe broadcast", "subject", sharedNats.SubjectAccessBroadcast, "error", err)
+	}
 
 	// Subscribed to downstream
 }
@@ -231,7 +235,9 @@ func (s *Server) ConnManager() *connection.Manager {
 func (s *Server) Shutdown() {
 	// 先关闭 WebTransport Server，停止接收新连接
 	if s.wtServer != nil {
-		s.wtServer.Close()
+		if err := s.wtServer.Close(); err != nil {
+			s.logger.Error("Failed to close WebTransport server", "error", err)
+		}
 	}
 
 	// 关闭 Worker Pool，等待所有消息处理完成

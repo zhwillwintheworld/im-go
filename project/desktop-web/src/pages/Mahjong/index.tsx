@@ -4,6 +4,7 @@ import { Switch, message } from 'antd';
 import { ArrowLeftOutlined, PlusOutlined, LoginOutlined } from '@ant-design/icons';
 import { mahjongRoomService } from '@/services/mahjongRoomService';
 import { useIMStore } from '@/stores/imStore';
+import { logger } from '@/utils/logger';
 import styles from './Mahjong.module.css';
 
 type ModalType = 'none' | 'create' | 'join';
@@ -41,7 +42,7 @@ function Mahjong() {
         const unsubscribe = mahjongRoomService.onRoomUpdate((roomInfo) => {
             const roomId = roomInfo.roomId();
             if (roomId) {
-                console.log('[Mahjong] Received room info, navigating to:', roomId);
+                logger.info('[Mahjong] Received room info, navigating to:', roomId);
                 message.success('进入房间成功！');
                 navigate(`/mahjong/room/${roomId}`);
             }
@@ -71,7 +72,7 @@ function Mahjong() {
 
 
         } catch (error) {
-            console.error('[Mahjong] Join room error:', error);
+            logger.error('[Mahjong] Join room error:', error);
             message.error('加入房间失败');
         }
     };

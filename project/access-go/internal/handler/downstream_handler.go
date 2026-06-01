@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -91,7 +92,15 @@ func (h *Handler) handlePushMessage(conn *connection.Connection, pushMsg *proto.
 	respFrame := h.buildClientResponseFrame("", im_protocol.ErrorCodeSUCCESS, "", im_protocol.ResponsePayloadChatPush, payload)
 	err := conn.Send(respFrame)
 	if err != nil {
-		h.logger.Error("Failed to send push message to user", "userId", conn.UserID(), "error", err)
+		if errors.Is(err, connection.ErrConnectionBackpressure) {
+			h.logger.Warn("Drop push message because connection write queue is full",
+				"userId", conn.UserID(),
+				"connId", conn.ID(),
+				"serverMsgId", pushMsg.ServerMsgId,
+				"error", err)
+			return
+		}
+		h.logger.Error("Failed to send push message to user", "userId", conn.UserID(), "connId", conn.ID(), "error", err)
 	}
 }
 
@@ -113,7 +122,16 @@ func (h *Handler) handleMessageAck(conn *connection.Connection, ack *proto.Messa
 	// reqId 使用 ClientMsgId，让客户端可以关联请求
 	respFrame := h.buildClientResponseFrame(ack.ClientMsgId, im_protocol.ErrorCodeSUCCESS, "", im_protocol.ResponsePayloadChatSendAck, payload)
 	if err := conn.Send(respFrame); err != nil {
-		h.logger.Error("Failed to send ACK to user", "userId", conn.UserID(), "error", err)
+		if errors.Is(err, connection.ErrConnectionBackpressure) {
+			h.logger.Warn("Drop ACK because connection write queue is full",
+				"userId", conn.UserID(),
+				"connId", conn.ID(),
+				"clientMsgId", ack.ClientMsgId,
+				"serverMsgId", ack.ServerMsgId,
+				"error", err)
+			return
+		}
+		h.logger.Error("Failed to send ACK to user", "userId", conn.UserID(), "connId", conn.ID(), "error", err)
 	}
 }
 

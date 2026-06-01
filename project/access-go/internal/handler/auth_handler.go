@@ -126,8 +126,8 @@ func (h *Handler) handleAuth(ctx context.Context, conn *connection.Connection, s
 		oldConn.Close()
 	}
 
-	// 注册用户位置到 Redis（包含 connId）
-	if err := h.redisClient.RegisterUserLocation(ctx, sessInfo.UserID, sessInfo.Platform, conn.ID()); err != nil {
+	// 注册用户位置到 Redis（包含 connId 和版本，旧连接清理不会误删新连接）
+	if err := h.redisClient.RegisterUserLocation(ctx, sessInfo.UserID, sessInfo.Platform, sessInfo.DeviceID, conn.ID()); err != nil {
 		h.logger.Error("Failed to register user location", "error", err)
 	}
 

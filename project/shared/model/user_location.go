@@ -9,5 +9,6 @@ type UserLocation struct {
 	ConnId       int64     `json:"connId"`
 	DeviceId     string    `json:"deviceId"`
 	Platform     string    `json:"platform"`
+	Version      string    `json:"version"`
 	LoginTime    time.Time `json:"loginTime"`
 }

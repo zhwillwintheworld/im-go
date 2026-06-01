@@ -223,13 +223,13 @@ defer file.Close()
 cd project/desktop-web
 
 # 自动修复 ESLint 问题
-npm run lint:fix
+pnpm run lint:fix
 
 # 自动格式化代码
-npm run format
+pnpm run format
 
 # 类型检查(不能自动修复,需要手动修复)
-npx tsc --noEmit
+pnpm exec tsc --noEmit
 ```
 
 #### 4. 手动检查
@@ -238,13 +238,13 @@ npx tsc --noEmit
 cd project/desktop-web
 
 # 只检查不修复
-npm run lint
+pnpm run lint
 
 # 检查格式
-npm run format:check
+pnpm run format:check
 
 # 类型检查
-npm run type-check
+pnpm run type-check
 ```
 
 ### 常见 TypeScript 问题修复
@@ -411,7 +411,7 @@ go mod tidy
 
 # TypeScript 模块
 cd project/desktop-web
-npm install
+pnpm install
 ```
 
 ### 问题: 测试失败

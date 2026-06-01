@@ -127,13 +127,13 @@ func setupIntegrationTest(t *testing.T) *testDeps {
 }
 
 // teardownIntegrationTest 清理测试环境
-func (d *testDeps) teardown() {
+func (d *testDeps) teardown(t *testing.T) {
 	if d.db != nil {
 		d.db.Close()
 	}
 	if d.redisClient != nil {
 		if err := d.redisClient.Close(); err != nil {
-			// 忽略关闭错误，测试环境清理
+			t.Logf("关闭 Redis 连接失败: %v", err)
 		}
 	}
 }
@@ -147,7 +147,7 @@ func (d *testDeps) cleanupTestUser(ctx context.Context, username string) error {
 // TestIntegration_Login_Success 集成测试: 登录成功
 func TestIntegration_Login_Success(t *testing.T) {
 	deps := setupIntegrationTest(t)
-	defer deps.teardown()
+	defer deps.teardown(t)
 
 	ctx := context.Background()
 	testUsername := fmt.Sprintf("testuser_%d", time.Now().UnixNano())
@@ -157,7 +157,7 @@ func TestIntegration_Login_Success(t *testing.T) {
 	// 清理可能存在的测试用户
 	defer func() {
 		if err := deps.cleanupTestUser(ctx, testUsername); err != nil {
-			// 忽略清理错误
+			t.Logf("清理测试用户失败: %v", err)
 		}
 	}()
 
@@ -184,10 +184,10 @@ func TestIntegration_Login_Success(t *testing.T) {
 
 	// Step 2: 登录
 	loginBody := map[string]string{
-		"username":  testUsername,
-		"password":  testPassword,
-		"device_id": "test-device-001",
-		"platform":  "pc",
+		"username": testUsername,
+		"password": testPassword,
+		"deviceId": "test-device-001",
+		"platform": "pc",
 	}
 	loginJSON, _ := json.Marshal(loginBody)
 
@@ -211,9 +211,9 @@ func TestIntegration_Login_Success(t *testing.T) {
 	err = json.Unmarshal(loginResp.Data, &loginData)
 	require.NoError(t, err)
 
-	assert.NotZero(t, loginData.UserID, "应该返回 user_id")
-	assert.NotEmpty(t, loginData.AccessToken, "应该返回 access_token")
-	assert.NotEmpty(t, loginData.RefreshToken, "应该返回 refresh_token")
+	assert.NotZero(t, loginData.UserID, "应该返回 userId")
+	assert.NotEmpty(t, loginData.AccessToken, "应该返回 accessToken")
+	assert.NotEmpty(t, loginData.RefreshToken, "应该返回 refreshToken")
 	assert.NotZero(t, loginData.ExpiresAt, "应该返回过期时间")
 
 	// 验证 Token 有效性
@@ -229,7 +229,7 @@ func TestIntegration_Login_Success(t *testing.T) {
 // TestIntegration_Login_WrongPassword 集成测试: 密码错误
 func TestIntegration_Login_WrongPassword(t *testing.T) {
 	deps := setupIntegrationTest(t)
-	defer deps.teardown()
+	defer deps.teardown(t)
 
 	ctx := context.Background()
 	testUsername := fmt.Sprintf("testuser_%d", time.Now().UnixNano())
@@ -238,7 +238,7 @@ func TestIntegration_Login_WrongPassword(t *testing.T) {
 
 	defer func() {
 		if err := deps.cleanupTestUser(ctx, testUsername); err != nil {
-			// 忽略清理错误
+			t.Logf("清理测试用户失败: %v", err)
 		}
 	}()
 
@@ -261,6 +261,8 @@ func TestIntegration_Login_WrongPassword(t *testing.T) {
 	loginBody := map[string]string{
 		"username": testUsername,
 		"password": "wrongpassword",
+		"deviceId": "test-device-wrong-password",
+		"platform": "web",
 	}
 	loginJSON, _ := json.Marshal(loginBody)
 
@@ -284,12 +286,14 @@ func TestIntegration_Login_WrongPassword(t *testing.T) {
 // TestIntegration_Login_UserNotFound 集成测试: 用户不存在
 func TestIntegration_Login_UserNotFound(t *testing.T) {
 	deps := setupIntegrationTest(t)
-	defer deps.teardown()
+	defer deps.teardown(t)
 
 	// 登录一个不存在的用户
 	loginBody := map[string]string{
 		"username": "nonexistent_user_12345",
 		"password": "password123",
+		"deviceId": "test-device-missing-user",
+		"platform": "web",
 	}
 	loginJSON, _ := json.Marshal(loginBody)
 
@@ -314,15 +318,15 @@ func TestIntegration_Login_UserNotFound(t *testing.T) {
 // 如果你的数据库中已经有 zhanghua 用户，可以使用此测试
 func TestIntegration_Login_WithExistingUser(t *testing.T) {
 	deps := setupIntegrationTest(t)
-	defer deps.teardown()
+	defer deps.teardown(t)
 
 	// 使用数据库中已存在的用户 (你需要确保这个用户存在)
 	// 如果用户不存在，此测试会失败
 	loginBody := map[string]string{
-		"username":  "zhanghua",
-		"password":  "123456",
-		"device_id": "integration-test-device",
-		"platform":  "pc",
+		"username": "zhanghua",
+		"password": "123456",
+		"deviceId": "integration-test-device",
+		"platform": "pc",
 	}
 	loginJSON, _ := json.Marshal(loginBody)
 
@@ -354,7 +358,7 @@ func TestIntegration_Login_WithExistingUser(t *testing.T) {
 // 使用已存在的 zhanghua 账号进行测试
 func TestIntegration_Logout_Success(t *testing.T) {
 	deps := setupIntegrationTest(t)
-	defer deps.teardown()
+	defer deps.teardown(t)
 
 	// 使用已存在的用户账号
 	testUsername := "zhanghua"
@@ -362,10 +366,10 @@ func TestIntegration_Logout_Success(t *testing.T) {
 
 	// Step 1: 登录获取 Token
 	loginBody := map[string]string{
-		"username":  testUsername,
-		"password":  testPassword,
-		"device_id": "test-device-logout-001",
-		"platform":  "pc",
+		"username": testUsername,
+		"password": testPassword,
+		"deviceId": "test-device-logout-001",
+		"platform": "pc",
 	}
 	loginJSON, _ := json.Marshal(loginBody)
 
@@ -410,7 +414,7 @@ func TestIntegration_Logout_Success(t *testing.T) {
 // TestIntegration_Logout_WithoutToken 集成测试: 无Token登出
 func TestIntegration_Logout_WithoutToken(t *testing.T) {
 	deps := setupIntegrationTest(t)
-	defer deps.teardown()
+	defer deps.teardown(t)
 
 	// 不带 Token 直接登出
 	logoutReq, _ := http.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil)
@@ -432,7 +436,7 @@ func TestIntegration_Logout_WithoutToken(t *testing.T) {
 // TestIntegration_Logout_InvalidToken 集成测试: 无效Token登出
 func TestIntegration_Logout_InvalidToken(t *testing.T) {
 	deps := setupIntegrationTest(t)
-	defer deps.teardown()
+	defer deps.teardown(t)
 
 	// 使用无效 Token 登出
 	logoutReq, _ := http.NewRequest(http.MethodPost, "/api/v1/auth/logout", nil)

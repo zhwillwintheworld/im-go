@@ -220,7 +220,7 @@ func TestAuthHandler_Login_InvalidCredentials(t *testing.T) {
 		response.Success(c, resp)
 	})
 
-	reqBody := `{"username": "zhanghua", "password": "123456"}`
+	reqBody := `{"username": "zhanghua", "password": "123456", "deviceId": "device-123", "platform": "web"}`
 	req, _ := http.NewRequest(http.MethodPost, "/auth/login", bytes.NewBufferString(reqBody))
 	req.Header.Set("Content-Type", "application/json")
 
@@ -269,7 +269,7 @@ func TestAuthHandler_Login_UserDisabled(t *testing.T) {
 		response.Success(c, resp)
 	})
 
-	reqBody := `{"username": "zhanghua", "password": "123456"}`
+	reqBody := `{"username": "zhanghua", "password": "123456", "deviceId": "device-123", "platform": "web"}`
 	req, _ := http.NewRequest(http.MethodPost, "/auth/login", bytes.NewBufferString(reqBody))
 	req.Header.Set("Content-Type", "application/json")
 

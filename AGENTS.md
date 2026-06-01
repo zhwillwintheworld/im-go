@@ -352,7 +352,7 @@ im-go/
 │   ├── check-go-quality.sh          # Go 代码质量检查
 │   └── ...
 ├── go.work                          # Go 工作区文件
-└── CLAUDE.md                        # 本文件
+└── AGENTS.md                        # 本文件
 ```
 
 ---
@@ -827,4 +827,4 @@ Authorization: Bearer <access_token>
 
 ---
 
-**Generated with Claude Code** - 最后更新: 2026-01-12
+**Generated with Codex** - 最后更新: 2026-01-12

@@ -1,9 +1,11 @@
 import { IMProtocol, FrameType } from '../protocol/IMProtocol.js';
-import { getUTC8TimeString } from '@/utils/time';
+import { logger } from '@/utils/logger';
 
 type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'reconnecting';
 type MessageHandler = (frameType: FrameType, body: Uint8Array) => void;
 type StatusHandler = (status: ConnectionStatus) => void;
+
+const AUTH_TIMEOUT_MS = 5000;
 
 /**
  * WebTransport 管理器
@@ -24,13 +26,14 @@ class WebTransportManager {
     private authData: { token: string; deviceId: string; appVersion: string } | null = null;
 
     // 流复用优化：前置创建并复用双向流
-    private sendStream: any | null = null;  // BidirectionalStream
+    private sendStream: WebTransportBidirectionalStream | null = null;
     private sendWriter: WritableStreamDefaultWriter<Uint8Array> | null = null;
     private receiveReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
 
     // 认证响应等待
     private authResolve: ((value: boolean) => void) | null = null;
-    private authReject: ((reason?: any) => void) | null = null;
+    private authReject: ((reason?: unknown) => void) | null = null;
+    private authTimeout: number | null = null;
 
     /**
      * 连接到 WebTransport 服务器并发送认证请求
@@ -75,32 +78,40 @@ class WebTransportManager {
                 throw new Error('Connection aborted');
             }
 
-            this.reconnectAttempts = 0;
-            this.setStatus('connected');
-            console.log('init stream')
+            logger.debug('[WebTransport] Initializing stream');
             // 前置创建双向流和 writer/reader（避免首次发送延迟）
             await this.initializeStream();
 
             // 立即发送认证请求（连接建立后的首个请求）
-            console.log('[WebTransport] Sending authentication request...');
+            logger.info('[WebTransport] Sending authentication request...');
             const authFrame = IMProtocol.createAuthRequest(
                 authData.token,
                 authData.deviceId,
                 authData.appVersion
             );
 
-            await this.send(authFrame);
-            console.log('[WebTransport] Authentication request sent, waiting for response...');
-
+            const authResult = this.waitForAuthResponse();
             // 启动数据接收（在后台运行，不要 await，否则会阻塞）
             this.startReceiving();
+            await this.writeFrame(authFrame);
+            logger.info('[WebTransport] Authentication request sent, waiting for response...');
+            await authResult;
 
-            console.log('[WebTransport] ✅ Authentication successful');
+            if (this.abortController.signal.aborted) {
+                throw new Error('Connection aborted');
+            }
+
+            this.reconnectAttempts = 0;
+            this.setStatus('connected');
+            logger.info('[WebTransport] Authentication successful');
 
             // 启动心跳（暂时关闭用于调试）
             this.startHeartbeat();
         } catch (error) {
-            console.error('[WebTransport] Connection failed:', error);
+            this.abortController?.abort();
+            this.rejectAuth(error);
+            this.cleanupTransport();
+            logger.error('[WebTransport] Connection failed:', error);
             this.setStatus('disconnected');
             throw error;
         }
@@ -114,8 +125,13 @@ class WebTransportManager {
 
         // 发出取消信号，通知 connect 过程停止
         this.abortController?.abort();
+        this.rejectAuth(new Error('Connection aborted'));
 
-        // 关闭复用的发送流和 reader
+        this.cleanupTransport();
+        this.setStatus('disconnected');
+    }
+
+    private cleanupTransport(): void {
         if (this.sendWriter) {
             this.sendWriter.close().catch(() => { });
             this.sendWriter = null;
@@ -126,19 +142,16 @@ class WebTransportManager {
         }
         this.sendStream = null;
 
-        // 只有由于 'ready' promise 的特性，如果正在连接中调用 close() 会报错
-        // 所以如果状态是 connecting，我们只 abort，让 connect 方法里的逻辑去关闭
-        if (this.status === 'connected' && this.transport) {
+        if (this.transport) {
             try {
                 this.transport.close();
             } catch (e) {
-                console.warn('[WebTransport] Error closing transport:', e);
+                logger.warn('[WebTransport] Error closing transport:', e);
             }
         }
 
         this.transport = null;
         this.isReceiving = false;
-        this.setStatus('disconnected');
     }
 
     /**
@@ -154,9 +167,9 @@ class WebTransportManager {
             this.sendStream = await this.transport.createBidirectionalStream();
             this.sendWriter = this.sendStream.writable.getWriter();
             this.receiveReader = this.sendStream.readable.getReader();
-            console.log('[WebTransport] ✅ 前置创建双向流成功');
+            logger.info('[WebTransport] 前置创建双向流成功');
         } catch (error) {
-            console.error('[WebTransport] 初始化流失败:', error);
+            logger.error('[WebTransport] 初始化流失败:', error);
             throw error;
         }
     }
@@ -165,8 +178,16 @@ class WebTransportManager {
      * 发送二进制数据（使用前置创建的流）
      */
     async send(data: Uint8Array): Promise<void> {
-        if (!this.transport || this.status !== 'connected') {
+        if (this.status !== 'connected') {
             throw new Error('Not connected');
+        }
+
+        await this.writeFrame(data);
+    }
+
+    private async writeFrame(data: Uint8Array): Promise<void> {
+        if (!this.transport) {
+            throw new Error('Transport not ready');
         }
 
         if (!this.sendWriter) {
@@ -177,11 +198,42 @@ class WebTransportManager {
             // 直接写入，不等待 ready（减少延迟）
             await this.sendWriter.write(data);
         } catch (error) {
-            console.error('[WebTransport] Send error:', error);
+            logger.error('[WebTransport] Send error:', error);
             // 出错时重置
             this.sendWriter = null;
             this.sendStream = null;
             throw error;
+        }
+    }
+
+    private waitForAuthResponse(): Promise<boolean> {
+        return new Promise((resolve, reject) => {
+            this.authResolve = resolve;
+            this.authReject = reject;
+            this.authTimeout = window.setTimeout(() => {
+                this.rejectAuth(new Error('Authentication timeout'));
+            }, AUTH_TIMEOUT_MS);
+        });
+    }
+
+    private resolveAuth(): void {
+        this.clearAuthWaiter();
+        this.authResolve?.(true);
+        this.authResolve = null;
+        this.authReject = null;
+    }
+
+    private rejectAuth(reason: unknown): void {
+        this.clearAuthWaiter();
+        this.authReject?.(reason);
+        this.authResolve = null;
+        this.authReject = null;
+    }
+
+    private clearAuthWaiter(): void {
+        if (this.authTimeout) {
+            clearTimeout(this.authTimeout);
+            this.authTimeout = null;
         }
     }
 
@@ -211,12 +263,12 @@ class WebTransportManager {
         if (!this.receiveReader || this.isReceiving) return;
         this.isReceiving = true;
 
-        console.log('[WebTransport] 开始接收数据...');
+        logger.info('[WebTransport] 开始接收数据...');
 
         try {
             await this.handleIncomingStream();
         } catch (error) {
-            console.error('[WebTransport] Receive error:', error);
+            logger.error('[WebTransport] Receive error:', error);
             this.handleDisconnect();
         }
     }
@@ -248,7 +300,7 @@ class WebTransportManager {
                 // 解析帧头：获取帧体长度（Big Endian）
                 const dataView = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
                 const bodyLength = dataView.getUint32(0, false);  // false = Big Endian
-                const frameType = buffer[4];
+                const frameType = buffer[4] as FrameType;
 
                 const totalFrameLength = 5 + bodyLength;
 
@@ -256,7 +308,7 @@ class WebTransportManager {
                 while (buffer.length < totalFrameLength) {
                     const { done, value } = await this.receiveReader.read();
                     if (done) {
-                        console.warn('[WebTransport] Stream ended before complete frame');
+                        logger.warn('[WebTransport] Stream ended before complete frame');
                         return;
                     }
                     if (value) {
@@ -274,23 +326,30 @@ class WebTransportManager {
                 this.messageHandlers.forEach((handler) => handler(frameType, bodyData));
 
                 // 特殊处理：如果是Response帧，检查是否是认证响应
-                if (frameType === 2 && this.authResolve) {  // FrameType.Response = 2
-                    console.log('[WebTransport] Received Response frame, resolving auth');
-                    this.authResolve(true);
-                    this.authResolve = null;
-                    this.authReject = null;
+                if (frameType === FrameType.Response && this.authResolve) {
+                    const resp = IMProtocol.parseClientResponse(bodyData);
+                    if (resp.code === 0) {
+                        this.resolveAuth();
+                    } else {
+                        this.rejectAuth(new Error(resp.msg ?? 'Authentication failed'));
+                    }
                 }
 
                 // 移除已处理的帧，保留剩余数据
                 buffer = buffer.subarray(totalFrameLength);
             }
         } catch (error) {
-            console.error('[WebTransport] Stream read error:', error);
+            logger.error('[WebTransport] Stream read error:', error);
         }
         // reader.releaseLock() 不需要，因为 reader 是成员变量，在 disconnect 时统一释放
     }
 
     private handleDisconnect(): void {
+        if (this.abortController?.signal.aborted) {
+            this.setStatus('disconnected');
+            return;
+        }
+
         if (this.reconnectAttempts < this.maxReconnectAttempts && this.authData) {
             this.setStatus('reconnecting');
             this.reconnectAttempts++;
@@ -312,9 +371,9 @@ class WebTransportManager {
             try {
                 const heartbeatFrame = IMProtocol.createHeartbeatRequest();
                 await this.send(heartbeatFrame);
-                console.debug('[WebTransport] Heartbeat sent');
+                logger.debug('[WebTransport] Heartbeat sent');
             } catch (error) {
-                console.error('[WebTransport] Heartbeat failed:', error);
+                logger.error('[WebTransport] Heartbeat failed:', error);
             }
         }, 30000);
     }

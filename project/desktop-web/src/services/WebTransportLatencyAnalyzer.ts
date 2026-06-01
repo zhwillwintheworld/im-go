@@ -1,4 +1,5 @@
 import { getUTC8TimeString } from '@/utils/time';
+import { logger } from '@/utils/logger';
 
 /**
  * WebTransport 延迟分析器
@@ -115,32 +116,32 @@ export class WebTransportLatencyAnalyzer {
     printReport(): void {
         const stats = this.getStats();
         if (!stats) {
-            console.log('[延迟分析] 暂无数据');
+            logger.info('[延迟分析] 暂无数据');
             return;
         }
 
-        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        console.log('📊 WebTransport 延迟分析报告');
-        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        console.log(`📦 样本数量: ${stats.count}`);
-        console.log(`📈 平均延迟: ${stats.avg.toFixed(2)}ms`);
-        console.log(`⬇️  最小延迟: ${stats.min.toFixed(2)}ms`);
-        console.log(`⬆️  最大延迟: ${stats.max.toFixed(2)}ms`);
-        console.log(`📊 P50 (中位数): ${stats.p50.toFixed(2)}ms`);
-        console.log(`📊 P95: ${stats.p95.toFixed(2)}ms`);
-        console.log(`📊 P99: ${stats.p99.toFixed(2)}ms`);
+        logger.info('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        logger.info('📊 WebTransport 延迟分析报告');
+        logger.info('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        logger.info(`📦 样本数量: ${stats.count}`);
+        logger.info(`📈 平均延迟: ${stats.avg.toFixed(2)}ms`);
+        logger.info(`⬇️  最小延迟: ${stats.min.toFixed(2)}ms`);
+        logger.info(`⬆️  最大延迟: ${stats.max.toFixed(2)}ms`);
+        logger.info(`📊 P50 (中位数): ${stats.p50.toFixed(2)}ms`);
+        logger.info(`📊 P95: ${stats.p95.toFixed(2)}ms`);
+        logger.info(`📊 P99: ${stats.p99.toFixed(2)}ms`);
 
         const anomalies = this.detectAnomalies();
         if (anomalies && anomalies.count > 0) {
-            console.log(`⚠️  异常延迟: ${anomalies.count} 次 (${anomalies.percentage.toFixed(1)}%)`);
-            console.log(`   阈值: ${anomalies.threshold.toFixed(2)}ms`);
+            logger.info(`⚠️  异常延迟: ${anomalies.count} 次 (${anomalies.percentage.toFixed(1)}%)`);
+            logger.info(`   阈值: ${anomalies.threshold.toFixed(2)}ms`);
         }
 
         const pending = this.getPendingCount();
         if (pending > 0) {
-            console.log(`⏳ 待确认请求: ${pending}`);
+            logger.info(`⏳ 待确认请求: ${pending}`);
         }
-        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        logger.info('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     }
 }
 

@@ -1,6 +1,7 @@
 import { transportManager } from '@/services/transport/WebTransportManager';
 import { IMProtocol, FrameType } from '@/services/protocol/IMProtocol';
 import { ResponsePayload } from '@/im/protocol';
+import { logger } from '@/utils/logger';
 
 type MessageHandler = (payload: Uint8Array | null, reqId: string | null) => void;
 
@@ -50,7 +51,7 @@ class MessageDispatcher {
             }
         });
 
-        console.log('[MessageDispatcher] Initialized');
+        logger.info('[MessageDispatcher] Initialized');
     }
 
     private handleResponse(body: Uint8Array): void {
@@ -61,7 +62,7 @@ class MessageDispatcher {
             try {
                 handler(resp.payload, resp.reqId);
             } catch (e) {
-                console.error('[MessageDispatcher] Handler error:', e);
+                logger.error('[MessageDispatcher] Handler error:', e);
             }
         }
     }

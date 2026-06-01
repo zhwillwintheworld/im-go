@@ -7,16 +7,19 @@ trigger: always_on
 ## ⚠️ 核心规则（必须严格遵守）
 
 1. **非阻塞要求（最高优先级）**: 在 access、logic、web 这三个模块中，绝对不允许阻塞消息处理，只需要打印日志即可。如果修改或生成的代码阻塞了消息处理，必须立即通知用户
+   - Access 下行连接写队列满时必须快速返回错误并记录日志，不能阻塞 NATS 回调或消息读取循环
 2. **质量检查要求**:
    - Go 模块（access-go/logic-go/web-go）修改后必须运行 `scripts/check-go-quality.sh` 并解决所有错误与警告
    - desktop-web 模块修改后必须运行 `scripts/check-web-quality.sh` 并解决所有错误与警告
    - 校验代码时不要生成编译产物
 3. **文件清理**: 生成的 .bak 备份文件必须删除
 4. **Redis 键管理**: 所有 Redis 键值操作必须在 shared/redis/keys.go 中定义，绝不在应用代码中硬编码
+   - 用户在线位置必须包含 `accessNodeId`、`connId`、`deviceId`、`platform`、`version`；注销和心跳续期必须校验当前连接版本，禁止无条件删除或续期位置
+   - Logic 读取用户位置可以使用短 TTL 缓存降低 Redis 往返，但上线/下线事件必须失效缓存，避免长期路由到旧连接
 5. **JSON 字段规范**:
    - Go 后端输出的 JSON 字段使用驼峰格式（camelCase）
    - web-go 返回的 response 对象中 id 字段必须为 string（因为前端 JS 会丢精度）
-6. **协议同步**: 修改 schema/message.fbs 后，必须运行 `npm run flatc` 重新生成 TypeScript 代码
+6. **协议同步**: 修改 schema/message.fbs 后，必须运行 `pnpm run flatc` 重新生成 TypeScript 代码
 
 ## 数据库规范
 

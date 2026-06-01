@@ -7,6 +7,8 @@ import (
 
 var ErrConnectionClosed = errors.New("connection closed")
 
+var ErrConnectionBackpressure = errors.New("connection write queue full")
+
 // Manager 管理所有连接
 type Manager struct {
 	connections map[int64]*Connection            // connID -> Connection
@@ -127,10 +129,8 @@ func (m *Manager) Broadcast(data []byte) {
 	defer m.mu.RUnlock()
 
 	for _, conn := range m.connections {
-		if err := conn.Send(data); err != nil {
-			// 记录错误但继续给其他连接发送
-			// 注意：这里不记录日志，因为 Manager 没有 logger，错误会在 Send 方法中处理
-		}
+		// Manager 没有 logger，Send 内部会处理连接关闭等状态。
+		_ = conn.Send(data)
 	}
 }
 

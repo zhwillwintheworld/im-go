@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -59,11 +60,9 @@ func Logger() gin.HandlerFunc {
 			path = path + "?" + query
 		}
 
-		if _, err := gin.DefaultWriter.Write([]byte(
+		_, _ = gin.DefaultWriter.Write([]byte(
 			formatLog(status, latency, clientIP, method, path),
-		)); err != nil {
-			// 忽略日志写入错误
-		}
+		))
 	}
 }
 
@@ -80,7 +79,7 @@ func joinStrings(strs []string) string {
 
 func formatLog(status int, latency time.Duration, clientIP, method, path string) string {
 	return "[GIN] " + time.Now().Format("2006/01/02 - 15:04:05") +
-		" | " + string(rune(status)) +
+		" | " + strconv.Itoa(status) +
 		" | " + latency.String() +
 		" | " + clientIP +
 		" | " + method +

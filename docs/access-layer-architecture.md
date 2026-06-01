@@ -455,16 +455,20 @@ flowchart TB
 使用 Redis 存储用户连接位置：
 
 ```
-Key: im:user:conn:{user_id}
+Key: im:user:location:{user_id}:{platform}
 Value: {
-    "access_node": "10.0.0.1:8080",
-    "conn_id": 12345,
-    "device_id": "xxx",
-    "platform": "iOS",
-    "login_time": 1702600000
+    "userId": 10001,
+    "accessNodeId": "access-1",
+    "connId": 12345,
+    "deviceId": "xxx",
+    "platform": "web",
+    "version": "access-1:12345",
+    "loginTime": "2026-06-01T00:00:00Z"
 }
-TTL: 连接存在时续期
+TTL: 2 分钟，心跳续期
 ```
+
+注销与心跳续期必须按 `accessNodeId + connId + version` 做原子校验，避免旧连接在快速重连后删除或续期新连接的位置。
 
 ### 5.2 多端登录策略
 

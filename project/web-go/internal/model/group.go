@@ -24,8 +24,8 @@ type Group struct {
 	Description string    `json:"description" db:"description"`
 	MaxMembers  int       `json:"maxMembers" db:"max_members"`
 	Status      int       `json:"status" db:"status"`
-	CreateAt    time.Time `json:"createAt" db:"create_at"`
-	UpdateAt    time.Time `json:"updateAt" db:"update_at"`
+	CreateAt    time.Time `json:"createAt" db:"created_at"`
+	UpdateAt    time.Time `json:"updateAt" db:"updated_at"`
 	Deleted     int       `json:"-" db:"deleted"`
 }
 
@@ -36,8 +36,8 @@ type GroupMember struct {
 	UserID   int64     `json:"userId,string" db:"user_id"`
 	Role     int       `json:"role" db:"role"`
 	Nickname string    `json:"nickname" db:"nickname"`
-	CreateAt time.Time `json:"createAt" db:"create_at"`
-	UpdateAt time.Time `json:"updateAt" db:"update_at"`
+	CreateAt time.Time `json:"createAt" db:"created_at"`
+	UpdateAt time.Time `json:"updateAt" db:"updated_at"`
 	Deleted  int       `json:"-" db:"deleted"`
 }
 

@@ -23,10 +23,6 @@ function Game() {
         navigate('/login');
     };
 
-    const handleStartGame = () => {
-        message.info('游戏功能开发中...');
-    };
-
     const handleViewRecords = () => {
         message.info('战绩功能开发中...');
     };

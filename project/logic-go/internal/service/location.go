@@ -5,11 +5,14 @@ import (
 	"encoding/json"
 	"log/slog"
 	"sync"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 	sharedModel "sudooom.im.shared/model"
 	sharedRedis "sudooom.im.shared/redis"
 )
+
+const locationCacheTTL = 500 * time.Millisecond
 
 // AllPlatforms 支持的所有平台列表
 var AllPlatforms = []string{"android", "ios", "web", "desktop", "wechat"}
@@ -17,6 +20,7 @@ var AllPlatforms = []string{"android", "ios", "web", "desktop", "wechat"}
 // cachedUserLocation 缓存的用户位置信息
 type cachedUserLocation struct {
 	Locations []sharedModel.UserLocation
+	ExpiresAt time.Time
 }
 
 // LocationService 用户位置管理服务
@@ -40,8 +44,11 @@ func (s *LocationService) GetUserLocations(ctx context.Context, userId int64) ([
 	// 1. 尝试从缓存读取
 	if cached, ok := s.locationCache.Load(userId); ok {
 		entry := cached.(*cachedUserLocation)
-		// 缓存命中，直接返回
-		return entry.Locations, nil
+		if time.Now().Before(entry.ExpiresAt) {
+			// 短 TTL 缓存命中，降低热会话 Redis 往返，但避免长期路由到旧连接。
+			return entry.Locations, nil
+		}
+		s.locationCache.Delete(userId)
 	}
 
 	// 2. 缓存未命中，查询 Redis
@@ -54,6 +61,7 @@ func (s *LocationService) GetUserLocations(ctx context.Context, userId int64) ([
 	if len(locations) > 0 {
 		s.locationCache.Store(userId, &cachedUserLocation{
 			Locations: locations,
+			ExpiresAt: time.Now().Add(locationCacheTTL),
 		})
 	}
 

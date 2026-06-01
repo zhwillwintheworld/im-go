@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"log/slog"
 
 	"golang.org/x/crypto/bcrypt"
 
@@ -92,8 +93,7 @@ func (s *AuthService) Register(ctx context.Context, req *RegisterRequest) (*mode
 
 	// 保存用户基本信息到 Redis（与平台无关，永久存储）
 	if err := s.tokenRepo.SaveUserInfo(ctx, user.ID, user.Username, user.Nickname, user.Avatar); err != nil {
-		// 记录日志但不影响注册流程
-		// 可以在这里添加日志记录
+		slog.Warn("failed to save user info cache", "userId", user.ID, "error", err)
 	}
 
 	return user, nil
@@ -143,8 +143,7 @@ func (s *AuthService) Login(ctx context.Context, req *LoginRequest) (*LoginRespo
 
 	// 保存用户基本信息到 Redis（与平台无关，永久存储）
 	if err := s.tokenRepo.SaveUserInfo(ctx, user.ID, user.Username, user.Nickname, user.Avatar); err != nil {
-		// 记录日志但不影响登录流程
-		// 可以在这里添加日志记录
+		slog.Warn("failed to save user info cache", "userId", user.ID, "error", err)
 	}
 
 	return &LoginResponse{

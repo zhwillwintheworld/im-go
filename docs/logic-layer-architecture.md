@@ -222,7 +222,7 @@ classDiagram
 ```
 
 > [!NOTE]
-> 用户位置 (UserLocation) 的注册与注销由 **Access 层** 直接管理，Logic 层仅读取 Redis 中的位置信息进行消息路由。
+> 用户位置 (UserLocation) 的注册与注销由 **Access 层** 直接管理，Logic 层仅读取 Redis 中的位置信息进行消息路由。Logic 可以使用短 TTL 本地缓存减少 Redis 往返，但必须在用户上线/下线事件中失效缓存，避免长时间路由到旧连接。
 
 ---
 

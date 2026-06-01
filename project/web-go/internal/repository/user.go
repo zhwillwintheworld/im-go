@@ -28,9 +28,9 @@ func NewUserRepository(db *pgxpool.Pool) *UserRepository {
 // Create 创建用户
 func (r *UserRepository) Create(ctx context.Context, user *model.User) error {
 	query := `
-		INSERT INTO users (id, username, password_hash, nickname, avatar, status, create_at, update_at)
+		INSERT INTO users (id, username, password_hash, nickname, avatar, status, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
-		RETURNING create_at, update_at
+		RETURNING created_at, updated_at
 	`
 	return r.db.QueryRow(ctx, query,
 		user.ID,
@@ -45,7 +45,7 @@ func (r *UserRepository) Create(ctx context.Context, user *model.User) error {
 // GetByID 通过 ID 获取用户
 func (r *UserRepository) GetByID(ctx context.Context, id int64) (*model.User, error) {
 	query := `
-		SELECT id, username, password_hash, nickname, avatar, status, create_at, update_at
+		SELECT id, username, password_hash, nickname, avatar, status, created_at, updated_at
 		FROM users WHERE id = $1 AND deleted = 0
 	`
 	user := &model.User{}
@@ -71,7 +71,7 @@ func (r *UserRepository) GetByID(ctx context.Context, id int64) (*model.User, er
 // GetByUsername 通过用户名获取用户
 func (r *UserRepository) GetByUsername(ctx context.Context, username string) (*model.User, error) {
 	query := `
-		SELECT id, username, password_hash, nickname, avatar, status, create_at, update_at
+		SELECT id, username, password_hash, nickname, avatar, status, created_at, updated_at
 		FROM users WHERE username = $1 AND deleted = 0
 	`
 	user := &model.User{}
@@ -105,7 +105,7 @@ func (r *UserRepository) ExistsByUsername(ctx context.Context, username string) 
 // Update 更新用户信息
 func (r *UserRepository) Update(ctx context.Context, user *model.User) error {
 	query := `
-		UPDATE users SET nickname = $2, avatar = $3, update_at = NOW()
+		UPDATE users SET nickname = $2, avatar = $3, updated_at = NOW()
 		WHERE id = $1 AND deleted = 0
 	`
 	result, err := r.db.Exec(ctx, query,
@@ -125,7 +125,7 @@ func (r *UserRepository) Update(ctx context.Context, user *model.User) error {
 // Search 搜索用户
 func (r *UserRepository) Search(ctx context.Context, keyword string, limit, offset int) ([]*model.User, error) {
 	query := `
-		SELECT id, username, nickname, avatar, status, create_at, update_at
+		SELECT id, username, nickname, avatar, status, created_at, updated_at
 		FROM users
 		WHERE (username ILIKE $1 OR nickname ILIKE $1) AND deleted = 0
 		ORDER BY id DESC
@@ -159,7 +159,7 @@ func (r *UserRepository) Search(ctx context.Context, keyword string, limit, offs
 
 // Delete 逻辑删除用户
 func (r *UserRepository) Delete(ctx context.Context, id int64) error {
-	query := `UPDATE users SET deleted = 1, update_at = NOW() WHERE id = $1 AND deleted = 0`
+	query := `UPDATE users SET deleted = 1, updated_at = NOW() WHERE id = $1 AND deleted = 0`
 	result, err := r.db.Exec(ctx, query, id)
 	if err != nil {
 		return err

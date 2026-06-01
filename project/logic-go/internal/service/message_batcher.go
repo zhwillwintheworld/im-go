@@ -2,7 +2,9 @@ package service
 
 import (
 	"context"
+	"errors"
 	"log/slog"
+	"strconv"
 	"sync"
 	"time"
 
@@ -12,6 +14,9 @@ import (
 	"sudooom.im.shared/proto"
 	"sudooom.im.shared/snowflake"
 )
+
+// ErrMessageBatchQueueFull 表示消息批量写入队列已满，调用方应丢弃或降级处理。
+var ErrMessageBatchQueueFull = errors.New("message batch queue full")
 
 // MessageBatcherConfig 批量写入配置
 type MessageBatcherConfig struct {
@@ -89,10 +94,9 @@ func (b *MessageBatcher) SaveMessage(msg *proto.UserMessage) (int64, error) {
 		// 入队成功，立即返回（不等待数据库写入）
 		return serverMsgId, nil
 	default:
-		// 队列满，记录警告，同步等待
-		b.logger.Warn("Message batch queue full, waiting...")
-		b.msgChan <- msgToSave
-		return serverMsgId, nil
+		// 队列满时立即返回，遵守消息处理非阻塞约束
+		b.logger.Warn("Message batch queue full, message dropped", "serverMsgId", serverMsgId)
+		return 0, ErrMessageBatchQueueFull
 	}
 }
 
@@ -163,13 +167,14 @@ func (b *MessageBatcher) flush(ctx context.Context, batch []*MessageToSave) {
 	// 使用 pgx.Batch 批量插入
 	pgBatch := &pgx.Batch{}
 	query := `
-		INSERT INTO messages (id, client_msg_id, from_user_id, to_user_id, to_group_id, msg_type, content, status)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		INSERT INTO messages (id, object_code, client_msg_id, from_user_id, to_user_id, to_group_id, msg_type, content, status)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 	`
 
 	for _, m := range batch {
 		pgBatch.Queue(query,
 			m.ServerMsgId,
+			strconv.FormatInt(m.ServerMsgId, 10),
 			m.Msg.ClientMsgId,
 			m.Msg.FromUserId,
 			m.Msg.ToUserId,

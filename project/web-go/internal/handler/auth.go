@@ -2,6 +2,7 @@ package handler
 
 import (
 	"errors"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 
@@ -28,7 +29,7 @@ func NewAuthHandler(authService *service.AuthService) *AuthHandler {
 // @Accept       json
 // @Produce      json
 // @Param        request body service.RegisterRequest true "注册信息"
-// @Success      200  {object}  response.Response{data=object{user_id=int64,username=string,nickname=string}}
+// @Success      200  {object}  response.Response{data=object{userId=string,username=string,nickname=string}}
 // @Failure      200  {object}  response.Response
 // @Router       /auth/register [post]
 func (h *AuthHandler) Register(c *gin.Context) {
@@ -49,7 +50,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	}
 
 	response.Success(c, gin.H{
-		"user_id":  user.ID,
+		"userId":   strconv.FormatInt(user.ID, 10),
 		"username": user.Username,
 		"nickname": user.Nickname,
 	})

@@ -30,9 +30,9 @@ func NewFriendRepository(db *pgxpool.Pool) *FriendRepository {
 // CreateRequest 创建好友请求
 func (r *FriendRepository) CreateRequest(ctx context.Context, request *model.FriendRequest) error {
 	query := `
-		INSERT INTO friend_requests (id, from_user_id, to_user_id, message, status, create_at, update_at)
+		INSERT INTO friend_requests (id, from_user_id, to_user_id, message, status, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
-		RETURNING create_at, update_at
+		RETURNING created_at, updated_at
 	`
 	return r.db.QueryRow(ctx, query,
 		request.ID,
@@ -46,7 +46,7 @@ func (r *FriendRepository) CreateRequest(ctx context.Context, request *model.Fri
 // GetRequestByID 通过 ID 获取好友请求
 func (r *FriendRepository) GetRequestByID(ctx context.Context, id int64) (*model.FriendRequest, error) {
 	query := `
-		SELECT id, from_user_id, to_user_id, message, status, create_at, update_at
+		SELECT id, from_user_id, to_user_id, message, status, created_at, updated_at
 		FROM friend_requests WHERE id = $1 AND deleted = 0
 	`
 	req := &model.FriendRequest{}
@@ -71,7 +71,7 @@ func (r *FriendRepository) GetRequestByID(ctx context.Context, id int64) (*model
 // GetPendingRequest 获取待处理的好友请求
 func (r *FriendRepository) GetPendingRequest(ctx context.Context, fromUserID, toUserID int64) (*model.FriendRequest, error) {
 	query := `
-		SELECT id, from_user_id, to_user_id, message, status, create_at, update_at
+		SELECT id, from_user_id, to_user_id, message, status, created_at, updated_at
 		FROM friend_requests
 		WHERE from_user_id = $1 AND to_user_id = $2 AND status = $3 AND deleted = 0
 	`
@@ -96,7 +96,7 @@ func (r *FriendRepository) GetPendingRequest(ctx context.Context, fromUserID, to
 
 // UpdateRequestStatus 更新好友请求状态
 func (r *FriendRepository) UpdateRequestStatus(ctx context.Context, id int64, status int) error {
-	query := `UPDATE friend_requests SET status = $2, update_at = NOW() WHERE id = $1 AND deleted = 0`
+	query := `UPDATE friend_requests SET status = $2, updated_at = NOW() WHERE id = $1 AND deleted = 0`
 	result, err := r.db.Exec(ctx, query, id, status)
 	if err != nil {
 		return err
@@ -110,12 +110,12 @@ func (r *FriendRepository) UpdateRequestStatus(ctx context.Context, id int64, st
 // GetPendingRequestsForUser 获取用户待处理的好友请求
 func (r *FriendRepository) GetPendingRequestsForUser(ctx context.Context, userID int64) ([]*model.FriendRequestWithUser, error) {
 	query := `
-		SELECT fr.id, fr.from_user_id, fr.to_user_id, fr.message, fr.status, fr.create_at, fr.update_at,
+		SELECT fr.id, fr.from_user_id, fr.to_user_id, fr.message, fr.status, fr.created_at, fr.updated_at,
 		       u.username, u.nickname, u.avatar
 		FROM friend_requests fr
 		JOIN users u ON fr.from_user_id = u.id
 		WHERE fr.to_user_id = $1 AND fr.status = $2 AND fr.deleted = 0 AND u.deleted = 0
-		ORDER BY fr.create_at DESC
+		ORDER BY fr.created_at DESC
 	`
 	rows, err := r.db.Query(ctx, query, userID, model.FriendRequestStatusPending)
 	if err != nil {
@@ -152,10 +152,12 @@ func (r *FriendRepository) CreateFriendship(ctx context.Context, userFriendID, f
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx)
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
 
 	query := `
-		INSERT INTO friends (id, user_id, friend_id, create_at, update_at)
+		INSERT INTO friends (id, user_id, friend_id, created_at, updated_at)
 		VALUES ($1, $2, $3, NOW(), NOW())
 		ON CONFLICT (user_id, friend_id) DO NOTHING
 	`
@@ -177,9 +179,11 @@ func (r *FriendRepository) DeleteFriendship(ctx context.Context, userID, friendI
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx)
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
 
-	query := `UPDATE friends SET deleted = 1, update_at = NOW() WHERE user_id = $1 AND friend_id = $2 AND deleted = 0`
+	query := `UPDATE friends SET deleted = 1, updated_at = NOW() WHERE user_id = $1 AND friend_id = $2 AND deleted = 0`
 
 	if _, err := tx.Exec(ctx, query, userID, friendID); err != nil {
 		return err
@@ -202,12 +206,12 @@ func (r *FriendRepository) IsFriend(ctx context.Context, userID, friendID int64)
 // GetFriends 获取好友列表
 func (r *FriendRepository) GetFriends(ctx context.Context, userID int64) ([]*model.FriendWithUser, error) {
 	query := `
-		SELECT f.id, f.user_id, f.friend_id, f.remark, f.create_at, f.update_at,
+		SELECT f.id, f.user_id, f.friend_id, f.remark, f.created_at, f.updated_at,
 		       u.username, u.nickname, u.avatar
 		FROM friends f
 		JOIN users u ON f.friend_id = u.id
 		WHERE f.user_id = $1 AND f.deleted = 0 AND u.deleted = 0
-		ORDER BY f.create_at DESC
+		ORDER BY f.created_at DESC
 	`
 	rows, err := r.db.Query(ctx, query, userID)
 	if err != nil {
@@ -239,7 +243,7 @@ func (r *FriendRepository) GetFriends(ctx context.Context, userID int64) ([]*mod
 
 // UpdateRemark 更新好友备注
 func (r *FriendRepository) UpdateRemark(ctx context.Context, userID, friendID int64, remark string) error {
-	query := `UPDATE friends SET remark = $3, update_at = NOW() WHERE user_id = $1 AND friend_id = $2 AND deleted = 0`
+	query := `UPDATE friends SET remark = $3, updated_at = NOW() WHERE user_id = $1 AND friend_id = $2 AND deleted = 0`
 	result, err := r.db.Exec(ctx, query, userID, friendID, remark)
 	if err != nil {
 		return err

@@ -14,7 +14,7 @@ import (
 func (h *Handler) handleHeartbeat(ctx context.Context, conn *connection.Connection, stream *webtransport.Stream, reqID string, _payload []byte) {
 	// 刷新用户位置 TTL
 	if conn.UserID() > 0 {
-		if err := h.redisClient.RefreshUserLocation(ctx, conn.UserID(), conn.Platform()); err != nil {
+		if err := h.redisClient.RefreshUserLocation(ctx, conn.UserID(), conn.Platform(), conn.ID()); err != nil {
 			h.logger.Error("Failed to refresh user location", "error", err)
 		}
 	}

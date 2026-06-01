@@ -6,6 +6,7 @@ import { ChatType, MsgType, ResponsePayload, ChatPush } from '@/im/protocol';
 import { useChatStore } from './chatStore';
 import { latencyAnalyzer } from '@/services/WebTransportLatencyAnalyzer';
 import { getUTC8TimeString } from '@/utils/time';
+import { logger } from '@/utils/logger';
 
 interface Message {
     id: string;
@@ -79,7 +80,7 @@ export const useMessageStore = create<MessageState>((set, get) => ({
             // 更新会话最后消息
             useChatStore.getState().updateLastMessage(convId, content);
         } catch (e) {
-            console.error('Failed to send message:', e);
+            logger.error('Failed to send message:', e);
             get().updateMessageStatus(msgId, 'failed');
         }
     },
@@ -154,12 +155,12 @@ export const useMessageStore = create<MessageState>((set, get) => ({
                 });
             }
         } catch (e) {
-            console.error('[MessageStore] Failed to parse ChatPush:', e);
+            logger.error('[MessageStore] Failed to parse ChatPush:', e);
         }
     },
 
     initListener: () => {
-        console.log('[MessageStore] initListener called, registering message handler');
+        logger.info('[MessageStore] initListener called, registering message handler');
         transportManager.onMessage((frameType: FrameType, body: Uint8Array) => {
             if (frameType === FrameType.Response) {
                 const resp = IMProtocol.parseClientResponse(body);
@@ -171,7 +172,7 @@ export const useMessageStore = create<MessageState>((set, get) => ({
                             const result = latencyAnalyzer.recordReceive(resp.reqId);
 
                             if (result !== null) {
-                                console.log(`[MessageStore] 📥 收到ACK reqId=${resp.reqId}, 延迟=${result.latency.toFixed(2)}ms`);
+                                logger.info(`[MessageStore] 📥 收到ACK reqId=${resp.reqId}, 延迟=${result.latency.toFixed(2)}ms`);
                                 // 删除本地时间戳映射
                                 get().sendTimestamps.delete(resp.reqId);
                             }
@@ -185,10 +186,10 @@ export const useMessageStore = create<MessageState>((set, get) => ({
                         }
                         break;
                     default:
-                        console.log('[MessageStore] Unknown response payload type:', resp.payloadType);
+                        logger.debug('[MessageStore] Unknown response payload type:', resp.payloadType);
                 }
             } else {
-                console.log('[MessageStore] Non-Response frame type:', frameType);
+                logger.debug('[MessageStore] Non-Response frame type:', frameType);
             }
         });
     }

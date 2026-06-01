@@ -6,12 +6,13 @@
         "dev": "vite --mode development",
         "dev:test": "vite --mode test",
         "dev:prod": "vite --mode production",
-        "build": "tsc && vite build --mode production",
-        "build:test": "tsc && vite build --mode test",
-        "build:prod": "tsc && vite build --mode production",
+        "type-check": "tsc --noEmit",
+        "build": "pnpm run type-check && vite build --mode production",
+        "build:test": "pnpm run type-check && vite build --mode test",
+        "build:prod": "pnpm run type-check && vite build --mode production",
         "preview": "vite preview",
         "lint": "eslint . --ext ts,tsx",
-        "flatc": "flatc --ts -o src/protocol ../../schema/message.fbs"
+        "flatc": "../../schema/generate-ts.sh"
     },
     "dependencies": {
         "@ant-design/icons": "^6.1.0",

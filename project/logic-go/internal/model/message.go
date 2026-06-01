@@ -31,7 +31,7 @@ type Message struct {
 	MsgType     MessageType `json:"msgType" db:"msg_type"`
 	Content     []byte      `json:"content" db:"content"`
 	Status      int         `json:"status" db:"status"`
-	CreateAt    time.Time   `json:"createAt" db:"create_at"`
-	UpdateAt    time.Time   `json:"updateAt" db:"update_at"`
+	CreateAt    time.Time   `json:"createAt" db:"created_at"`
+	UpdateAt    time.Time   `json:"updateAt" db:"updated_at"`
 	Deleted     int         `json:"-" db:"deleted"`
 }

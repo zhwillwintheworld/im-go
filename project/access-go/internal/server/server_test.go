@@ -89,7 +89,11 @@ func TestWebTransportAuth(t *testing.T) {
 	if err != nil {
 		t.Fatalf("建立 WebTransport 连接失败: %v", err)
 	}
-	defer session.CloseWithError(0, "test completed")
+	defer func() {
+		if err := session.CloseWithError(0, "test completed"); err != nil {
+			t.Logf("关闭 WebTransport session 失败: %v", err)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("WebTransport 握手失败，状态码: %d", resp.StatusCode)
@@ -105,7 +109,11 @@ func TestWebTransportAuth(t *testing.T) {
 	if err != nil {
 		t.Fatalf("打开双向流失败: %v", err)
 	}
-	defer stream.Close()
+	defer func() {
+		if err := stream.Close(); err != nil {
+			t.Logf("关闭 WebTransport stream 失败: %v", err)
+		}
+	}()
 
 	// 发送认证帧
 	err = sendAuthFrame(stream, authReq)
@@ -166,7 +174,9 @@ func TestWebTransportAuthFail(t *testing.T) {
 
 	server := New(cfg, natsClient, redisClient, logger)
 	go func() {
-		server.Start(ctx)
+		if err := server.Start(ctx); err != nil && ctx.Err() == nil {
+			t.Logf("启动 WebTransport server 失败: %v", err)
+		}
 	}()
 	time.Sleep(2 * time.Second)
 
@@ -176,7 +186,11 @@ func TestWebTransportAuthFail(t *testing.T) {
 	if err != nil {
 		t.Fatalf("建立 WebTransport 连接失败: %v", err)
 	}
-	defer session.CloseWithError(0, "test completed")
+	defer func() {
+		if err := session.CloseWithError(0, "test completed"); err != nil {
+			t.Logf("关闭 WebTransport session 失败: %v", err)
+		}
+	}()
 
 	// 使用无效的 token
 	invalidToken := "invalid-token-xyz"
@@ -186,7 +200,11 @@ func TestWebTransportAuthFail(t *testing.T) {
 	if err != nil {
 		t.Fatalf("打开双向流失败: %v", err)
 	}
-	defer stream.Close()
+	defer func() {
+		if err := stream.Close(); err != nil {
+			t.Logf("关闭 WebTransport stream 失败: %v", err)
+		}
+	}()
 
 	err = sendAuthFrame(stream, authReq)
 	if err != nil {
@@ -301,7 +319,7 @@ func setTestUserToken(ctx context.Context, redisClient *redis.Client, userID int
 // cleanupTestData 清理测试数据
 func cleanupTestData(ctx context.Context, t *testing.T, redisClient *redis.Client, userID int64, platform, token string) {
 	// 移除用户位置
-	err := redisClient.UnregisterUserLocation(ctx, userID, platform)
+	err := redisClient.ForceUnregisterUserLocation(ctx, userID, platform)
 	if err != nil {
 		t.Logf("清理用户位置失败: %v", err)
 	}

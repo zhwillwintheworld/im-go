@@ -15,6 +15,7 @@ import (
 	"sudooom.im.logic/internal/service"
 	"sudooom.im.logic/internal/task"
 	"sudooom.im.shared/model"
+	"sudooom.im.shared/snowflake"
 )
 
 // RoomBroadcaster 房间广播接口（避免循环依赖）
@@ -40,6 +41,7 @@ type GameManager struct {
 	roomBroadcaster RoomBroadcaster        // 房间广播器（RoomService）
 	routerService   *service.RouterService // 路由服务（用于消息分发）
 	scheduler       *task.Scheduler        // 任务调度器
+	sfNode          *snowflake.Node        // 雪花ID生成器
 
 	logger *slog.Logger
 }
@@ -51,6 +53,7 @@ func NewGameManager(
 	roomBroadcaster RoomBroadcaster,
 	routerService *service.RouterService,
 	scheduler *task.Scheduler,
+	sfNode *snowflake.Node,
 ) *GameManager {
 	m := &GameManager{
 		maxGames:        maxGames,
@@ -60,6 +63,7 @@ func NewGameManager(
 		roomBroadcaster: roomBroadcaster,
 		routerService:   routerService,
 		scheduler:       scheduler,
+		sfNode:          sfNode,
 		logger:          slog.Default().With("component", "GameManager"),
 	}
 
@@ -84,8 +88,8 @@ func (m *GameManager) StartGame(ctx context.Context, room *model.Room) error {
 
 	// 2. 创建游戏实例
 	config := GameConfig{
-		MaxRounds: 8,  // 默认 8 局
-		BaseScore: 10, // 默认底分 10
+		MaxRounds: 8, // 默认 8 局
+		BaseScore: 1, // 默认底分 1
 	}
 
 	game, err := m.createGame(room.RoomID, internalType, config)
@@ -243,8 +247,8 @@ func (m *GameManager) createGame(roomID string, gameType string, config GameConf
 		return nil, ErrMaxGamesReached
 	}
 
-	// 创建游戏
-	gameID := roomID + ":game:" + time.Now().Format("20060102150405")
+	// 创建游戏（使用雪花算法生成唯一ID）
+	gameID := m.sfNode.Generate().String()
 	g := NewMultiRoundGame(gameID, roomID, gameType, config, m.scheduler)
 
 	actual, loaded := m.games.LoadOrStore(roomID, g)

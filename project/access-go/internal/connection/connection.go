@@ -96,10 +96,18 @@ func (c *Connection) WebTransportSession() *webtransport.Session {
 
 func (c *Connection) Send(data []byte) error {
 	select {
+	case <-c.closeChan:
+		return ErrConnectionClosed
+	default:
+	}
+
+	select {
 	case c.writeChan <- data:
 		return nil
 	case <-c.closeChan:
 		return ErrConnectionClosed
+	default:
+		return ErrConnectionBackpressure
 	}
 }
 

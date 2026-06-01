@@ -76,14 +76,16 @@ func (p *Pool) worker(id int) {
 	}
 }
 
-// Submit 提交任务到 Worker Pool
-// 如果队列满了，会阻塞直到有空位或 context 被取消
+// Submit 提交任务到 Worker Pool。
+// 队列满时立即返回 false，避免阻塞消息读取循环。
 func (p *Pool) Submit(task Task) bool {
 	select {
 	case <-p.ctx.Done():
 		return false
 	case p.taskQueue <- task:
 		return true
+	default:
+		return false
 	}
 }
 
@@ -104,7 +106,6 @@ func (p *Pool) TrySubmit(task Task) bool {
 // 等待所有任务完成
 func (p *Pool) Shutdown() {
 	p.cancel()
-	close(p.taskQueue)
 	p.wg.Wait()
 	p.logger.Info("Worker pool shutdown completed")
 }

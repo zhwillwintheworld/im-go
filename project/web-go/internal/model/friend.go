@@ -9,8 +9,8 @@ type FriendRequest struct {
 	ToUserID   int64     `json:"toUserId,string" db:"to_user_id"`
 	Message    string    `json:"message" db:"message"`
 	Status     int       `json:"status" db:"status"`
-	CreateAt   time.Time `json:"createAt" db:"create_at"`
-	UpdateAt   time.Time `json:"updateAt" db:"update_at"`
+	CreateAt   time.Time `json:"createAt" db:"created_at"`
+	UpdateAt   time.Time `json:"updateAt" db:"updated_at"`
 	Deleted    int       `json:"-" db:"deleted"`
 }
 
@@ -35,8 +35,8 @@ type Friend struct {
 	UserID   int64     `json:"userId,string" db:"user_id"`
 	FriendID int64     `json:"friendId,string" db:"friend_id"`
 	Remark   string    `json:"remark" db:"remark"`
-	CreateAt time.Time `json:"createAt" db:"create_at"`
-	UpdateAt time.Time `json:"updateAt" db:"update_at"`
+	CreateAt time.Time `json:"createAt" db:"created_at"`
+	UpdateAt time.Time `json:"updateAt" db:"updated_at"`
 	Deleted  int       `json:"-" db:"deleted"`
 }
 

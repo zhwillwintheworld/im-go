@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -15,7 +16,7 @@ import (
 
 const (
 	// 用户位置 TTL: 2 分钟，心跳续期
-	locationTTL = 2 * time.Minute
+	locationTTL = sharedRedis.LocationTTL
 )
 
 // UserTokenInfo 存储在 Redis 中的用户 Token 信息（仅认证字段）
@@ -32,8 +33,45 @@ type UserLocation struct {
 	ConnId       int64     `json:"connId"`
 	DeviceId     string    `json:"deviceId"`
 	Platform     string    `json:"platform"`
+	Version      string    `json:"version"`
 	LoginTime    time.Time `json:"loginTime"`
 }
+
+var unregisterLocationScript = redis.NewScript(`
+local raw = redis.call("GET", KEYS[1])
+if not raw then
+  return 0
+end
+
+local ok, loc = pcall(cjson.decode, raw)
+if not ok then
+  return 0
+end
+
+if tostring(loc.accessNodeId) == ARGV[1] and tostring(loc.connId) == ARGV[2] and tostring(loc.version) == ARGV[3] then
+  return redis.call("DEL", KEYS[1])
+end
+
+return 0
+`)
+
+var refreshLocationScript = redis.NewScript(`
+local raw = redis.call("GET", KEYS[1])
+if not raw then
+  return 0
+end
+
+local ok, loc = pcall(cjson.decode, raw)
+if not ok then
+  return 0
+end
+
+if tostring(loc.accessNodeId) == ARGV[1] and tostring(loc.connId) == ARGV[2] and tostring(loc.version) == ARGV[3] then
+  return redis.call("EXPIRE", KEYS[1], ARGV[4])
+end
+
+return 0
+`)
 
 // Client Redis 客户端
 type Client struct {
@@ -44,6 +82,10 @@ type Client struct {
 
 // NewClient 创建 Redis 客户端
 func NewClient(cfg config.RedisConfig, nodeID string) *Client {
+	if nodeID == "" {
+		nodeID = "access-1"
+	}
+
 	client := redis.NewClient(&redis.Options{
 		Addr:     cfg.Addr,
 		Password: cfg.Password,
@@ -58,10 +100,14 @@ func NewClient(cfg config.RedisConfig, nodeID string) *Client {
 	}
 }
 
+func (c *Client) locationVersion(connId int64) string {
+	return c.nodeID + ":" + strconv.FormatInt(connId, 10)
+}
+
 // RegisterUserLocation 注册用户位置
 // Key: im:user:location:{userId}:{platform}, Value: JSON{accessNodeId, connId}
 // 一个 platform 只维持一个连接，新连接会覆盖旧连接
-func (c *Client) RegisterUserLocation(ctx context.Context, userId int64, platform string, connId int64) error {
+func (c *Client) RegisterUserLocation(ctx context.Context, userId int64, platform string, deviceId string, connId int64) error {
 	key := sharedRedis.BuildUserLocationKeyWithPlatform(userId, platform)
 
 	// 存储完整的路由信息
@@ -69,7 +115,9 @@ func (c *Client) RegisterUserLocation(ctx context.Context, userId int64, platfor
 		UserId:       userId,
 		AccessNodeId: c.nodeID,
 		ConnId:       connId,
+		DeviceId:     deviceId,
 		Platform:     platform,
+		Version:      c.locationVersion(connId),
 		LoginTime:    time.Now(),
 	}
 
@@ -85,6 +133,7 @@ func (c *Client) RegisterUserLocation(ctx context.Context, userId int64, platfor
 			"userId", userId,
 			"platform", platform,
 			"connId", connId,
+			"version", location.Version,
 			"nodeId", c.nodeID)
 	}
 
@@ -92,22 +141,69 @@ func (c *Client) RegisterUserLocation(ctx context.Context, userId int64, platfor
 }
 
 // UnregisterUserLocation 移除用户位置
-func (c *Client) UnregisterUserLocation(ctx context.Context, userId int64, platform string) error {
+func (c *Client) UnregisterUserLocation(ctx context.Context, userId int64, platform string, connId int64) error {
 	key := sharedRedis.BuildUserLocationKeyWithPlatform(userId, platform)
+	version := c.locationVersion(connId)
 
-	err := c.client.Del(ctx, key).Err()
-
-	if err == nil {
-		// User location unregistered
+	deleted, err := unregisterLocationScript.Run(ctx, c.client, []string{key},
+		c.nodeID,
+		strconv.FormatInt(connId, 10),
+		version,
+	).Int64()
+	if err != nil {
+		return err
 	}
 
-	return err
+	if deleted > 0 {
+		c.logger.Debug("Unregistered user location",
+			"userId", userId,
+			"platform", platform,
+			"connId", connId,
+			"version", version,
+			"nodeId", c.nodeID)
+	} else {
+		c.logger.Debug("Skip unregistering stale user location",
+			"userId", userId,
+			"platform", platform,
+			"connId", connId,
+			"version", version,
+			"nodeId", c.nodeID)
+	}
+
+	return nil
+}
+
+// ForceUnregisterUserLocation 无条件移除用户位置，仅用于测试清理或管理操作。
+func (c *Client) ForceUnregisterUserLocation(ctx context.Context, userId int64, platform string) error {
+	key := sharedRedis.BuildUserLocationKeyWithPlatform(userId, platform)
+	return c.client.Del(ctx, key).Err()
 }
 
 // RefreshUserLocation 刷新用户位置 TTL（心跳时调用）
-func (c *Client) RefreshUserLocation(ctx context.Context, userId int64, platform string) error {
+func (c *Client) RefreshUserLocation(ctx context.Context, userId int64, platform string, connId int64) error {
 	key := sharedRedis.BuildUserLocationKeyWithPlatform(userId, platform)
-	return c.client.Expire(ctx, key, locationTTL).Err()
+	version := c.locationVersion(connId)
+
+	refreshed, err := refreshLocationScript.Run(ctx, c.client, []string{key},
+		c.nodeID,
+		strconv.FormatInt(connId, 10),
+		version,
+		strconv.FormatInt(int64(locationTTL/time.Second), 10),
+	).Int64()
+	if err != nil {
+		return err
+	}
+
+	if refreshed == 0 {
+		c.logger.Debug("Skip refreshing stale user location",
+			"userId", userId,
+			"platform", platform,
+			"connId", connId,
+			"version", version,
+			"nodeId", c.nodeID)
+	}
+
+	return nil
 }
 
 // GetUserLocation 获取用户某平台的位置（返回完整路由信息）

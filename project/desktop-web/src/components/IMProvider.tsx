@@ -2,6 +2,7 @@ import { useEffect, useState, ReactNode } from 'react';
 import { useAuthStore } from '@/stores/authStore';
 import { useIMStore } from '@/stores/imStore';
 import { messageDispatcher } from '@/services/messageDispatcher';
+import { logger } from '@/utils/logger';
 
 interface IMProviderProps {
     children: ReactNode;
@@ -32,12 +33,12 @@ export function IMProvider({ children }: IMProviderProps) {
         if (!initialized) return;
 
         if (isAuthenticated && token) {
-            console.log('[IMProvider] User authenticated, connecting to IM...');
+            logger.info('[IMProvider] User authenticated, connecting to IM...');
             imConnect(token).catch((err) => {
-                console.error('[IMProvider] IM connect failed:', err);
+                logger.error('[IMProvider] IM connect failed:', err);
             });
         } else {
-            console.log('[IMProvider] User not authenticated, disconnecting IM...');
+            logger.info('[IMProvider] User not authenticated, disconnecting IM...');
             imDisconnect();
         }
     }, [initialized, isAuthenticated, token, imConnect, imDisconnect]);

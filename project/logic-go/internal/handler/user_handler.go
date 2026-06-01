@@ -26,6 +26,9 @@ func NewUserHandler(conversationService *service.ConversationService, routerServ
 
 // HandleUserOnline 处理用户上线
 func (h *UserHandler) HandleUserOnline(ctx context.Context, event *proto.UserOnline, accessNodeId string) {
+	// Access 已先写 Redis 位置；上线事件到达时清一次短缓存，避免重连后短时间命中旧路由。
+	h.routerService.InvalidateUserCache(event.UserId)
+
 	// location 由 access-go 管理，这里只记录日志
 	h.logger.Info("User online",
 		"userId", event.UserId,

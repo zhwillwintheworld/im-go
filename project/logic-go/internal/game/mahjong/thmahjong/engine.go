@@ -69,7 +69,7 @@ func (e *Engine) HandleAction(ctx context.Context, playerID string, action core.
 
 // IsRoundOver 检查单局是否结束（实现 game.RoundEngine 接口）
 func (e *Engine) IsRoundOver() bool {
-	return e.Engine.IsGameOver()
+	return e.IsGameOver()
 }
 
 // GetSettlement 获取结算结果（实现 game.RoundEngine 接口）
@@ -110,7 +110,7 @@ func (e *Engine) GetSettlement() interface{} {
 	settlement.FanScore = totalFan
 
 	// 获取赢家手牌和胡牌
-	state := e.Engine.GetState()
+	state := e.GetState()
 	if coreSettlement.WinnerID != "" {
 		for _, player := range state.Players {
 			if player.ID == coreSettlement.WinnerID {

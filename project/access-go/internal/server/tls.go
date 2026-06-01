@@ -60,7 +60,9 @@ func generateSelfSignedTLSConfig() (*tls.Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer certOut.Close()
+	defer func() {
+		_ = certOut.Close()
+	}()
 	if err := pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: certDER}); err != nil {
 		return nil, err
 	}
@@ -69,7 +71,9 @@ func generateSelfSignedTLSConfig() (*tls.Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer keyOut.Close()
+	defer func() {
+		_ = keyOut.Close()
+	}()
 	keyBytes, err := x509.MarshalECPrivateKey(key)
 	if err != nil {
 		return nil, err

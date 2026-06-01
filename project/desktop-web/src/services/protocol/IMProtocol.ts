@@ -12,6 +12,7 @@ import {
     ChatType,
     MsgType
 } from '@/im/protocol';
+import { logger } from '@/utils/logger';
 
 /**
  * 帧类型定义 - 与服务端 handler.go 保持一致
@@ -86,7 +87,7 @@ export class IMProtocol {
      * 创建认证请求帧
      */
     static createAuthRequest(token: string, deviceId: string, appVersion: string): Uint8Array {
-        console.log('[IMProtocol] Creating AuthRequest:', {
+        logger.debug('[IMProtocol] Creating AuthRequest:', {
             token: token.substring(0, 20) + '...',
             deviceId,
             platform: 'WEB',
@@ -203,7 +204,7 @@ export class IMProtocol {
     ): { frame: Uint8Array; reqId: string } {
         const reqId = generateReqId();
 
-        console.log('[IMProtocol] Creating ConversationReadRequest:', {
+        logger.debug('[IMProtocol] Creating ConversationReadRequest:', {
             reqId,
             peerId,
             groupId,
@@ -270,4 +271,3 @@ export class IMProtocol {
         };
     }
 }
-

@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { transportManager } from '@/services/transport/WebTransportManager';
-import { IMProtocol } from '@/services/protocol/IMProtocol';
 import { config } from '@/config';
+import { logger } from '@/utils/logger';
 
 type IMConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'authenticating' | 'authenticated' | 'error';
 
@@ -45,10 +45,10 @@ export const useIMStore = create<IMState>((set, get) => ({
 
             // 认证成功
             set({ status: 'authenticated' });
-            console.log('[IMStore] Connected and authenticated');
+            logger.info('[IMStore] Connected and authenticated');
         } catch (err) {
             const errorMsg = err instanceof Error ? err.message : 'Unknown error';
-            console.error('[IMStore] Connection failed:', errorMsg);
+            logger.error('[IMStore] Connection failed:', errorMsg);
             set({ status: 'error', error: errorMsg });
             throw err;
         }
@@ -57,7 +57,7 @@ export const useIMStore = create<IMState>((set, get) => ({
     disconnect: () => {
         transportManager.disconnect();
         set({ status: 'disconnected', error: null });
-        console.log('[IMStore] Disconnected');
+        logger.info('[IMStore] Disconnected');
     },
 }));
 

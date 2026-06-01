@@ -4,7 +4,6 @@ import { message } from 'antd';
 import { EyeOutlined, PlusOutlined, SendOutlined } from '@ant-design/icons';
 import { mahjongRoomService } from '@/services/mahjongRoomService';
 import { useIMStore } from '@/stores/imStore';
-import { RoomInfo, RoomPlayer as FBRoomPlayer } from '@/im/protocol';
 import styles from './Room.module.css';
 
 interface Player {
@@ -98,7 +97,7 @@ function MahjongRoom() {
         try {
             await mahjongRoomService.takeSeat(roomId!, seatIndex);
             message.success(`正在占据 ${POSITION_LABELS[position]} 座位...`);
-        } catch (error) {
+        } catch {
             message.error('占座失败');
         }
     };
@@ -107,7 +106,7 @@ function MahjongRoom() {
         try {
             await mahjongRoomService.toggleReady(roomId!);
             message.info(isReady ? '正在取消准备...' : '正在准备...');
-        } catch (error) {
+        } catch {
             message.error('操作失败');
         }
     };
@@ -117,7 +116,7 @@ function MahjongRoom() {
             await mahjongRoomService.startGame(roomId!);
             message.info('正在开始游戏...');
             navigate(`/mahjong/game/${roomId}`);
-        } catch (error) {
+        } catch {
             message.error('开始游戏失败');
         }
     };
@@ -254,6 +253,7 @@ function MahjongRoom() {
                     <button
                         className={styles.startBtn}
                         onClick={handleStartGame}
+                        disabled={!canStart}
                     >
                         开始游戏 ({readyCount}/4)
                     </button>

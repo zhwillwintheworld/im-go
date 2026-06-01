@@ -28,7 +28,7 @@ SUCCESS=true
 
 # 1. TypeScript 类型检查
 echo -e "${BLUE}1/2 TypeScript 类型检查...${NC}"
-tsc_output=$(npx tsc --noEmit 2>&1 || true)
+tsc_output=$(pnpm exec tsc --noEmit 2>&1 || true)
 if echo "$tsc_output" | grep -q "error TS"; then
     echo -e "${RED}  ✗ 类型检查失败${NC}"
     echo "$tsc_output" | grep "error TS" | head -10 | sed 's/^/    /'
@@ -40,7 +40,7 @@ echo ""
 
 # 2. ESLint 检查
 echo -e "${BLUE}2/2 ESLint 代码质量检查...${NC}"
-eslint_output=$(npm run lint 2>&1 || true)
+eslint_output=$(pnpm run lint 2>&1 || true)
 if echo "$eslint_output" | grep -qE "^\s+[0-9]+:[0-9]+\s+(error|warning)"; then
     error_count=$(echo "$eslint_output" | grep -cE "^\s+[0-9]+:[0-9]+\s+error" || true)
     warning_count=$(echo "$eslint_output" | grep -cE "^\s+[0-9]+:[0-9]+\s+warning" || true)

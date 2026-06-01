@@ -85,7 +85,7 @@ func main() {
 	routerService := service.NewRouterService(locationService, dispatcherService)
 
 	groupService := service.NewGroupService(db)
-	messageService := service.NewMessageService(db)
+	messageService := service.NewMessageService(db, sfNode)
 
 	// 创建消息批量写入器
 	messageBatcher := service.NewMessageBatcher(db, sfNode, service.MessageBatcherConfig{
@@ -125,6 +125,7 @@ func main() {
 		roomService,           // 房间广播器
 		routerService,         // 路由服务
 		taskScheduler,         // 任务调度器
+		sfNode,                // 雪花ID生成器
 	)
 
 	// 创建消息处理器

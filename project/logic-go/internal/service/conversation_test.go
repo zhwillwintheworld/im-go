@@ -33,7 +33,11 @@ func getTestRedisClient(t *testing.T) *redis.Client {
 
 func TestConversationService_UpdateConversationForSender(t *testing.T) {
 	client := getTestRedisClient(t)
-	defer client.Close()
+	defer func() {
+		if err := client.Close(); err != nil {
+			t.Logf("Failed to close Redis client: %v", err)
+		}
+	}()
 
 	svc := NewConversationService(client)
 	ctx := context.Background()
@@ -77,7 +81,11 @@ func TestConversationService_UpdateConversationForSender(t *testing.T) {
 
 func TestConversationService_UpdateConversationForReceiver(t *testing.T) {
 	client := getTestRedisClient(t)
-	defer client.Close()
+	defer func() {
+		if err := client.Close(); err != nil {
+			t.Logf("Failed to close Redis client: %v", err)
+		}
+	}()
 
 	svc := NewConversationService(client)
 	ctx := context.Background()
@@ -116,7 +124,11 @@ func TestConversationService_UpdateConversationForReceiver(t *testing.T) {
 
 func TestConversationService_MarkRead(t *testing.T) {
 	client := getTestRedisClient(t)
-	defer client.Close()
+	defer func() {
+		if err := client.Close(); err != nil {
+			t.Logf("Failed to close Redis client: %v", err)
+		}
+	}()
 
 	svc := NewConversationService(client)
 	ctx := context.Background()
@@ -159,7 +171,11 @@ func TestConversationService_MarkRead(t *testing.T) {
 
 func TestConversationService_GetUserConversations(t *testing.T) {
 	client := getTestRedisClient(t)
-	defer client.Close()
+	defer func() {
+		if err := client.Close(); err != nil {
+			t.Logf("Failed to close Redis client: %v", err)
+		}
+	}()
 
 	svc := NewConversationService(client)
 	ctx := context.Background()
@@ -189,13 +205,17 @@ func TestConversationService_GetUserConversations(t *testing.T) {
 
 	// 验证倒序排列（最新的在前）
 	if len(conversations) >= 2 && conversations[0].UpdateAt < conversations[1].UpdateAt {
-		t.Error("Conversations should be sorted by update_at descending")
+		t.Error("Conversations should be sorted by updated_at descending")
 	}
 }
 
 func TestConversationService_GetTotalUnreadCount(t *testing.T) {
 	client := getTestRedisClient(t)
-	defer client.Close()
+	defer func() {
+		if err := client.Close(); err != nil {
+			t.Logf("Failed to close Redis client: %v", err)
+		}
+	}()
 
 	svc := NewConversationService(client)
 	ctx := context.Background()
@@ -225,7 +245,11 @@ func TestConversationService_GetTotalUnreadCount(t *testing.T) {
 
 func TestConversationService_GroupConversation(t *testing.T) {
 	client := getTestRedisClient(t)
-	defer client.Close()
+	defer func() {
+		if err := client.Close(); err != nil {
+			t.Logf("Failed to close Redis client: %v", err)
+		}
+	}()
 
 	svc := NewConversationService(client)
 	ctx := context.Background()

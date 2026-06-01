@@ -40,7 +40,7 @@ func (s *ConversationService) UpdateConversationForSender(ctx context.Context, u
 	idxKey := sharedRedis.BuildConversationIndexKey(userId)
 
 	pipe := s.redisClient.Pipeline()
-	pipe.HSet(ctx, convKey, "last_msg_id", msgId, "update_at", now)
+	pipe.HSet(ctx, convKey, "last_msg_id", msgId, "updated_at", now)
 	pipe.ZAdd(ctx, idxKey, redis.Z{Score: float64(now), Member: member})
 	_, err := pipe.Exec(ctx)
 
@@ -62,7 +62,7 @@ func (s *ConversationService) UpdateConversationForReceiver(ctx context.Context,
 	idxKey := sharedRedis.BuildConversationIndexKey(userId)
 
 	pipe := s.redisClient.Pipeline()
-	pipe.HSet(ctx, convKey, "last_msg_id", msgId, "update_at", now)
+	pipe.HSet(ctx, convKey, "last_msg_id", msgId, "updated_at", now)
 	pipe.HIncrBy(ctx, convKey, "unread_count", 1)
 	pipe.ZAdd(ctx, idxKey, redis.Z{Score: float64(now), Member: member})
 	_, err := pipe.Exec(ctx)
@@ -80,7 +80,7 @@ func (s *ConversationService) UpdateConversationForGroupMembers(ctx context.Cont
 		convKey := sharedRedis.BuildConversationGroupKey(userId, groupId)
 		idxKey := sharedRedis.BuildConversationIndexKey(userId)
 
-		pipe.HSet(ctx, convKey, "last_msg_id", msgId, "update_at", now)
+		pipe.HSet(ctx, convKey, "last_msg_id", msgId, "updated_at", now)
 		if userId != senderId {
 			pipe.HIncrBy(ctx, convKey, "unread_count", 1)
 		}
@@ -154,7 +154,7 @@ func (s *ConversationService) GetUserConversations(ctx context.Context, userId i
 			UnreadCount:   int(s.parseInt64(data["unread_count"])),
 			IsPinned:      data["is_pinned"] == "1",
 			IsMuted:       data["is_muted"] == "1",
-			UpdateAt:      s.parseInt64(data["update_at"]),
+			UpdateAt:      s.parseInt64(data["updated_at"]),
 		}
 		conversations = append(conversations, conv)
 	}

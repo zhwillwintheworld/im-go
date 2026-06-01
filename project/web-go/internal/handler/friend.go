@@ -28,7 +28,7 @@ func NewFriendHandler(friendService *service.FriendService) *FriendHandler {
 // @Tags         好友
 // @Produce      json
 // @Security     BearerAuth
-// @Success      200  {object}  response.Response{data=object{list=[]object{id=int64,friend_id=int64,username=string,nickname=string,avatar=string,remark=string,create_at=time.Time}}}
+// @Success      200  {object}  response.Response{data=object{list=[]object{id=string,friendId=string,username=string,nickname=string,avatar=string,remark=string,createAt=time.Time}}}
 // @Failure      200  {object}  response.Response
 // @Router       /friends [get]
 func (h *FriendHandler) GetFriendList(c *gin.Context) {
@@ -43,13 +43,13 @@ func (h *FriendHandler) GetFriendList(c *gin.Context) {
 	var result []gin.H
 	for _, f := range friends {
 		result = append(result, gin.H{
-			"id":        strconv.FormatInt(f.ID, 10),
-			"friend_id": strconv.FormatInt(f.FriendID, 10),
-			"username":  f.Username,
-			"nickname":  f.Nickname,
-			"avatar":    f.Avatar,
-			"remark":    f.Remark,
-			"create_at": f.CreateAt,
+			"id":       strconv.FormatInt(f.ID, 10),
+			"friendId": strconv.FormatInt(f.FriendID, 10),
+			"username": f.Username,
+			"nickname": f.Nickname,
+			"avatar":   f.Avatar,
+			"remark":   f.Remark,
+			"createAt": f.CreateAt,
 		})
 	}
 
@@ -107,7 +107,7 @@ func (h *FriendHandler) SendRequest(c *gin.Context) {
 // @Tags         好友
 // @Produce      json
 // @Security     BearerAuth
-// @Success      200  {object}  response.Response{data=object{list=[]object{id=int64,from_user_id=int64,from_username=string,from_nickname=string,from_avatar=string,message=string,create_at=time.Time}}}
+// @Success      200  {object}  response.Response{data=object{list=[]object{id=string,fromUserId=string,fromUsername=string,fromNickname=string,fromAvatar=string,message=string,createAt=time.Time}}}
 // @Failure      200  {object}  response.Response
 // @Router       /friends/requests [get]
 func (h *FriendHandler) GetPendingRequests(c *gin.Context) {
@@ -122,13 +122,13 @@ func (h *FriendHandler) GetPendingRequests(c *gin.Context) {
 	var result []gin.H
 	for _, r := range requests {
 		result = append(result, gin.H{
-			"id":            strconv.FormatInt(r.ID, 10),
-			"from_user_id":  strconv.FormatInt(r.FromUserID, 10),
-			"from_username": r.FromUsername,
-			"from_nickname": r.FromNickname,
-			"from_avatar":   r.FromAvatar,
-			"message":       r.Message,
-			"create_at":     r.CreateAt,
+			"id":           strconv.FormatInt(r.ID, 10),
+			"fromUserId":   strconv.FormatInt(r.FromUserID, 10),
+			"fromUsername": r.FromUsername,
+			"fromNickname": r.FromNickname,
+			"fromAvatar":   r.FromAvatar,
+			"message":      r.Message,
+			"createAt":     r.CreateAt,
 		})
 	}
 

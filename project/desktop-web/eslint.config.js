@@ -8,7 +8,8 @@ export default tseslint.config(
         ignores: [
             'dist/**',
             'node_modules/**',
-            'src/protocol/**',  // FlatBuffers 生成的代码
+            'src/im/protocol.ts',
+            'src/im/protocol/**',  // FlatBuffers 生成的代码
             '**/*.cjs',
             'vite.config.ts'
         ],

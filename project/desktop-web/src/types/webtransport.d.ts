@@ -5,6 +5,18 @@
 
 interface WebTransportOptions {
     /**
+     * Prefer a browser-supported congestion control profile.
+     */
+    congestionControl?: 'default' | 'throughput' | 'low-latency' | string;
+    /**
+     * Whether the connection may be pooled with compatible sessions.
+     */
+    allowPooling?: boolean;
+    /**
+     * Whether unreliable datagrams are required.
+     */
+    requireUnreliable?: boolean;
+    /**
      * Server certificate hashes for self-signed certificates (development only)
      */
     serverCertificateHashes?: WebTransportHash[];

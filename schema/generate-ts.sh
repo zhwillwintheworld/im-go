@@ -42,7 +42,7 @@ if [ $? -eq 0 ]; then
     echo "📁 输出目录: ${TS_OUTPUT_DIR}"
     echo ""
     echo "📋 已生成的文件:"
-    ls -1 "${TS_OUTPUT_DIR}"/*.ts 2>/dev/null | while read file; do
+    find "${CLEAN_DIR}" -maxdepth 1 -name "*.ts" -type f 2>/dev/null | sort | while read file; do
         echo "  - $(basename "$file")"
     done
     echo ""

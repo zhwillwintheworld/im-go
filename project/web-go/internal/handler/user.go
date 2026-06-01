@@ -28,7 +28,7 @@ func NewUserHandler(userService *service.UserService) *UserHandler {
 // @Tags         用户
 // @Produce      json
 // @Security     BearerAuth
-// @Success      200  {object}  response.Response{data=object{id=int64,username=string,nickname=string,avatar=string,status=int,create_at=time.Time}}
+// @Success      200  {object}  response.Response{data=object{id=string,username=string,nickname=string,avatar=string,status=int,createAt=time.Time}}
 // @Failure      200  {object}  response.Response
 // @Router       /user/profile [get]
 func (h *UserHandler) GetProfile(c *gin.Context) {
@@ -45,12 +45,12 @@ func (h *UserHandler) GetProfile(c *gin.Context) {
 	}
 
 	response.Success(c, gin.H{
-		"id":        user.ID,
-		"username":  user.Username,
-		"nickname":  user.Nickname,
-		"avatar":    user.Avatar,
-		"status":    user.Status,
-		"create_at": user.CreateAt,
+		"id":       strconv.FormatInt(user.ID, 10),
+		"username": user.Username,
+		"nickname": user.Nickname,
+		"avatar":   user.Avatar,
+		"status":   user.Status,
+		"createAt": user.CreateAt,
 	})
 }
 
@@ -93,7 +93,7 @@ func (h *UserHandler) UpdateProfile(c *gin.Context) {
 // @Produce      json
 // @Security     BearerAuth
 // @Param        id path int true "用户 ID"
-// @Success      200  {object}  response.Response{data=object{id=int64,username=string,nickname=string,avatar=string}}
+// @Success      200  {object}  response.Response{data=object{id=string,username=string,nickname=string,avatar=string}}
 // @Failure      200  {object}  response.Response
 // @Router       /user/{id} [get]
 func (h *UserHandler) GetUserByID(c *gin.Context) {
@@ -114,7 +114,7 @@ func (h *UserHandler) GetUserByID(c *gin.Context) {
 	}
 
 	response.Success(c, gin.H{
-		"id":       user.ID,
+		"id":       strconv.FormatInt(user.ID, 10),
 		"username": user.Username,
 		"nickname": user.Nickname,
 		"avatar":   user.Avatar,
@@ -130,7 +130,7 @@ func (h *UserHandler) GetUserByID(c *gin.Context) {
 // @Param        keyword query string true "搜索关键词"
 // @Param        page query int false "页码" default(1)
 // @Param        page_size query int false "每页数量" default(20)
-// @Success      200  {object}  response.Response{data=object{list=[]object{id=int64,username=string,nickname=string,avatar=string},page=int}}
+// @Success      200  {object}  response.Response{data=object{list=[]object{id=string,username=string,nickname=string,avatar=string},page=int}}
 // @Failure      200  {object}  response.Response
 // @Router       /user/search [get]
 func (h *UserHandler) Search(c *gin.Context) {
@@ -152,7 +152,7 @@ func (h *UserHandler) Search(c *gin.Context) {
 	var result []gin.H
 	for _, u := range users {
 		result = append(result, gin.H{
-			"id":       u.ID,
+			"id":       strconv.FormatInt(u.ID, 10),
 			"username": u.Username,
 			"nickname": u.Nickname,
 			"avatar":   u.Avatar,

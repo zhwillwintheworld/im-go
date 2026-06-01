@@ -10,8 +10,8 @@ const (
 	// UserLocationKeyPrefix 用户位置 Redis Key 前缀
 	UserLocationKeyPrefix = "im:user:location:"
 
-	// LocationTTL 用户位置 TTL
-	LocationTTL = 24 * time.Hour
+	// LocationTTL 用户位置 TTL，Access 心跳负责续期
+	LocationTTL = 2 * time.Minute
 )
 
 // BuildUserLocationKeyWithPlatform 构建用户位置 Key（按平台）

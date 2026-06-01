@@ -27,13 +27,14 @@ func NewMessageRepository(db *pgxpool.Pool) *MessageRepository {
 // Create 创建消息
 func (r *MessageRepository) Create(ctx context.Context, msg *model.Message) (int64, error) {
 	query := `
-		INSERT INTO messages (object_code, client_msg_id, from_user_id, to_user_id, to_group_id, msg_type, content, status, create_at, update_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
+		INSERT INTO messages (id, object_code, client_msg_id, from_user_id, to_user_id, to_group_id, msg_type, content, status, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
 		RETURNING id
 	`
 
 	var id int64
 	err := r.db.QueryRow(ctx, query,
+		msg.Id,
 		msg.ObjectCode,
 		msg.ClientMsgId,
 		msg.FromUserId,
@@ -50,7 +51,7 @@ func (r *MessageRepository) Create(ctx context.Context, msg *model.Message) (int
 // FindByID 根据 ID 查找消息
 func (r *MessageRepository) FindByID(ctx context.Context, id int64) (*model.Message, error) {
 	query := `
-		SELECT id, object_code, client_msg_id, from_user_id, to_user_id, to_group_id, msg_type, content, status, create_at, update_at
+		SELECT id, object_code, client_msg_id, from_user_id, to_user_id, to_group_id, msg_type, content, status, created_at, updated_at
 		FROM messages WHERE id = $1 AND deleted = 0
 	`
 
@@ -82,7 +83,7 @@ func (r *MessageRepository) FindByID(ctx context.Context, id int64) (*model.Mess
 // FindByObjectCode 根据 ObjectCode 查找消息
 func (r *MessageRepository) FindByObjectCode(ctx context.Context, objectCode string) (*model.Message, error) {
 	query := `
-		SELECT id, object_code, client_msg_id, from_user_id, to_user_id, to_group_id, msg_type, content, status, create_at, update_at
+		SELECT id, object_code, client_msg_id, from_user_id, to_user_id, to_group_id, msg_type, content, status, created_at, updated_at
 		FROM messages WHERE object_code = $1 AND deleted = 0
 	`
 
@@ -113,7 +114,7 @@ func (r *MessageRepository) FindByObjectCode(ctx context.Context, objectCode str
 
 // UpdateStatus 更新消息状态
 func (r *MessageRepository) UpdateStatus(ctx context.Context, id int64, status int) error {
-	query := `UPDATE messages SET status = $2, update_at = NOW() WHERE id = $1 AND deleted = 0`
+	query := `UPDATE messages SET status = $2, updated_at = NOW() WHERE id = $1 AND deleted = 0`
 	result, err := r.db.Exec(ctx, query, id, status)
 	if err != nil {
 		return err

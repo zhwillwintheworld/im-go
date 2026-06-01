@@ -82,7 +82,9 @@ func (h *ChatHandler) Handle(ctx context.Context, msg *proto.UserMessage, access
 
 		// 异步更新所有群成员会话（非关键路径）
 		go func() {
-			h.conversationService.UpdateConversationForGroupMembers(context.Background(), members, msg.FromUserId, msg.ToGroupId, serverMsgId)
+			if err := h.conversationService.UpdateConversationForGroupMembers(context.Background(), members, msg.FromUserId, msg.ToGroupId, serverMsgId); err != nil {
+				h.logger.Error("Failed to update group conversations", "error", err, "groupId", msg.ToGroupId)
+			}
 		}()
 	}
 

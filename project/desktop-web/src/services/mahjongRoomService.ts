@@ -2,6 +2,7 @@ import * as flatbuffers from 'flatbuffers';
 import { transportManager } from '@/services/transport/WebTransportManager';
 import { FrameType } from '@/services/protocol/IMProtocol';
 import { messageDispatcher, ResponsePayload } from '@/services/messageDispatcher';
+import { logger } from '@/utils/logger';
 import {
     RoomAction,
     RoomEvent,
@@ -31,7 +32,7 @@ class MahjongRoomService {
      */
     private initMessageListeners(): void {
         // 监听房间推送消息
-        messageDispatcher.register(ResponsePayload.RoomPush, (payload, reqId) => {
+        messageDispatcher.register(ResponsePayload.RoomPush, (payload, _reqId) => {
             if (!payload) return;
 
             try {
@@ -40,14 +41,14 @@ class MahjongRoomService {
                 const event = roomPush.event();
                 const roomInfo = roomPush.roomInfo();
 
-                console.log('[MahjongRoomService] Received room event:', RoomEvent[event], roomInfo);
+                logger.info('[MahjongRoomService] Received room event:', RoomEvent[event], roomInfo);
 
                 // 分发房间状态更新
                 if (roomInfo) {
                     this.notifyRoomUpdate(roomInfo);
                 }
             } catch (error) {
-                console.error('[MahjongRoomService] Failed to parse room push:', error);
+                logger.error('[MahjongRoomService] Failed to parse room push:', error);
             }
         });
     }
@@ -60,7 +61,7 @@ class MahjongRoomService {
             try {
                 callback(roomInfo);
             } catch (error) {
-                console.error('[MahjongRoomService] Room update callback error:', error);
+                logger.error('[MahjongRoomService] Room update callback error:', error);
             }
         }
     }
@@ -124,7 +125,7 @@ class MahjongRoomService {
 
         await transportManager.send(frame);
 
-        console.log('[MahjongRoomService] Sent room request:', RoomAction[action], {
+        logger.info('[MahjongRoomService] Sent room request:', RoomAction[action], {
             roomId,
             targetSeatIndex,
             roomConfig,

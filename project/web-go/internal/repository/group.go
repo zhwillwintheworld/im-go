@@ -29,9 +29,9 @@ func NewGroupRepository(db *pgxpool.Pool) *GroupRepository {
 // Create 创建群组
 func (r *GroupRepository) Create(ctx context.Context, group *model.Group) error {
 	query := `
-		INSERT INTO groups (id, name, owner_id, avatar, description, max_members, status, create_at, update_at)
+		INSERT INTO groups (id, name, owner_id, avatar, description, max_members, status, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
-		RETURNING create_at, update_at
+		RETURNING created_at, updated_at
 	`
 	return r.db.QueryRow(ctx, query,
 		group.ID,
@@ -47,7 +47,7 @@ func (r *GroupRepository) Create(ctx context.Context, group *model.Group) error 
 // GetByID 通过 ID 获取群组
 func (r *GroupRepository) GetByID(ctx context.Context, id int64) (*model.Group, error) {
 	query := `
-		SELECT id, name, owner_id, avatar, description, max_members, status, create_at, update_at
+		SELECT id, name, owner_id, avatar, description, max_members, status, created_at, updated_at
 		FROM groups WHERE id = $1 AND deleted = 0
 	`
 	group := &model.Group{}
@@ -74,7 +74,7 @@ func (r *GroupRepository) GetByID(ctx context.Context, id int64) (*model.Group, 
 // Update 更新群组信息
 func (r *GroupRepository) Update(ctx context.Context, group *model.Group) error {
 	query := `
-		UPDATE groups SET name = $2, avatar = $3, description = $4, update_at = NOW()
+		UPDATE groups SET name = $2, avatar = $3, description = $4, updated_at = NOW()
 		WHERE id = $1 AND deleted = 0
 	`
 	result, err := r.db.Exec(ctx, query,
@@ -94,7 +94,7 @@ func (r *GroupRepository) Update(ctx context.Context, group *model.Group) error 
 
 // Delete 逻辑删除群组
 func (r *GroupRepository) Delete(ctx context.Context, id int64) error {
-	query := `UPDATE groups SET deleted = 1, status = 1, update_at = NOW() WHERE id = $1 AND deleted = 0`
+	query := `UPDATE groups SET deleted = 1, status = 1, updated_at = NOW() WHERE id = $1 AND deleted = 0`
 	result, err := r.db.Exec(ctx, query, id)
 	if err != nil {
 		return err
@@ -116,12 +116,12 @@ func (r *GroupRepository) GetMemberCount(ctx context.Context, groupID int64) (in
 // GetUserGroups 获取用户加入的群组列表
 func (r *GroupRepository) GetUserGroups(ctx context.Context, userID int64) ([]*model.GroupWithMemberCount, error) {
 	query := `
-		SELECT g.id, g.name, g.owner_id, g.avatar, g.description, g.max_members, g.status, g.create_at, g.update_at,
+		SELECT g.id, g.name, g.owner_id, g.avatar, g.description, g.max_members, g.status, g.created_at, g.updated_at,
 		       (SELECT COUNT(*) FROM group_members gm WHERE gm.group_id = g.id AND gm.deleted = 0) as member_count
 		FROM groups g
 		JOIN group_members m ON g.id = m.group_id
 		WHERE m.user_id = $1 AND g.deleted = 0 AND m.deleted = 0
-		ORDER BY g.create_at DESC
+		ORDER BY g.created_at DESC
 	`
 	rows, err := r.db.Query(ctx, query, userID)
 	if err != nil {
@@ -155,10 +155,10 @@ func (r *GroupRepository) GetUserGroups(ctx context.Context, userID int64) ([]*m
 // AddMember 添加群成员
 func (r *GroupRepository) AddMember(ctx context.Context, member *model.GroupMember) error {
 	query := `
-		INSERT INTO group_members (id, group_id, user_id, role, nickname, create_at, update_at)
+		INSERT INTO group_members (id, group_id, user_id, role, nickname, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
 		ON CONFLICT (group_id, user_id) DO NOTHING
-		RETURNING create_at, update_at
+		RETURNING created_at, updated_at
 	`
 	err := r.db.QueryRow(ctx, query,
 		member.ID,
@@ -178,7 +178,7 @@ func (r *GroupRepository) AddMember(ctx context.Context, member *model.GroupMemb
 
 // RemoveMember 移除群成员（逻辑删除）
 func (r *GroupRepository) RemoveMember(ctx context.Context, groupID, userID int64) error {
-	query := `UPDATE group_members SET deleted = 1, update_at = NOW() WHERE group_id = $1 AND user_id = $2 AND deleted = 0`
+	query := `UPDATE group_members SET deleted = 1, updated_at = NOW() WHERE group_id = $1 AND user_id = $2 AND deleted = 0`
 	result, err := r.db.Exec(ctx, query, groupID, userID)
 	if err != nil {
 		return err
@@ -192,7 +192,7 @@ func (r *GroupRepository) RemoveMember(ctx context.Context, groupID, userID int6
 // GetMember 获取群成员信息
 func (r *GroupRepository) GetMember(ctx context.Context, groupID, userID int64) (*model.GroupMember, error) {
 	query := `
-		SELECT id, group_id, user_id, role, nickname, create_at, update_at
+		SELECT id, group_id, user_id, role, nickname, created_at, updated_at
 		FROM group_members WHERE group_id = $1 AND user_id = $2 AND deleted = 0
 	`
 	member := &model.GroupMember{}
@@ -217,12 +217,12 @@ func (r *GroupRepository) GetMember(ctx context.Context, groupID, userID int64) 
 // GetMembers 获取群成员列表
 func (r *GroupRepository) GetMembers(ctx context.Context, groupID int64) ([]*model.GroupMemberWithUser, error) {
 	query := `
-		SELECT gm.id, gm.group_id, gm.user_id, gm.role, gm.nickname, gm.create_at, gm.update_at,
+		SELECT gm.id, gm.group_id, gm.user_id, gm.role, gm.nickname, gm.created_at, gm.updated_at,
 		       u.username, u.nickname as user_nickname, u.avatar
 		FROM group_members gm
 		JOIN users u ON gm.user_id = u.id
 		WHERE gm.group_id = $1 AND gm.deleted = 0 AND u.deleted = 0
-		ORDER BY gm.role DESC, gm.create_at ASC
+		ORDER BY gm.role DESC, gm.created_at ASC
 	`
 	rows, err := r.db.Query(ctx, query, groupID)
 	if err != nil {
@@ -257,7 +257,7 @@ func (r *GroupRepository) GetMembers(ctx context.Context, groupID int64) ([]*mod
 
 // UpdateMemberRole 更新群成员角色
 func (r *GroupRepository) UpdateMemberRole(ctx context.Context, groupID, userID int64, role int) error {
-	query := `UPDATE group_members SET role = $3, update_at = NOW() WHERE group_id = $1 AND user_id = $2 AND deleted = 0`
+	query := `UPDATE group_members SET role = $3, updated_at = NOW() WHERE group_id = $1 AND user_id = $2 AND deleted = 0`
 	result, err := r.db.Exec(ctx, query, groupID, userID, role)
 	if err != nil {
 		return err
@@ -270,7 +270,7 @@ func (r *GroupRepository) UpdateMemberRole(ctx context.Context, groupID, userID 
 
 // UpdateMemberNickname 更新群成员昵称
 func (r *GroupRepository) UpdateMemberNickname(ctx context.Context, groupID, userID int64, nickname string) error {
-	query := `UPDATE group_members SET nickname = $3, update_at = NOW() WHERE group_id = $1 AND user_id = $2 AND deleted = 0`
+	query := `UPDATE group_members SET nickname = $3, updated_at = NOW() WHERE group_id = $1 AND user_id = $2 AND deleted = 0`
 	result, err := r.db.Exec(ctx, query, groupID, userID, nickname)
 	if err != nil {
 		return err

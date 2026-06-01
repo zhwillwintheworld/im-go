@@ -31,13 +31,13 @@ function MahjongGame() {
 
     const [myHandTiles, setMyHandTiles] = useState<MahjongTile[]>([]);
     const [selectedTileId, setSelectedTileId] = useState<string | null>(null);
-    const [gameInfo, setGameInfo] = useState({
+    const [gameInfo] = useState({
         currentRound: 1,
         remainingTiles: 88,
         isDealerTurn: true,
     });
 
-    const [players, setPlayers] = useState<Player[]>([
+    const [players] = useState<Player[]>([
         { id: '1', name: '张三', handTilesCount: 13, discardTiles: [], position: 'east', isActive: true },
         { id: '2', name: '李四', handTilesCount: 13, discardTiles: [], position: 'south', isActive: false },
         { id: '3', name: '王五', handTilesCount: 13, discardTiles: [], position: 'west', isActive: false },

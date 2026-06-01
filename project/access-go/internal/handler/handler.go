@@ -57,7 +57,8 @@ func NewHandler(connMgr *connection.Manager, natsClient *nats.Client, redisClien
 		workerPool:  workerPool,
 		bufferPool: &sync.Pool{
 			New: func() interface{} {
-				return make([]byte, 0, defaultBufferCap)
+				buf := make([]byte, 0, defaultBufferCap)
+				return &buf
 			},
 		},
 	}
@@ -66,8 +67,8 @@ func NewHandler(connMgr *connection.Manager, natsClient *nats.Client, redisClien
 // HandleStream 处理客户端流（连接已认证）
 func (h *Handler) HandleStream(ctx context.Context, conn *connection.Connection, stream *webtransport.Stream) {
 	defer func(stream *webtransport.Stream) {
-		err := stream.Close()
-		if err != nil {
+		if err := stream.Close(); err != nil {
+			h.logger.Debug("Failed to close client stream", "error", err, "conn_id", conn.ID())
 		}
 	}(stream)
 
@@ -77,6 +78,7 @@ func (h *Handler) HandleStream(ctx context.Context, conn *connection.Connection,
 		header := make([]byte, FrameHeaderSize)
 		if _, err := io.ReadFull(stream, header); err != nil {
 			if err != io.EOF {
+				h.logger.Debug("Failed to read frame header", "error", err, "conn_id", conn.ID())
 			}
 			return
 		}
@@ -93,7 +95,8 @@ func (h *Handler) HandleStream(ctx context.Context, conn *connection.Connection,
 		conn.UpdateActive()
 
 		// 从对象池获取buffer
-		buf := h.bufferPool.Get().([]byte)
+		bufPtr := h.bufferPool.Get().(*[]byte)
+		buf := *bufPtr
 
 		// 检查容量
 		if cap(buf) < len(body) {
@@ -107,13 +110,22 @@ func (h *Handler) HandleStream(ctx context.Context, conn *connection.Connection,
 
 		// 异步提交到 Worker Pool，避免阻塞消息读取循环
 		submitted := h.workerPool.Submit(func() {
-			defer h.bufferPool.Put(buf[:0]) // 处理完后归还到对象池
+			defer func() {
+				buf = buf[:0]
+				*bufPtr = buf
+				h.bufferPool.Put(bufPtr)
+			}()
 			h.dispatch(ctx, conn, stream, frameType, buf)
 		})
 
 		if !submitted {
-			h.logger.Warn("Worker pool is shutting down, message dropped")
-			h.bufferPool.Put(buf[:0]) // 如果提交失败，手动归还buffer
+			h.logger.Warn("Worker pool busy or shutting down, message dropped",
+				"conn_id", conn.ID(),
+				"frameType", frameType,
+				"bodyLength", len(body))
+			buf = buf[:0]
+			*bufPtr = buf
+			h.bufferPool.Put(bufPtr)
 		}
 	}
 }
