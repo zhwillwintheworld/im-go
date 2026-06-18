@@ -91,6 +91,14 @@ type DownstreamPayload struct {
 	GamePush    *GamePush    `json:"GamePush,omitempty"` // 游戏推送
 }
 
+// MessageAckStatus 消息 ACK 状态。
+type MessageAckStatus string
+
+const (
+	MessageAckStatusAccepted  MessageAckStatus = "accepted"
+	MessageAckStatusPersisted MessageAckStatus = "persisted"
+)
+
 // PushMessage 推送消息
 type PushMessage struct {
 	ServerMsgId int64  `json:"ServerMsgId,string"`
@@ -106,12 +114,13 @@ type PushMessage struct {
 
 // MessageAck 消息确认
 type MessageAck struct {
-	ClientMsgId string `json:"ClientMsgId"`
-	ServerMsgId int64  `json:"ServerMsgId,string"`
-	ToUserId    int64  `json:"ToUserId,string"` // 接收 ACK 的用户 ID
-	Timestamp   int64  `json:"Timestamp"`
-	Platform    string `json:"Platform,omitempty"`      // 目标平台（发送消息的平台）
-	ConnId      int64  `json:"ConnId,string,omitempty"` // 目标连接 ID（用于 Access 直接路由）
+	ClientMsgId string           `json:"ClientMsgId"`
+	ServerMsgId int64            `json:"ServerMsgId,string"`
+	ToUserId    int64            `json:"ToUserId,string"` // 接收 ACK 的用户 ID
+	Timestamp   int64            `json:"Timestamp"`
+	Status      MessageAckStatus `json:"Status,omitempty"`        // accepted/persisted
+	Platform    string           `json:"Platform,omitempty"`      // 目标平台（发送消息的平台）
+	ConnId      int64            `json:"ConnId,string,omitempty"` // 目标连接 ID（用于 Access 直接路由）
 }
 
 // RoomPush 房间推送

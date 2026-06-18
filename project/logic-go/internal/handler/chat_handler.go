@@ -39,15 +39,30 @@ func NewChatHandler(
 // Handle 处理聊天消息
 func (h *ChatHandler) Handle(ctx context.Context, msg *proto.UserMessage, accessNodeId string, connId int64, platform string) {
 	// 1. 异步批量消息存储（立即返回 serverMsgId）
-	serverMsgId, err := h.messageBatcher.SaveMessage(msg)
+	var serverMsgId int64
+	var duplicate bool
+	var err error
+	serverMsgId, duplicate, err = h.messageBatcher.SaveMessageWithCallback(msg, func(persistedServerMsgId int64) {
+		if err := h.routerService.SendAckToUserDirect(accessNodeId, connId, msg.FromUserId, msg.ClientMsgId, persistedServerMsgId, proto.MessageAckStatusPersisted); err != nil {
+			h.logger.Error("Failed to send persisted ack", "error", err)
+		}
+	})
 	if err != nil {
 		h.logger.Error("Failed to queue message for saving", "error", err)
 		return
 	}
 
 	// 直接回 ACK 给发送者（使用 connId 避免查询 Redis）
-	if err := h.routerService.SendAckToUserDirect(accessNodeId, connId, msg.FromUserId, msg.ClientMsgId, serverMsgId); err != nil {
-		h.logger.Error("Failed to send ack", "error", err)
+	if err := h.routerService.SendAckToUserDirect(accessNodeId, connId, msg.FromUserId, msg.ClientMsgId, serverMsgId, proto.MessageAckStatusAccepted); err != nil {
+		h.logger.Error("Failed to send accepted ack", "error", err)
+	}
+
+	if duplicate {
+		h.logger.Debug("Duplicate client message skipped",
+			"fromUserId", msg.FromUserId,
+			"clientMsgId", msg.ClientMsgId,
+			"serverMsgId", serverMsgId)
+		return
 	}
 
 	// 3. 路由消息给接收者

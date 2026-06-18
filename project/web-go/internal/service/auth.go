@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"time"
 
 	"golang.org/x/crypto/bcrypt"
 
@@ -101,6 +102,13 @@ func (s *AuthService) Register(ctx context.Context, req *RegisterRequest) (*mode
 
 // Login 用户登录
 func (s *AuthService) Login(ctx context.Context, req *LoginRequest) (*LoginResponse, error) {
+	loginStart := time.Now()
+	defer func() {
+		if elapsed := time.Since(loginStart); elapsed > 100*time.Millisecond {
+			slog.Warn("login slow", "elapsed", elapsed, "platform", req.Platform)
+		}
+	}()
+
 	// 查询用户
 	user, err := s.userRepo.GetByUsername(ctx, req.Username)
 	if err != nil {

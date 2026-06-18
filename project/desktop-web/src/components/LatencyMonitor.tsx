@@ -9,12 +9,16 @@ import { latencyAnalyzer, LatencyStats } from '@/services/WebTransportLatencyAna
  */
 export function LatencyMonitor() {
     const [stats, setStats] = useState<LatencyStats | null>(null);
+    const [connectionStats, setConnectionStats] = useState<LatencyStats | null>(null);
+    const [authStats, setAuthStats] = useState<LatencyStats | null>(null);
     const [pendingCount, setPendingCount] = useState(0);
 
     useEffect(() => {
         // 每秒更新一次统计数据
         const interval = setInterval(() => {
             setStats(latencyAnalyzer.getStats());
+            setConnectionStats(latencyAnalyzer.getConnectionStats());
+            setAuthStats(latencyAnalyzer.getAuthStats());
             setPendingCount(latencyAnalyzer.getPendingCount());
         }, 1000);
 
@@ -28,10 +32,12 @@ export function LatencyMonitor() {
     const handleReset = () => {
         latencyAnalyzer.reset();
         setStats(null);
+        setConnectionStats(null);
+        setAuthStats(null);
         setPendingCount(0);
     };
 
-    if (!stats) {
+    if (!stats && !connectionStats && !authStats) {
         return (
             <Card
                 title="📊 延迟监控"
@@ -50,6 +56,8 @@ export function LatencyMonitor() {
         return 'error';
     };
 
+    const badgeAvg = stats?.avg ?? connectionStats?.avg ?? authStats?.avg ?? 0;
+
     return (
         <Card
             title="📊 延迟监控"
@@ -57,8 +65,8 @@ export function LatencyMonitor() {
             extra={
                 <div style={{ display: 'flex', gap: 8 }}>
                     <Badge
-                        status={getLatencyStatus(stats.avg)}
-                        text={`${stats.avg.toFixed(1)}ms`}
+                        status={getLatencyStatus(badgeAvg)}
+                        text={`${badgeAvg.toFixed(1)}ms`}
                     />
                     {pendingCount > 0 && (
                         <Badge count={pendingCount} title="待确认请求" />
@@ -67,54 +75,60 @@ export function LatencyMonitor() {
             }
         >
             <Row gutter={[16, 16]}>
+                {stats && (
+                    <>
+                        <Col span={8}>
+                            <Statistic
+                                title="ACK 平均"
+                                value={stats.avg}
+                                precision={2}
+                                suffix="ms"
+                                valueStyle={{ color: stats.avg < 50 ? '#3f8600' : '#cf1322' }}
+                                prefix={<ThunderboltOutlined />}
+                            />
+                        </Col>
+                        <Col span={8}>
+                            <Statistic
+                                title="ACK P95"
+                                value={stats.p95}
+                                precision={2}
+                                suffix="ms"
+                            />
+                        </Col>
+                        <Col span={8}>
+                            <Statistic
+                                title="ACK P99"
+                                value={stats.p99}
+                                precision={2}
+                                suffix="ms"
+                            />
+                        </Col>
+                    </>
+                )}
+                {connectionStats && (
+                    <Col span={8}>
+                        <Statistic
+                            title="连接平均"
+                            value={connectionStats.avg}
+                            precision={2}
+                            suffix="ms"
+                        />
+                    </Col>
+                )}
+                {authStats && (
+                    <Col span={8}>
+                        <Statistic
+                            title="认证平均"
+                            value={authStats.avg}
+                            precision={2}
+                            suffix="ms"
+                        />
+                    </Col>
+                )}
                 <Col span={8}>
                     <Statistic
-                        title="平均延迟"
-                        value={stats.avg}
-                        precision={2}
-                        suffix="ms"
-                        valueStyle={{ color: stats.avg < 50 ? '#3f8600' : '#cf1322' }}
-                        prefix={<ThunderboltOutlined />}
-                    />
-                </Col>
-                <Col span={8}>
-                    <Statistic
-                        title="最小延迟"
-                        value={stats.min}
-                        precision={2}
-                        suffix="ms"
-                        valueStyle={{ color: '#3f8600' }}
-                    />
-                </Col>
-                <Col span={8}>
-                    <Statistic
-                        title="最大延迟"
-                        value={stats.max}
-                        precision={2}
-                        suffix="ms"
-                        valueStyle={{ color: '#cf1322' }}
-                    />
-                </Col>
-                <Col span={8}>
-                    <Statistic
-                        title="P50 (中位数)"
-                        value={stats.p50}
-                        precision={2}
-                        suffix="ms"
-                    />
-                </Col>
-                <Col span={8}>
-                    <Statistic
-                        title="P95"
-                        value={stats.p95}
-                        precision={2}
-                        suffix="ms"
-                    />
-                </Col>
-                <Col span={8}>
-                    <Statistic
-                        title="样本数量"
-                        value={stats.count}
+                        title="ACK 样本"
+                        value={stats?.count ?? 0}
                         prefix={<CheckCircleOutlined />}
                     />
                 </Col>

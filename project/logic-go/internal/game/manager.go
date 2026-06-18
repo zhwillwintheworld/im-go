@@ -36,6 +36,9 @@ type GameManager struct {
 	evictTicker  *time.Ticker
 
 	stopChan chan struct{} // 停止信号通道
+	stopOnce sync.Once
+
+	snapshotChan chan string
 
 	// 依赖
 	roomBroadcaster RoomBroadcaster        // 房间广播器（RoomService）
@@ -60,6 +63,7 @@ func NewGameManager(
 		evictTimeout:    evictTimeout,
 		evictTicker:     time.NewTicker(60 * time.Second),
 		stopChan:        make(chan struct{}),
+		snapshotChan:    make(chan string, 1024),
 		roomBroadcaster: roomBroadcaster,
 		routerService:   routerService,
 		scheduler:       scheduler,
@@ -68,6 +72,7 @@ func NewGameManager(
 	}
 
 	go m.evictLoop()
+	go m.snapshotLoop()
 
 	return m
 }
@@ -113,6 +118,7 @@ func (m *GameManager) StartGame(ctx context.Context, room *model.Room) error {
 		"roomId", room.RoomID,
 		"roundId", round.ID,
 		"playerCount", len(playerIDs))
+	m.TriggerSnapshot(room.RoomID)
 
 	// 4. 广播游戏开始事件
 	return m.broadcastGameStart(ctx, room)
@@ -148,6 +154,8 @@ func (m *GameManager) HandlePlayerAction(ctx context.Context, roomID string, use
 		if err := m.finishRound(ctx, game); err != nil {
 			return err
 		}
+	} else {
+		m.TriggerSnapshot(roomID)
 	}
 
 	return nil
@@ -200,6 +208,18 @@ func (m *GameManager) RemoveGame(roomID string) {
 	m.logger.Info("Game removed", "roomId", roomID)
 }
 
+// TriggerSnapshot 非阻塞触发游戏快照，后续可接入 Redis/PostgreSQL 持久化。
+func (m *GameManager) TriggerSnapshot(roomID string) {
+	if roomID == "" {
+		return
+	}
+	select {
+	case m.snapshotChan <- roomID:
+	default:
+		m.logger.Warn("Game snapshot queue full, skip snapshot", "roomId", roomID)
+	}
+}
+
 // Count 返回当前游戏数
 func (m *GameManager) Count() int {
 	return int(m.gameCount.Load())
@@ -210,7 +230,9 @@ func (m *GameManager) Shutdown(ctx context.Context) error {
 	m.logger.Info("Shutting down GameManager")
 
 	// 发送停止信号
-	close(m.stopChan)
+	m.stopOnce.Do(func() {
+		close(m.stopChan)
+	})
 
 	// 停止定时器
 	m.evictTicker.Stop()
@@ -298,6 +320,7 @@ func (m *GameManager) finishRound(ctx context.Context, game *MultiRoundGame) err
 		m.logger.Error("Failed to finish round", "error", err, "gameId", game.ID)
 		return err
 	}
+	m.TriggerSnapshot(game.RoomID)
 
 	m.logger.Info("Round finished", "gameId", game.ID)
 
@@ -335,6 +358,18 @@ func (m *GameManager) evictLoop() {
 			m.evictInactive()
 		case <-m.stopChan:
 			m.logger.Info("Evict loop stopped")
+			return
+		}
+	}
+}
+
+func (m *GameManager) snapshotLoop() {
+	for {
+		select {
+		case roomID := <-m.snapshotChan:
+			m.logger.Debug("Game snapshot requested", "roomId", roomID)
+		case <-m.stopChan:
+			m.logger.Info("Game snapshot loop stopped")
 			return
 		}
 	}

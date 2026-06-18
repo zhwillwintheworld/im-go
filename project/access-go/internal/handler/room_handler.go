@@ -28,7 +28,8 @@ func (h *Handler) handleRoomRequest(_ctx context.Context, conn *connection.Conne
 		},
 	})
 
-	if err := h.publishUpstream(msg); err != nil {
+	subject := h.logicRoomShardSubject(msg.Payload.RoomRequest.RoomId, msg.Payload.RoomRequest.UserId)
+	if err := h.publishUpstreamToSubject(subject, msg); err != nil {
 		h.logger.Error("Failed to publish room request to NATS", "error", err)
 	}
 	// Room request published

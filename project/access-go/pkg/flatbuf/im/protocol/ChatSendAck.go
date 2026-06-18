@@ -61,14 +61,29 @@ func (rcv *ChatSendAck) MutateSendTime(n int64) bool {
 	return rcv._tab.MutateInt64Slot(6, n)
 }
 
+func (rcv *ChatSendAck) Status() AckStatus {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
+	if o != 0 {
+		return AckStatus(rcv._tab.GetInt8(o + rcv._tab.Pos))
+	}
+	return 1
+}
+
+func (rcv *ChatSendAck) MutateStatus(n AckStatus) bool {
+	return rcv._tab.MutateInt8Slot(8, int8(n))
+}
+
 func ChatSendAckStart(builder *flatbuffers.Builder) {
-	builder.StartObject(2)
+	builder.StartObject(3)
 }
 func ChatSendAckAddMsgId(builder *flatbuffers.Builder, msgId flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(msgId), 0)
 }
 func ChatSendAckAddSendTime(builder *flatbuffers.Builder, sendTime int64) {
 	builder.PrependInt64Slot(1, sendTime, 0)
+}
+func ChatSendAckAddStatus(builder *flatbuffers.Builder, status AckStatus) {
+	builder.PrependInt8Slot(2, int8(status), 1)
 }
 func ChatSendAckEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()

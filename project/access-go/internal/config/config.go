@@ -2,12 +2,15 @@ package config
 
 import (
 	"os"
+	"strings"
 	"time"
 
 	sharedConfig "sudooom.im.shared/config"
 
 	"gopkg.in/yaml.v3"
 )
+
+const DefaultMaxFrameSize = 1 << 20 // 1 MiB
 
 type Config struct {
 	Server  ServerConfig  `yaml:"server"`
@@ -22,6 +25,9 @@ type ServerConfig struct {
 	Addr                   string        `yaml:"addr"`
 	NodeID                 string        `yaml:"node_id"`
 	MaxConnections         int           `yaml:"max_connections"`
+	MaxFrameSize           int           `yaml:"max_frame_size"`
+	AllowedOrigins         []string      `yaml:"allowed_origins"`
+	RoomShardCount         int           `yaml:"room_shard_count"`
 	HeartbeatTimeout       time.Duration `yaml:"heartbeat_timeout"`        // 心跳超时时间，默认 90s
 	HeartbeatCheckInterval time.Duration `yaml:"heartbeat_check_interval"` // 检测间隔，默认 30s
 	WorkerPoolSize         int           `yaml:"worker_pool_size"`         // Worker Pool 大小，默认 1000
@@ -76,12 +82,29 @@ func Load(path string) (*Config, error) {
 
 	// 从环境变量覆盖配置
 	cfg.applyEnv()
+	cfg.applyDefaults()
 
 	return &cfg, nil
 }
 
+func (c *Config) applyDefaults() {
+	if c.Server.MaxFrameSize <= 0 {
+		c.Server.MaxFrameSize = DefaultMaxFrameSize
+	}
+	if c.Server.RoomShardCount <= 0 {
+		c.Server.RoomShardCount = 1
+	}
+}
+
 // applyEnv 从环境变量覆盖配置
 func (c *Config) applyEnv() {
+	c.Server.MaxConnections = sharedConfig.GetEnvInt("ACCESS_MAX_CONNECTIONS", c.Server.MaxConnections)
+	c.Server.MaxFrameSize = sharedConfig.GetEnvInt("ACCESS_MAX_FRAME_SIZE", c.Server.MaxFrameSize)
+	c.Server.RoomShardCount = sharedConfig.GetEnvInt("ROOM_SHARD_COUNT", c.Server.RoomShardCount)
+	if origins := sharedConfig.GetEnv("ACCESS_ALLOWED_ORIGINS", ""); origins != "" {
+		c.Server.AllowedOrigins = splitCSV(origins)
+	}
+
 	// NATS
 	c.NATS.URL = sharedConfig.GetEnv("NATS_URL", c.NATS.URL)
 	c.NATS.MaxReconnects = sharedConfig.GetEnvInt("NATS_MAX_RECONNECTS", c.NATS.MaxReconnects)
@@ -112,4 +135,16 @@ func (c *Config) applyEnv() {
 	// Logging
 	c.Logging.Level = sharedConfig.GetEnv("LOG_LEVEL", c.Logging.Level)
 	c.Logging.Format = sharedConfig.GetEnv("LOG_FORMAT", c.Logging.Format)
+}
+
+func splitCSV(value string) []string {
+	parts := strings.Split(value, ",")
+	result := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			result = append(result, part)
+		}
+	}
+	return result
 }

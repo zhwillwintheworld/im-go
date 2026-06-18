@@ -26,5 +26,5 @@ func (h *Handler) handleHeartbeat(ctx context.Context, conn *connection.Connecti
 	builder.Finish(respOffset)
 	respPayload := builder.FinishedBytes()
 
-	h.sendClientResponse(stream, reqID, im_protocol.ErrorCodeSUCCESS, "", im_protocol.ResponsePayloadHeartbeatResp, respPayload)
+	h.sendClientResponse(conn, reqID, im_protocol.ErrorCodeSUCCESS, "", im_protocol.ResponsePayloadHeartbeatResp, respPayload)
 }

@@ -76,11 +76,11 @@ func (h *Handler) handleConversationRead(conn *connection.Connection, stream *we
 
 	if err := h.publishUpstream(msg); err != nil {
 		h.logger.Error("Failed to publish conversation read to NATS", "error", err)
-		h.sendClientResponse(stream, reqID, im_protocol.ErrorCodeUNKNOWN_ERROR, "internal error", im_protocol.ResponsePayloadNONE, nil)
+		h.sendClientResponse(conn, reqID, im_protocol.ErrorCodeUNKNOWN_ERROR, "internal error", im_protocol.ResponsePayloadNONE, nil)
 		return
 	}
 
 	// 返回成功
-	h.sendClientResponse(stream, reqID, im_protocol.ErrorCodeSUCCESS, "", im_protocol.ResponsePayloadNONE, nil)
+	h.sendClientResponse(conn, reqID, im_protocol.ErrorCodeSUCCESS, "", im_protocol.ResponsePayloadNONE, nil)
 	// Conversation read forwarded
 }

@@ -111,6 +111,16 @@ func (c *Connection) Send(data []byte) error {
 	}
 }
 
+// WriteQueueLength 返回当前连接写队列长度，用于轻量观测。
+func (c *Connection) WriteQueueLength() int {
+	return len(c.writeChan)
+}
+
+// WriteQueueCapacity 返回当前连接写队列容量，用于轻量观测。
+func (c *Connection) WriteQueueCapacity() int {
+	return cap(c.writeChan)
+}
+
 func (c *Connection) writeLoop() {
 	for {
 		select {

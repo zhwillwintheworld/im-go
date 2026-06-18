@@ -237,6 +237,9 @@ temp_uploads/
 docs/build/
 docs/.vuepress/dist/
 
+# 本地执行计划
+docs/plans/
+
 # 杂项
 .DS_Store?
 ehthumbs.db

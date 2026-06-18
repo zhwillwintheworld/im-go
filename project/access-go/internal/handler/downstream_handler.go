@@ -113,6 +113,7 @@ func (h *Handler) handleMessageAck(conn *connection.Connection, ack *proto.Messa
 	im_protocol.ChatSendAckStart(builder)
 	im_protocol.ChatSendAckAddMsgId(builder, msgIdOffset)
 	im_protocol.ChatSendAckAddSendTime(builder, ack.Timestamp)
+	im_protocol.ChatSendAckAddStatus(builder, toFlatBufferAckStatus(ack.Status))
 	ackOffset := im_protocol.ChatSendAckEnd(builder)
 	builder.Finish(ackOffset)
 
@@ -132,6 +133,17 @@ func (h *Handler) handleMessageAck(conn *connection.Connection, ack *proto.Messa
 			return
 		}
 		h.logger.Error("Failed to send ACK to user", "userId", conn.UserID(), "connId", conn.ID(), "error", err)
+	}
+}
+
+func toFlatBufferAckStatus(status proto.MessageAckStatus) im_protocol.AckStatus {
+	switch status {
+	case proto.MessageAckStatusPersisted:
+		return im_protocol.AckStatusPERSISTED
+	case proto.MessageAckStatusAccepted, "":
+		return im_protocol.AckStatusACCEPTED
+	default:
+		return im_protocol.AckStatusUNKNOWN
 	}
 }
 

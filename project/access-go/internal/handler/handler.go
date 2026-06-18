@@ -4,13 +4,14 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
+	"math"
 	"sync"
-	"time"
 
 	"log/slog"
 
-	flatbuffers "github.com/google/flatbuffers/go"
 	"github.com/quic-go/webtransport-go"
 	"sudooom.im.access/internal/connection"
 	"sudooom.im.access/internal/nats"
@@ -35,26 +36,38 @@ const (
 
 	// Buffer Pool 默认容量（4KB，适合大多数消息）
 	defaultBufferCap = 4096
+
+	// defaultMaxFrameSize 默认最大帧体长度，避免绕过配置加载时失去内存保护。
+	defaultMaxFrameSize = 1 << 20
 )
 
+var ErrFrameTooLarge = errors.New("frame body too large")
+
 type Handler struct {
-	connMgr     *connection.Manager
-	natsClient  *nats.Client
-	redisClient *redis.Client
-	nodeID      string
-	logger      *slog.Logger
-	workerPool  *workerpool.Pool
-	bufferPool  *sync.Pool // 消息 buffer 对象池，减少内存分配
+	connMgr        *connection.Manager
+	natsClient     *nats.Client
+	redisClient    *redis.Client
+	nodeID         string
+	logger         *slog.Logger
+	workerPool     *workerpool.Pool
+	bufferPool     *sync.Pool // 消息 buffer 对象池，减少内存分配
+	maxFrameSize   uint32
+	roomShardCount int
 }
 
-func NewHandler(connMgr *connection.Manager, natsClient *nats.Client, redisClient *redis.Client, nodeID string, logger *slog.Logger, workerPool *workerpool.Pool) *Handler {
+func NewHandler(connMgr *connection.Manager, natsClient *nats.Client, redisClient *redis.Client, nodeID string, logger *slog.Logger, workerPool *workerpool.Pool, maxFrameSize int, roomShardCount int) *Handler {
+	if roomShardCount <= 0 {
+		roomShardCount = sharedNats.DefaultRoomShardCount
+	}
 	return &Handler{
-		connMgr:     connMgr,
-		natsClient:  natsClient,
-		redisClient: redisClient,
-		nodeID:      nodeID,
-		logger:      logger,
-		workerPool:  workerPool,
+		connMgr:        connMgr,
+		natsClient:     natsClient,
+		redisClient:    redisClient,
+		nodeID:         nodeID,
+		logger:         logger,
+		workerPool:     workerPool,
+		maxFrameSize:   normalizeMaxFrameSize(maxFrameSize),
+		roomShardCount: roomShardCount,
 		bufferPool: &sync.Pool{
 			New: func() interface{} {
 				buf := make([]byte, 0, defaultBufferCap)
@@ -75,20 +88,16 @@ func (h *Handler) HandleStream(ctx context.Context, conn *connection.Connection,
 	conn.SetClientStream(stream)
 
 	for {
-		header := make([]byte, FrameHeaderSize)
-		if _, err := io.ReadFull(stream, header); err != nil {
-			if err != io.EOF {
-				h.logger.Debug("Failed to read frame header", "error", err, "conn_id", conn.ID())
+		frameType, body, err := readFrame(stream, h.maxFrameSize)
+		if err != nil {
+			if errors.Is(err, ErrFrameTooLarge) {
+				h.logger.Warn("Reject frame because body is too large",
+					"error", err,
+					"conn_id", conn.ID(),
+					"frameType", frameType)
+			} else if err != io.EOF {
+				h.logger.Debug("Failed to read frame", "error", err, "conn_id", conn.ID())
 			}
-			return
-		}
-
-		length := binary.BigEndian.Uint32(header[:4])
-		frameType := header[4]
-
-		body := make([]byte, length)
-		if _, err := io.ReadFull(stream, body); err != nil {
-			h.logger.Error("Failed to read body", "error", err)
 			return
 		}
 
@@ -130,6 +139,36 @@ func (h *Handler) HandleStream(ctx context.Context, conn *connection.Connection,
 	}
 }
 
+func normalizeMaxFrameSize(maxFrameSize int) uint32 {
+	if maxFrameSize <= 0 {
+		return defaultMaxFrameSize
+	}
+	if maxFrameSize > math.MaxUint32 {
+		return math.MaxUint32
+	}
+	return uint32(maxFrameSize)
+}
+
+func readFrame(reader io.Reader, maxBodySize uint32) (byte, []byte, error) {
+	header := make([]byte, FrameHeaderSize)
+	if _, err := io.ReadFull(reader, header); err != nil {
+		return 0, nil, err
+	}
+
+	length := binary.BigEndian.Uint32(header[:4])
+	frameType := header[4]
+	if maxBodySize > 0 && length > maxBodySize {
+		return frameType, nil, fmt.Errorf("%w: length=%d max=%d", ErrFrameTooLarge, length, maxBodySize)
+	}
+
+	body := make([]byte, length)
+	if _, err := io.ReadFull(reader, body); err != nil {
+		return frameType, nil, err
+	}
+
+	return frameType, body, nil
+}
+
 // dispatch 根据帧类型分发处理
 func (h *Handler) dispatch(ctx context.Context, conn *connection.Connection, stream *webtransport.Stream, frameType byte, body []byte) {
 	switch frameType {
@@ -165,54 +204,29 @@ func (h *Handler) handleClientRequest(ctx context.Context, conn *connection.Conn
 		h.handleGameRequest(ctx, conn, reqID, payload)
 	default:
 		h.logger.Warn("Unknown payload type", "payloadType", payloadType)
-		h.sendClientResponse(stream, reqID, im_protocol.ErrorCodeUNKNOWN_ERROR, "unknown request type", im_protocol.ResponsePayloadNONE, nil)
+		h.sendClientResponse(conn, reqID, im_protocol.ErrorCodeUNKNOWN_ERROR, "unknown request type", im_protocol.ResponsePayloadNONE, nil)
 	}
 }
 
-// sendClientResponse 发送响应给客户端
-func (h *Handler) sendClientResponse(stream *webtransport.Stream, reqID string, code im_protocol.ErrorCode, msg string, payloadType im_protocol.ResponsePayload, payload []byte) {
-	builder := flatbuffers.NewBuilder(256 + len(payload))
-
-	reqIDOffset := builder.CreateString(reqID)
-	msgOffset := builder.CreateString(msg)
-
-	var payloadOffset flatbuffers.UOffsetT
-	if len(payload) > 0 {
-		payloadOffset = builder.CreateByteVector(payload)
-	}
-
-	im_protocol.ClientResponseStart(builder)
-	im_protocol.ClientResponseAddReqId(builder, reqIDOffset)
-	im_protocol.ClientResponseAddTimestamp(builder, time.Now().UnixMilli())
-	im_protocol.ClientResponseAddCode(builder, code)
-	im_protocol.ClientResponseAddMsg(builder, msgOffset)
-	im_protocol.ClientResponseAddPayloadType(builder, payloadType)
-	if len(payload) > 0 {
-		im_protocol.ClientResponseAddPayload(builder, payloadOffset)
-	}
-	respOffset := im_protocol.ClientResponseEnd(builder)
-	builder.Finish(respOffset)
-
-	respBytes := builder.FinishedBytes()
-
-	// 发送带帧头的响应
-	h.sendFrame(stream, FrameTypeResponse, respBytes)
-}
-
-// sendFrame 发送带帧头的数据
-func (h *Handler) sendFrame(stream *webtransport.Stream, frameType byte, body []byte) {
-	header := make([]byte, FrameHeaderSize)
-	binary.BigEndian.PutUint32(header[:4], uint32(len(body)))
-	header[4] = frameType
-	_, err := stream.Write(header)
-	if err != nil {
-		return
-	}
-	if len(body) > 0 {
-		_, err := stream.Write(body)
-		if err != nil {
+// sendClientResponse 构建响应帧后通过连接写队列发送，保护 stream 单 writer 语义。
+func (h *Handler) sendClientResponse(conn *connection.Connection, reqID string, code im_protocol.ErrorCode, msg string, payloadType im_protocol.ResponsePayload, payload []byte) {
+	frame := h.buildClientResponseFrame(reqID, code, msg, payloadType, payload)
+	if err := conn.Send(frame); err != nil {
+		if errors.Is(err, connection.ErrConnectionBackpressure) {
+			h.logger.Warn("Drop client response because connection write queue is full",
+				"conn_id", conn.ID(),
+				"user_id", conn.UserID(),
+				"req_id", reqID,
+				"payload_type", payloadType,
+				"error", err)
 			return
 		}
+		h.logger.Error("Failed to enqueue client response",
+			"conn_id", conn.ID(),
+			"user_id", conn.UserID(),
+			"req_id", reqID,
+			"payload_type", payloadType,
+			"error", err)
 	}
 }
 
@@ -228,9 +242,23 @@ func (h *Handler) buildUpstreamMessage(conn *connection.Connection, payload prot
 
 // publishUpstream 发布上行消息到 Logic（辅助方法）
 func (h *Handler) publishUpstream(msg *proto.UpstreamMessage) error {
+	return h.publishUpstreamToSubject(sharedNats.SubjectLogicUpstream, msg)
+}
+
+func (h *Handler) publishUpstreamToSubject(subject string, msg *proto.UpstreamMessage) error {
 	data, err := json.Marshal(msg)
 	if err != nil {
 		return err
 	}
-	return h.natsClient.Publish(sharedNats.SubjectLogicUpstream, data)
+	return h.natsClient.Publish(subject, data)
+}
+
+func (h *Handler) logicRoomShardSubject(roomID string, fallbackUserID int64) string {
+	shard := sharedNats.ShardForRoomID(roomID, fallbackUserID, h.roomShardCount)
+	return sharedNats.BuildLogicRoomShardSubject(shard)
+}
+
+func (h *Handler) logicGameShardSubject(roomID string, fallbackUserID int64) string {
+	shard := sharedNats.ShardForRoomID(roomID, fallbackUserID, h.roomShardCount)
+	return sharedNats.BuildLogicGameShardSubject(shard)
 }

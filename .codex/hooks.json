@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/bin/python3 /Users/zhanghua/.codex/hooks/session_start_load_context.py",
+            "timeout": 30,
+            "statusMessage": "Loading project context"
+          }
+        ]
+      }
+    ]
+  }
+}

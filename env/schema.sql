@@ -144,6 +144,8 @@ CREATE INDEX idx_messages_from_user ON messages(from_user_id, created_at DESC);
 CREATE INDEX idx_messages_to_user ON messages(to_user_id, created_at DESC) WHERE to_user_id IS NOT NULL;
 CREATE INDEX idx_messages_to_group ON messages(to_group_id, created_at DESC) WHERE to_group_id IS NOT NULL;
 CREATE INDEX idx_messages_client_msg_id ON messages(client_msg_id);
+CREATE UNIQUE INDEX idx_messages_from_user_client_msg_id ON messages(from_user_id, client_msg_id)
+    WHERE client_msg_id != '' AND deleted = 0;
 CREATE INDEX idx_messages_object_code ON messages(object_code) WHERE object_code != '';
 
 COMMENT ON TABLE messages IS '消息表';

@@ -2,20 +2,23 @@ import { create } from 'zustand';
 import * as flatbuffers from 'flatbuffers';
 import { transportManager } from '@/services/transport/WebTransportManager';
 import { IMProtocol, FrameType } from '@/services/protocol/IMProtocol';
-import { ChatType, MsgType, ResponsePayload, ChatPush } from '@/im/protocol';
+import { AckStatus, ChatType, MsgType, ResponsePayload, ChatPush, ChatSendAck } from '@/im/protocol';
 import { useChatStore } from './chatStore';
 import { latencyAnalyzer } from '@/services/WebTransportLatencyAnalyzer';
 import { getUTC8TimeString } from '@/utils/time';
 import { logger } from '@/utils/logger';
 
+type MessageStatus = 'pending' | 'accepted' | 'persisted' | 'sent' | 'failed';
+
 interface Message {
     id: string;
+    serverMsgId?: string;
     conversationId: string;
     content: string;
     senderId: string;
     isSelf: boolean;
     timestamp: number;
-    status: 'pending' | 'sent' | 'failed';
+    status: MessageStatus;
     latency?: number; // 消息延迟（毫秒）
 }
 
@@ -23,15 +26,24 @@ interface MessageState {
     messages: Map<string, Message[]>;
     addMessage: (convId: string, msg: Message) => void;
     sendMessage: (convId: string, content: string) => Promise<void>;
-    updateMessageStatus: (msgId: string, status: Message['status']) => void;
+    updateMessageStatus: (msgId: string, status: MessageStatus) => void;
+    updateMessageAck: (localMsgId: string, status: MessageStatus, serverMsgId: string) => void;
     initListener: () => void;
+    handleChatSendAck: (reqId: string, payload: Uint8Array) => void;
     handleChatPush: (payload: Uint8Array) => void;
+    recoverPendingAcks: () => Promise<void>;
     sendTimestamps: Map<string, string>; // reqId -> 发送时间字符串，用于计算延迟
+    pendingAcks: Map<string, string>; // reqId -> localMsgId
+    pendingFrames: Map<string, Uint8Array>; // reqId -> 原始发送帧，用于重连后按同一 clientMsgId 恢复
 }
+
+let messageListenerInitialized = false;
 
 export const useMessageStore = create<MessageState>((set, get) => ({
     messages: new Map(),
     sendTimestamps: new Map(),
+    pendingAcks: new Map(),
+    pendingFrames: new Map(),
 
     addMessage: (convId: string, msg: Message) => {
         set((state) => {
@@ -72,6 +84,8 @@ export const useMessageStore = create<MessageState>((set, get) => ({
             // 记录到延迟分析器
             latencyAnalyzer.recordSend(reqId);
 
+            get().pendingAcks.set(reqId, msgId);
+            get().pendingFrames.set(reqId, frame.slice());
             // 保存发送时间戳（用于本地延迟计算）
             get().sendTimestamps.set(reqId, getUTC8TimeString());
 
@@ -81,6 +95,14 @@ export const useMessageStore = create<MessageState>((set, get) => ({
             useChatStore.getState().updateLastMessage(convId, content);
         } catch (e) {
             logger.error('Failed to send message:', e);
+            for (const [reqId, localMsgId] of get().pendingAcks) {
+                if (localMsgId === msgId) {
+                    get().pendingAcks.delete(reqId);
+                    get().pendingFrames.delete(reqId);
+                    get().sendTimestamps.delete(reqId);
+                    break;
+                }
+            }
             get().updateMessageStatus(msgId, 'failed');
         }
     },
@@ -99,6 +121,56 @@ export const useMessageStore = create<MessageState>((set, get) => ({
             }
             return { messages: newMessages };
         });
+    },
+
+    updateMessageAck: (localMsgId: string, status: MessageStatus, serverMsgId: string) => {
+        set((state) => {
+            const newMessages = new Map(state.messages);
+            for (const [convId, msgs] of newMessages) {
+                const index = msgs.findIndex((m) => m.id === localMsgId);
+                if (index >= 0) {
+                    const newMsgs = [...msgs];
+                    newMsgs[index] = { ...newMsgs[index], status, serverMsgId };
+                    newMessages.set(convId, newMsgs);
+                    break;
+                }
+            }
+            return { messages: newMessages };
+        });
+    },
+
+    handleChatSendAck: (reqId: string, payload: Uint8Array) => {
+        try {
+            const bb = new flatbuffers.ByteBuffer(payload);
+            const ack = ChatSendAck.getRootAsChatSendAck(bb);
+            const localMsgId = get().pendingAcks.get(reqId);
+            if (!localMsgId) {
+                logger.warn('[MessageStore] ACK has no pending local message', { reqId });
+                return;
+            }
+
+            const serverMsgId = ack.msgId() || '';
+            const ackStatus = ack.status();
+            const nextStatus: MessageStatus = ackStatus === AckStatus.PERSISTED ? 'persisted' : 'accepted';
+            get().updateMessageAck(localMsgId, nextStatus, serverMsgId);
+
+            if (ackStatus === AckStatus.ACCEPTED) {
+                const result = latencyAnalyzer.recordReceive(reqId);
+                if (result !== null) {
+                    logger.info(`[MessageStore] 收到 accepted ACK reqId=${reqId}, 延迟=${result.latency.toFixed(2)}ms`);
+                    get().sendTimestamps.delete(reqId);
+                }
+            }
+
+            if (ackStatus === AckStatus.PERSISTED) {
+                get().pendingAcks.delete(reqId);
+                get().pendingFrames.delete(reqId);
+                get().sendTimestamps.delete(reqId);
+                logger.debug('[MessageStore] 收到 persisted ACK', { reqId, serverMsgId });
+            }
+        } catch (e) {
+            logger.error('[MessageStore] Failed to parse ChatSendAck:', e);
+        }
     },
 
     // 处理收到的 ChatPush 消息
@@ -159,23 +231,52 @@ export const useMessageStore = create<MessageState>((set, get) => ({
         }
     },
 
+    recoverPendingAcks: async () => {
+        const pendingFrames = Array.from(get().pendingFrames.entries());
+        if (pendingFrames.length === 0) {
+            return;
+        }
+
+        logger.info('[MessageStore] Recovering pending ACKs after reconnect', {
+            count: pendingFrames.length,
+        });
+
+        for (const [reqId, frame] of pendingFrames) {
+            const localMsgId = get().pendingAcks.get(reqId);
+            if (!localMsgId) {
+                get().pendingFrames.delete(reqId);
+                get().sendTimestamps.delete(reqId);
+                continue;
+            }
+
+            try {
+                latencyAnalyzer.recordSend(reqId);
+                get().sendTimestamps.set(reqId, getUTC8TimeString());
+                await transportManager.send(frame);
+            } catch (e) {
+                logger.warn('[MessageStore] Failed to recover pending ACK, keep for next reconnect', {
+                    reqId,
+                    error: e,
+                });
+                break;
+            }
+        }
+    },
+
     initListener: () => {
+        if (messageListenerInitialized) {
+            return;
+        }
+        messageListenerInitialized = true;
+
         logger.info('[MessageStore] initListener called, registering message handler');
         transportManager.onMessage((frameType: FrameType, body: Uint8Array) => {
             if (frameType === FrameType.Response) {
                 const resp = IMProtocol.parseClientResponse(body);
                 switch (resp.payloadType) {
                     case ResponsePayload.ChatSendAck:
-                        // 消息发送确认
-                        if (resp.reqId) {
-                            // 使用延迟分析器计算延迟
-                            const result = latencyAnalyzer.recordReceive(resp.reqId);
-
-                            if (result !== null) {
-                                logger.info(`[MessageStore] 📥 收到ACK reqId=${resp.reqId}, 延迟=${result.latency.toFixed(2)}ms`);
-                                // 删除本地时间戳映射
-                                get().sendTimestamps.delete(resp.reqId);
-                            }
+                        if (resp.reqId && resp.payload) {
+                            get().handleChatSendAck(resp.reqId, resp.payload);
                         }
                         break;
                     case ResponsePayload.ChatPush:
@@ -190,6 +291,14 @@ export const useMessageStore = create<MessageState>((set, get) => ({
                 }
             } else {
                 logger.debug('[MessageStore] Non-Response frame type:', frameType);
+            }
+        });
+
+        transportManager.onStatusChange((status) => {
+            if (status === 'connected') {
+                get().recoverPendingAcks().catch((e) => {
+                    logger.warn('[MessageStore] Pending ACK recovery failed', e);
+                });
             }
         });
     }

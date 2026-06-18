@@ -7,7 +7,11 @@ import { logger } from '@/utils/logger';
  */
 export class WebTransportLatencyAnalyzer {
     private latencies: number[] = [];
+    private connectionLatencies: number[] = [];
+    private authLatencies: number[] = [];
     private timestamps: Map<string, { startTime: number; timeString: string }> = new Map();
+    private connectionStartTime: number | null = null;
+    private authStartTime: number | null = null;
     private maxHistorySize: number = 1000;
 
     /**
@@ -18,6 +22,34 @@ export class WebTransportLatencyAnalyzer {
             startTime: performance.now(),
             timeString: getUTC8TimeString()
         });
+    }
+
+    recordConnectionStart(): void {
+        this.connectionStartTime = performance.now();
+    }
+
+    recordConnectionReady(): number | null {
+        if (this.connectionStartTime === null) {
+            return null;
+        }
+        const latency = performance.now() - this.connectionStartTime;
+        this.pushLatency(this.connectionLatencies, latency);
+        this.connectionStartTime = null;
+        return latency;
+    }
+
+    recordAuthStart(): void {
+        this.authStartTime = performance.now();
+    }
+
+    recordAuthSuccess(): number | null {
+        if (this.authStartTime === null) {
+            return null;
+        }
+        const latency = performance.now() - this.authStartTime;
+        this.pushLatency(this.authLatencies, latency);
+        this.authStartTime = null;
+        return latency;
     }
 
     /**
@@ -31,13 +63,8 @@ export class WebTransportLatencyAnalyzer {
 
         const latency = performance.now() - sendRecord.startTime;
         const receiveTimeString = getUTC8TimeString();
-        this.latencies.push(latency);
+        this.pushLatency(this.latencies, latency);
         this.timestamps.delete(reqId);
-
-        // 限制历史记录大小
-        if (this.latencies.length > this.maxHistorySize) {
-            this.latencies.shift();
-        }
 
         return {
             latency,
@@ -50,22 +77,15 @@ export class WebTransportLatencyAnalyzer {
      * 获取统计数据
      */
     getStats(): LatencyStats | null {
-        if (this.latencies.length === 0) {
-            return null;
-        }
+        return this.buildStats(this.latencies);
+    }
 
-        const sorted = [...this.latencies].sort((a, b) => a - b);
-        const sum = this.latencies.reduce((a, b) => a + b, 0);
+    getConnectionStats(): LatencyStats | null {
+        return this.buildStats(this.connectionLatencies);
+    }
 
-        return {
-            count: this.latencies.length,
-            avg: sum / this.latencies.length,
-            min: sorted[0],
-            max: sorted[sorted.length - 1],
-            p50: sorted[Math.floor(sorted.length * 0.5)],
-            p95: sorted[Math.floor(sorted.length * 0.95)],
-            p99: sorted[Math.floor(sorted.length * 0.99)],
-        };
+    getAuthStats(): LatencyStats | null {
+        return this.buildStats(this.authLatencies);
     }
 
     /**
@@ -100,7 +120,11 @@ export class WebTransportLatencyAnalyzer {
      */
     reset(): void {
         this.latencies = [];
+        this.connectionLatencies = [];
+        this.authLatencies = [];
         this.timestamps.clear();
+        this.connectionStartTime = null;
+        this.authStartTime = null;
     }
 
     /**
@@ -142,6 +166,32 @@ export class WebTransportLatencyAnalyzer {
             logger.info(`⏳ 待确认请求: ${pending}`);
         }
         logger.info('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    }
+
+    private pushLatency(target: number[], latency: number): void {
+        target.push(latency);
+        if (target.length > this.maxHistorySize) {
+            target.shift();
+        }
+    }
+
+    private buildStats(values: number[]): LatencyStats | null {
+        if (values.length === 0) {
+            return null;
+        }
+
+        const sorted = [...values].sort((a, b) => a - b);
+        const sum = values.reduce((a, b) => a + b, 0);
+
+        return {
+            count: values.length,
+            avg: sum / values.length,
+            min: sorted[0],
+            max: sorted[sorted.length - 1],
+            p50: sorted[Math.floor(sorted.length * 0.5)],
+            p95: sorted[Math.floor(sorted.length * 0.95)],
+            p99: sorted[Math.floor(sorted.length * 0.99)],
+        };
     }
 }
 

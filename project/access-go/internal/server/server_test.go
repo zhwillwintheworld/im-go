@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"reflect"
@@ -29,16 +30,18 @@ import (
 const (
 	frameHeaderSize = 5
 	frameTypeAuth   = byte(1)
+	frameTypeReq    = byte(2)
 )
 
 // TestWebTransportAuth 测试 WebTransport 认证流程
 func TestWebTransportAuth(t *testing.T) {
+	requireIntegrationTest(t)
+
 	// 1. 启动测试服务器
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
 
 	// 创建测试配置
-	cfg := createTestConfig()
+	cfg := createTestConfig(t)
 
 	// 创建测试依赖
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
@@ -51,22 +54,20 @@ func TestWebTransportAuth(t *testing.T) {
 	if err != nil {
 		t.Fatalf("创建 NATS 客户端失败: %v", err)
 	}
-	defer natsClient.Close()
+	t.Cleanup(natsClient.Close)
 
 	// 创建并启动服务器
 	server := New(cfg, natsClient, redisClient, logger)
-
-	// 在 goroutine 中启动服务器
-	serverErr := make(chan error, 1)
-	go func() {
-		err := server.Start(ctx)
-		if err != nil {
-			serverErr <- err
+	serverErr := startTestAccessServer(t, ctx, server)
+	t.Cleanup(func() {
+		server.Shutdown()
+		cancel()
+		select {
+		case err := <-serverErr:
+			t.Logf("WebTransport server stopped: %v", err)
+		default:
 		}
-	}()
-
-	// 等待服务器启动
-	time.Sleep(2 * time.Second)
+	})
 
 	// 2. 创建测试用户的 token
 	testUserID := int64(12345)
@@ -156,29 +157,30 @@ func TestWebTransportAuth(t *testing.T) {
 
 // TestWebTransportAuthFail 测试认证失败场景
 func TestWebTransportAuthFail(t *testing.T) {
-	if os.Getenv("INTEGRATION_TEST") == "" {
-		t.Skip("跳过集成测试，设置 INTEGRATION_TEST=1 来运行")
-	}
+	requireIntegrationTest(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
 
-	cfg := createTestConfig()
+	cfg := createTestConfig(t)
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	redisClient := redis.NewClient(cfg.Redis, cfg.Server.NodeID)
 	natsClient, err := nats.NewClient(cfg.NATS)
 	if err != nil {
 		t.Fatalf("创建 NATS 客户端失败: %v", err)
 	}
-	defer natsClient.Close()
+	t.Cleanup(natsClient.Close)
 
 	server := New(cfg, natsClient, redisClient, logger)
-	go func() {
-		if err := server.Start(ctx); err != nil && ctx.Err() == nil {
-			t.Logf("启动 WebTransport server 失败: %v", err)
+	serverErr := startTestAccessServer(t, ctx, server)
+	t.Cleanup(func() {
+		server.Shutdown()
+		cancel()
+		select {
+		case err := <-serverErr:
+			t.Logf("WebTransport server stopped: %v", err)
+		default:
 		}
-	}()
-	time.Sleep(2 * time.Second)
+	})
 
 	url := "https://" + cfg.Server.Addr + "/webtransport"
 	dialer := createWebTransportDialer(t)
@@ -211,10 +213,10 @@ func TestWebTransportAuthFail(t *testing.T) {
 		t.Fatalf("发送认证帧失败: %v", err)
 	}
 
-	// 读取响应
 	response, err := readResponse(stream)
 	if err != nil {
-		t.Fatalf("读取认证响应失败: %v", err)
+		t.Logf("认证失败时连接被快速关闭: %v", err)
+		return
 	}
 
 	// 验证认证失败
@@ -227,13 +229,150 @@ func TestWebTransportAuthFail(t *testing.T) {
 		string(response.Msg()))
 }
 
+// TestWebTransportRejectsNonAuthFirstFrame 测试认证首包异常时快速拒绝。
+func TestWebTransportRejectsNonAuthFirstFrame(t *testing.T) {
+	requireIntegrationTest(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+
+	cfg := createTestConfig(t)
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	redisClient := redis.NewClient(cfg.Redis, cfg.Server.NodeID)
+	natsClient, err := nats.NewClient(cfg.NATS)
+	if err != nil {
+		t.Fatalf("创建 NATS 客户端失败: %v", err)
+	}
+	t.Cleanup(natsClient.Close)
+
+	server := New(cfg, natsClient, redisClient, logger)
+	serverErr := startTestAccessServer(t, ctx, server)
+	t.Cleanup(func() {
+		server.Shutdown()
+		cancel()
+		select {
+		case err := <-serverErr:
+			t.Logf("WebTransport server stopped: %v", err)
+		default:
+		}
+	})
+
+	url := "https://" + cfg.Server.Addr + "/webtransport"
+	dialer := createWebTransportDialer(t)
+	resp, session, err := dialer.Dial(ctx, url, nil)
+	if err != nil {
+		t.Fatalf("建立 WebTransport 连接失败: %v", err)
+	}
+	defer func() {
+		if err := session.CloseWithError(0, "test completed"); err != nil {
+			t.Logf("关闭 WebTransport session 失败: %v", err)
+		}
+	}()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("WebTransport 握手失败，状态码: %d", resp.StatusCode)
+	}
+
+	stream, err := session.OpenStreamSync(ctx)
+	if err != nil {
+		t.Fatalf("打开双向流失败: %v", err)
+	}
+	defer func() {
+		if err := stream.Close(); err != nil {
+			t.Logf("关闭 WebTransport stream 失败: %v", err)
+		}
+	}()
+
+	if err := sendFrame(stream, frameTypeReq, nil); err != nil {
+		t.Fatalf("发送非认证首包失败: %v", err)
+	}
+
+	response, err := readResponse(stream)
+	if err != nil {
+		t.Logf("非认证首包被快速关闭: %v", err)
+		return
+	}
+	if response.Code() != im_protocol.ErrorCodeAUTH_FAILED {
+		t.Fatalf("非认证首包应返回认证失败，实际错误码: %s", response.Code().String())
+	}
+}
+
+// TestWebTransportRejectsOversizedAuthFrame 测试认证首包超过最大帧长时快速拒绝。
+func TestWebTransportRejectsOversizedAuthFrame(t *testing.T) {
+	requireIntegrationTest(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+
+	cfg := createTestConfig(t)
+	cfg.Server.MaxFrameSize = 4
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	redisClient := redis.NewClient(cfg.Redis, cfg.Server.NodeID)
+	natsClient, err := nats.NewClient(cfg.NATS)
+	if err != nil {
+		t.Fatalf("创建 NATS 客户端失败: %v", err)
+	}
+	t.Cleanup(natsClient.Close)
+
+	server := New(cfg, natsClient, redisClient, logger)
+	serverErr := startTestAccessServer(t, ctx, server)
+	t.Cleanup(func() {
+		server.Shutdown()
+		cancel()
+		select {
+		case err := <-serverErr:
+			t.Logf("WebTransport server stopped: %v", err)
+		default:
+		}
+	})
+
+	url := "https://" + cfg.Server.Addr + "/webtransport"
+	dialer := createWebTransportDialer(t)
+	resp, session, err := dialer.Dial(ctx, url, nil)
+	if err != nil {
+		t.Fatalf("建立 WebTransport 连接失败: %v", err)
+	}
+	defer func() {
+		if err := session.CloseWithError(0, "test completed"); err != nil {
+			t.Logf("关闭 WebTransport session 失败: %v", err)
+		}
+	}()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("WebTransport 握手失败，状态码: %d", resp.StatusCode)
+	}
+
+	stream, err := session.OpenStreamSync(ctx)
+	if err != nil {
+		t.Fatalf("打开双向流失败: %v", err)
+	}
+	defer func() {
+		if err := stream.Close(); err != nil {
+			t.Logf("关闭 WebTransport stream 失败: %v", err)
+		}
+	}()
+
+	oversizedAuthReq := buildAuthRequest("too-large-token", "device-001", im_protocol.PlatformWEB)
+	if len(oversizedAuthReq) <= cfg.Server.MaxFrameSize {
+		t.Fatalf("测试数据长度 %d 必须大于 max_frame_size %d", len(oversizedAuthReq), cfg.Server.MaxFrameSize)
+	}
+	if err := sendAuthFrame(stream, oversizedAuthReq); err != nil {
+		t.Fatalf("发送超大认证帧失败: %v", err)
+	}
+
+	if response, err := readResponse(stream); err == nil && response.Code() == im_protocol.ErrorCodeSUCCESS {
+		t.Fatal("超大认证帧不应认证成功")
+	} else if err != nil {
+		t.Logf("超大认证帧被快速关闭: %v", err)
+	}
+}
+
 // createTestConfig 创建测试配置
-func createTestConfig() *config.Config {
+func createTestConfig(t *testing.T) *config.Config {
+	t.Helper()
+
 	return &config.Config{
 		Server: config.ServerConfig{
-			Addr:                   "localhost:18081", // 使用不同端口避免冲突
+			Addr:                   pickTestUDPAddr(t),
 			NodeID:                 "test-access-1",
 			MaxConnections:         1000,
+			MaxFrameSize:           config.DefaultMaxFrameSize,
 			HeartbeatTimeout:       90 * time.Second,
 			HeartbeatCheckInterval: 30 * time.Second,
 		},
@@ -243,8 +382,8 @@ func createTestConfig() *config.Config {
 			MaxIncomingStreams:    100,
 			MaxIncomingUniStreams: 50,
 			Allow0RTT:             true,
-			CertFile:              "../../localhost+2.pem",
-			KeyFile:               "../../localhost+2-key.pem",
+			CertFile:              "../../localhost.crt",
+			KeyFile:               "../../localhost.key",
 		},
 		NATS: config.NATSConfig{
 			URL:           "nats://localhost:4222",
@@ -258,6 +397,47 @@ func createTestConfig() *config.Config {
 			PoolSize: 10,
 		},
 	}
+}
+
+func pickTestUDPAddr(t *testing.T) string {
+	t.Helper()
+
+	conn, err := net.ListenPacket("udp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("分配测试 UDP 端口失败: %v", err)
+	}
+	defer func() {
+		if err := conn.Close(); err != nil {
+			t.Logf("关闭临时 UDP 端口失败: %v", err)
+		}
+	}()
+	return conn.LocalAddr().String()
+}
+
+func requireIntegrationTest(t *testing.T) {
+	t.Helper()
+	if os.Getenv("INTEGRATION_TEST") == "" {
+		t.Skip("跳过集成测试，设置 INTEGRATION_TEST=1 来运行")
+	}
+}
+
+func startTestAccessServer(t *testing.T, ctx context.Context, server *Server) <-chan error {
+	t.Helper()
+
+	serverErr := make(chan error, 1)
+	go func() {
+		if err := server.Start(ctx); err != nil && ctx.Err() == nil {
+			serverErr <- err
+		}
+	}()
+
+	select {
+	case err := <-serverErr:
+		t.Fatalf("启动 WebTransport server 失败: %v", err)
+	case <-time.After(500 * time.Millisecond):
+	}
+
+	return serverErr
 }
 
 // createWebTransportDialer 创建 WebTransport 拨号器
@@ -367,12 +547,14 @@ func buildAuthRequest(token, deviceID string, platform im_protocol.Platform) []b
 
 // sendAuthFrame 发送认证帧
 func sendAuthFrame(stream *webtransport.Stream, authReq []byte) error {
-	// 构建帧头：4 bytes length + 1 byte frame type
-	frame := make([]byte, frameHeaderSize+len(authReq))
-	binary.BigEndian.PutUint32(frame[:4], uint32(len(authReq)))
-	frame[4] = frameTypeAuth
-	copy(frame[frameHeaderSize:], authReq)
+	return sendFrame(stream, frameTypeAuth, authReq)
+}
 
+func sendFrame(stream *webtransport.Stream, frameType byte, body []byte) error {
+	frame := make([]byte, frameHeaderSize+len(body))
+	binary.BigEndian.PutUint32(frame[:4], uint32(len(body)))
+	frame[4] = frameType
+	copy(frame[frameHeaderSize:], body)
 	_, err := stream.Write(frame)
 	return err
 }

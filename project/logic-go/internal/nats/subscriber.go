@@ -23,20 +23,26 @@ type MessageHandler interface {
 
 // SubscriberConfig Worker Pool 配置
 type SubscriberConfig struct {
-	WorkerCount int // Worker 数量
-	BufferSize  int // 消息缓冲区大小
+	WorkerCount     int // 普通消息 Worker 数量
+	BufferSize      int // 普通消息缓冲区大小
+	RoomWorkerCount int // room/game Worker 数量
+	RoomBufferSize  int // room/game 消息缓冲区大小
+	RoomShardCount  int // room/game shard 总数
+	RoomShardIndex  int // 当前节点负责的 room/game shard
 }
 
 // MessageSubscriber 消息订阅器
 type MessageSubscriber struct {
-	nc           *nats.Conn
-	handler      MessageHandler
-	logger       *slog.Logger
-	subscription *nats.Subscription
-	config       SubscriberConfig
-	msgChan      chan *nats.Msg
-	wg           sync.WaitGroup
-	cancelFunc   context.CancelFunc
+	nc                 *nats.Conn
+	handler            MessageHandler
+	logger             *slog.Logger
+	subscription       *nats.Subscription
+	shardSubscriptions []*nats.Subscription
+	config             SubscriberConfig
+	msgChan            chan *nats.Msg
+	shardMsgChan       chan *nats.Msg
+	wg                 sync.WaitGroup
+	cancelFunc         context.CancelFunc
 }
 
 // NewMessageSubscriber 创建消息订阅器
@@ -47,6 +53,18 @@ func NewMessageSubscriber(nc *nats.Conn, handler MessageHandler, config Subscrib
 	}
 	if config.BufferSize <= 0 {
 		config.BufferSize = 10000
+	}
+	if config.RoomWorkerCount <= 0 {
+		config.RoomWorkerCount = 32
+	}
+	if config.RoomBufferSize <= 0 {
+		config.RoomBufferSize = 5000
+	}
+	if config.RoomShardCount <= 0 {
+		config.RoomShardCount = sharedNats.DefaultRoomShardCount
+	}
+	if config.RoomShardIndex < 0 || config.RoomShardIndex >= config.RoomShardCount {
+		config.RoomShardIndex = 0
 	}
 
 	return &MessageSubscriber{
@@ -61,6 +79,7 @@ func NewMessageSubscriber(nc *nats.Conn, handler MessageHandler, config Subscrib
 func (s *MessageSubscriber) Start(ctx context.Context) error {
 	// 创建带缓冲的消息通道
 	s.msgChan = make(chan *nats.Msg, s.config.BufferSize)
+	s.shardMsgChan = make(chan *nats.Msg, s.config.RoomBufferSize)
 
 	// 创建可取消的上下文
 	workerCtx, cancel := context.WithCancel(ctx)
@@ -69,7 +88,12 @@ func (s *MessageSubscriber) Start(ctx context.Context) error {
 	// 启动 Worker Pool
 	for i := 0; i < s.config.WorkerCount; i++ {
 		s.wg.Add(1)
-		go s.worker(workerCtx)
+		go s.worker(workerCtx, s.msgChan)
+	}
+
+	for i := 0; i < s.config.RoomWorkerCount; i++ {
+		s.wg.Add(1)
+		go s.worker(workerCtx, s.shardMsgChan)
 	}
 
 	// 订阅上行消息 - 使用队列组实现负载均衡
@@ -88,28 +112,68 @@ func (s *MessageSubscriber) Start(ctx context.Context) error {
 	}
 
 	s.subscription = sub
+
+	if err := s.subscribeRoomGameShards(); err != nil {
+		if unsubscribeErr := sub.Unsubscribe(); unsubscribeErr != nil {
+			s.logger.Error("Failed to unsubscribe upstream after shard subscribe error", "error", unsubscribeErr)
+		}
+		cancel()
+		return err
+	}
+
 	s.logger.Info("NATS subscriber started",
 		"subject", sharedNats.SubjectLogicUpstream,
 		"workerCount", s.config.WorkerCount,
 		"bufferSize", s.config.BufferSize,
+		"roomWorkerCount", s.config.RoomWorkerCount,
+		"roomBufferSize", s.config.RoomBufferSize,
+		"roomShardCount", s.config.RoomShardCount,
+		"roomShardIndex", s.config.RoomShardIndex,
 	)
 	return nil
 }
 
 // worker 工作协程
-func (s *MessageSubscriber) worker(ctx context.Context) {
+func (s *MessageSubscriber) worker(ctx context.Context, msgChan <-chan *nats.Msg) {
 	defer s.wg.Done()
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case msg, ok := <-s.msgChan:
+		case msg, ok := <-msgChan:
 			if !ok {
 				return
 			}
 			s.handleUpstreamMessage(ctx, msg.Data)
 		}
+	}
+}
+
+func (s *MessageSubscriber) subscribeRoomGameShards() error {
+	for _, subject := range s.roomGameShardSubjects() {
+		sub, err := s.nc.Subscribe(subject, func(msg *nats.Msg) {
+			select {
+			case s.shardMsgChan <- msg:
+			default:
+				s.logger.Warn("Room/game message buffer full, dropping message",
+					"subject", msg.Subject,
+					"bufferSize", s.config.RoomBufferSize)
+			}
+		})
+		if err != nil {
+			return err
+		}
+		s.shardSubscriptions = append(s.shardSubscriptions, sub)
+	}
+	return nil
+}
+
+func (s *MessageSubscriber) roomGameShardSubjects() []string {
+	shard := s.config.RoomShardIndex
+	return []string{
+		sharedNats.BuildLogicRoomShardSubject(shard),
+		sharedNats.BuildLogicGameShardSubject(shard),
 	}
 }
 
@@ -154,10 +218,18 @@ func (s *MessageSubscriber) Stop() error {
 			s.logger.Error("Failed to unsubscribe", "error", err)
 		}
 	}
+	for _, sub := range s.shardSubscriptions {
+		if err := sub.Unsubscribe(); err != nil {
+			s.logger.Error("Failed to unsubscribe shard", "error", err)
+		}
+	}
 
 	// 关闭消息通道
 	if s.msgChan != nil {
 		close(s.msgChan)
+	}
+	if s.shardMsgChan != nil {
+		close(s.shardMsgChan)
 	}
 
 	// 等待所有 worker 完成

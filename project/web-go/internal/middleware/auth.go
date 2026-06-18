@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"log/slog"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -21,7 +22,12 @@ func TokenAuth(tokenRepo *repository.TokenRepository, accessExpire, autoRenewThr
 		}
 
 		// 从 Redis 获取用户信息
+		tokenLookupStart := time.Now()
 		userInfo, err := tokenRepo.GetUserInfoByToken(c.Request.Context(), authHeader)
+		tokenLookupElapsed := time.Since(tokenLookupStart)
+		if tokenLookupElapsed > 20*time.Millisecond {
+			slog.Warn("token lookup slow", "elapsed", tokenLookupElapsed, "path", c.Request.URL.Path)
+		}
 		if err != nil {
 			response.Error(c, response.CodeServerError)
 			c.Abort()

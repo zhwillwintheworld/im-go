@@ -2,6 +2,7 @@
 
 /* eslint-disable @typescript-eslint/no-unused-vars, @typescript-eslint/no-explicit-any, @typescript-eslint/no-non-null-assertion */
 
+export { AckStatus } from './protocol/ack-status.js';
 export { AuthRequest } from './protocol/auth-request.js';
 export { ChatPush } from './protocol/chat-push.js';
 export { ChatSendAck } from './protocol/chat-send-ack.js';

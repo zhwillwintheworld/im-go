@@ -173,6 +173,12 @@ enum ResponsePayload : byte {
     SystemPush = 13
 }
 
+enum AckStatus : byte {
+    UNKNOWN = 0,
+    ACCEPTED = 1,
+    PERSISTED = 2
+}
+
 table ClientResponse {
     req_id: string;
     timestamp: int64;
@@ -186,6 +192,7 @@ table ClientResponse {
 table ChatSendAck {
     msg_id: string;
     send_time: int64;
+    status: AckStatus = ACCEPTED;
 }
 
 // 房间响应

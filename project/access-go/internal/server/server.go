@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"log/slog"
 	"net/http"
+	"strings"
 	"sync"
 
 	"github.com/quic-go/quic-go"
@@ -48,7 +49,12 @@ func New(cfg *config.Config, natsClient *nats.Client, redisClient *redis.Client,
 	// 创建 Worker Pool
 	workerPool := workerpool.New(workerPoolSize, workerQueueSize, logger)
 
-	handler := handler.NewHandler(connMgr, natsClient, redisClient, cfg.Server.NodeID, logger, workerPool)
+	maxFrameSize := cfg.Server.MaxFrameSize
+	if maxFrameSize <= 0 {
+		maxFrameSize = config.DefaultMaxFrameSize
+	}
+
+	handler := handler.NewHandler(connMgr, natsClient, redisClient, cfg.Server.NodeID, logger, workerPool, maxFrameSize, cfg.Server.RoomShardCount)
 
 	return &Server{
 		cfg:         cfg,
@@ -83,15 +89,20 @@ func (s *Server) Start(ctx context.Context) error {
 			TLSConfig:  tlsConfig,
 			QUICConfig: quicConfig,
 		},
-		CheckOrigin: func(r *http.Request) bool {
-			// TODO: 生产环境应该检查 Origin
-			return true
-		},
+		CheckOrigin: s.checkOrigin,
 	}
 
 	// 设置 HTTP 路由
 	mux := http.NewServeMux()
 	mux.HandleFunc("/webtransport", func(w http.ResponseWriter, r *http.Request) {
+		if !s.canAcceptSession() {
+			s.logger.Warn("Reject WebTransport upgrade because max connections reached",
+				"max_connections", s.cfg.Server.MaxConnections,
+				"current_connections", s.connMgr.Count())
+			http.Error(w, "too many connections", http.StatusServiceUnavailable)
+			return
+		}
+
 		session, err := s.wtServer.Upgrade(w, r)
 		if err != nil {
 			s.logger.Error("WebTransport upgrade failed", "error", err)
@@ -133,6 +144,16 @@ func (s *Server) Start(ctx context.Context) error {
 
 func (s *Server) handleSession(ctx context.Context, session *webtransport.Session) {
 	defer s.wg.Done()
+
+	if !s.canAcceptSession() {
+		s.logger.Warn("Close WebTransport session because max connections reached",
+			"max_connections", s.cfg.Server.MaxConnections,
+			"current_connections", s.connMgr.Count())
+		if err := session.CloseWithError(4002, "too many connections"); err != nil {
+			s.logger.Error("Failed to close overloaded session", "error", err)
+		}
+		return
+	}
 
 	c := connection.NewFromWebTransport(session, s.logger)
 	s.connMgr.Add(c)
@@ -177,6 +198,36 @@ func (s *Server) handleSession(ctx context.Context, session *webtransport.Sessio
 	// 流关闭后函数返回，触发 defer 中的清理逻辑
 	// Stream closed, cleanup
 
+}
+
+func (s *Server) canAcceptSession() bool {
+	return hasConnectionCapacity(s.cfg.Server.MaxConnections, s.connMgr.Count())
+}
+
+func hasConnectionCapacity(maxConnections, currentConnections int) bool {
+	return maxConnections <= 0 || currentConnections < maxConnections
+}
+
+func (s *Server) checkOrigin(r *http.Request) bool {
+	origin := strings.TrimSpace(r.Header.Get("Origin"))
+	if origin == "" {
+		return true
+	}
+
+	allowedOrigins := s.cfg.Server.AllowedOrigins
+	if len(allowedOrigins) == 0 {
+		return true
+	}
+
+	for _, allowed := range allowedOrigins {
+		allowed = strings.TrimSpace(allowed)
+		if allowed == "*" || strings.EqualFold(allowed, origin) {
+			return true
+		}
+	}
+
+	s.logger.Warn("Reject WebTransport origin", "origin", origin)
+	return false
 }
 
 func (s *Server) subscribeDownstream() {

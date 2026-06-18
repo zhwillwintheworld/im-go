@@ -2,6 +2,13 @@ server:
   addr: ":8081"  # 使用明确的 IPv4 地址
   node_id: "access-1"
   max_connections: 50000
+  max_frame_size: 1048576
+  room_shard_count: 1
+  allowed_origins:
+    - "http://localhost:5173"
+    - "https://localhost:5173"
+    - "http://127.0.0.1:5173"
+    - "https://127.0.0.1:5173"
   heartbeat_timeout: 90s        # 心跳超时时间
   heartbeat_check_interval: 30s # 心跳检测间隔
 

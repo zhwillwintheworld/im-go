@@ -4,6 +4,9 @@
 
 import * as flatbuffers from 'flatbuffers';
 
+import { AckStatus } from '../../im/protocol/ack-status.js';
+
+
 export class ChatSendAck {
   bb: flatbuffers.ByteBuffer|null = null;
   bb_pos = 0;
@@ -34,8 +37,13 @@ sendTime():bigint {
   return offset ? this.bb!.readInt64(this.bb_pos + offset) : BigInt('0');
 }
 
+status():AckStatus {
+  const offset = this.bb!.__offset(this.bb_pos, 8);
+  return offset ? this.bb!.readInt8(this.bb_pos + offset) : AckStatus.ACCEPTED;
+}
+
 static startChatSendAck(builder:flatbuffers.Builder) {
-  builder.startObject(2);
+  builder.startObject(3);
 }
 
 static addMsgId(builder:flatbuffers.Builder, msgIdOffset:flatbuffers.Offset) {
@@ -46,15 +54,20 @@ static addSendTime(builder:flatbuffers.Builder, sendTime:bigint) {
   builder.addFieldInt64(1, sendTime, BigInt('0'));
 }
 
+static addStatus(builder:flatbuffers.Builder, status:AckStatus) {
+  builder.addFieldInt8(2, status, AckStatus.ACCEPTED);
+}
+
 static endChatSendAck(builder:flatbuffers.Builder):flatbuffers.Offset {
   const offset = builder.endObject();
   return offset;
 }
 
-static createChatSendAck(builder:flatbuffers.Builder, msgIdOffset:flatbuffers.Offset, sendTime:bigint):flatbuffers.Offset {
+static createChatSendAck(builder:flatbuffers.Builder, msgIdOffset:flatbuffers.Offset, sendTime:bigint, status:AckStatus):flatbuffers.Offset {
   ChatSendAck.startChatSendAck(builder);
   ChatSendAck.addMsgId(builder, msgIdOffset);
   ChatSendAck.addSendTime(builder, sendTime);
+  ChatSendAck.addStatus(builder, status);
   return ChatSendAck.endChatSendAck(builder);
 }
 }

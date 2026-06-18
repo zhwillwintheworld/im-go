@@ -95,6 +95,7 @@ func (s *RoomService) CreateRoom(ctx context.Context, params CreateRoomParams) (
 		s.logger.Error("Failed to join room as creator", "error", err, "roomId", roomId)
 		return nil, err
 	}
+	s.roomManager.TriggerSnapshot(roomId)
 
 	s.logger.Info("Room created", "roomId", roomId, "creator", params.UserId)
 
@@ -130,6 +131,7 @@ func (s *RoomService) JoinRoom(ctx context.Context, params JoinRoomParams) (*mod
 		s.logger.Warn("Failed to join room", "error", err, "userId", params.UserId, "roomId", params.RoomId)
 		return nil, err
 	}
+	s.roomManager.TriggerSnapshot(params.RoomId)
 
 	s.logger.Info("User joined room", "userId", params.UserId, "roomId", params.RoomId, "seatIndex", seatIndex)
 
@@ -156,6 +158,7 @@ func (s *RoomService) LeaveRoom(ctx context.Context, params LeaveRoomParams) (*m
 		s.logger.Warn("Failed to leave room", "error", err, "userId", params.UserId, "roomId", params.RoomId)
 		return nil, err
 	}
+	s.roomManager.TriggerSnapshot(params.RoomId)
 
 	s.logger.Info("User left room", "userId", params.UserId, "roomId", params.RoomId)
 
@@ -182,6 +185,7 @@ func (s *RoomService) ReadyRoom(ctx context.Context, params ReadyRoomParams) (*m
 		s.logger.Warn("Failed to ready", "error", err, "userId", params.UserId, "roomId", params.RoomId)
 		return nil, err
 	}
+	s.roomManager.TriggerSnapshot(params.RoomId)
 
 	s.logger.Info("User ready status changed", "userId", params.UserId, "roomId", params.RoomId)
 
@@ -208,6 +212,7 @@ func (s *RoomService) ChangeSeat(ctx context.Context, params ChangeSeatParams) (
 		s.logger.Warn("Failed to change seat", "error", err, "userId", params.UserId, "roomId", params.RoomId)
 		return nil, err
 	}
+	s.roomManager.TriggerSnapshot(params.RoomId)
 
 	s.logger.Info("User changed seat", "userId", params.UserId, "roomId", params.RoomId, "targetSeat", params.TargetSeat)
 
@@ -240,6 +245,7 @@ func (s *RoomService) StartGame(ctx context.Context, params StartGameParams) (*m
 		s.logger.Warn("Failed to start game", "error", err, "userId", params.UserId, "roomId", params.RoomId)
 		return nil, err
 	}
+	s.roomManager.TriggerSnapshot(params.RoomId)
 
 	s.logger.Info("Game started successfully", "userId", params.UserId, "roomId", params.RoomId)
 

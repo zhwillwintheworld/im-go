@@ -15,6 +15,10 @@ nats:
   reconnect_wait: 2s
   worker_count: 100    # Worker Pool 并发数
   buffer_size: 10000   # 消息缓冲区大小
+  room_worker_count: 32
+  room_buffer_size: 5000
+  room_shard_count: 1
+  room_shard_index: 0
 
 # PostgreSQL
 database:
@@ -50,3 +54,13 @@ room:
   max_rooms: 50000          # 最大房间数
   evict_check_interval: 60s # 房间清理检查间隔
   evict_timeout: 30m       # 房间无响应超时时间
+
+# 群消息 fan-out 配置
+fanout:
+  worker_count: 8
+  buffer_size: 1024
+  large_group_threshold: 100
+  location_query_concurrency: 8
+  location_batch_size: 256
+  dispatch_concurrency: 32
+  group_member_cache_ttl: 500ms

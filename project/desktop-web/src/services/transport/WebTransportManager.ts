@@ -1,5 +1,6 @@
 import { IMProtocol, FrameType } from '../protocol/IMProtocol.js';
 import { logger } from '@/utils/logger';
+import { latencyAnalyzer } from '@/services/WebTransportLatencyAnalyzer';
 
 type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'reconnecting';
 type MessageHandler = (frameType: FrameType, body: Uint8Array) => void;
@@ -51,6 +52,8 @@ class WebTransportManager {
         this.abortController = new AbortController();
 
         try {
+            latencyAnalyzer.recordConnectionStart();
+
             // 开发环境证书哈希 (14天有效期的自签名证书 wt-cert.pem)
             // WebTransport 要求自签名证书有效期不超过 14 天
             // 计算方法: openssl x509 -in wt-cert.pem -outform DER | openssl dgst -sha256 -binary | base64
@@ -70,6 +73,10 @@ class WebTransportManager {
 
             // 等待连接就绪
             await transport.ready;
+            const connectionLatency = latencyAnalyzer.recordConnectionReady();
+            if (connectionLatency !== null) {
+                logger.info(`[WebTransport] Connection ready latency=${connectionLatency.toFixed(2)}ms`);
+            }
 
             // 检查是否在连接过程中被取消
             if (this.abortController.signal.aborted) {
@@ -91,11 +98,16 @@ class WebTransportManager {
             );
 
             const authResult = this.waitForAuthResponse();
+            latencyAnalyzer.recordAuthStart();
             // 启动数据接收（在后台运行，不要 await，否则会阻塞）
             this.startReceiving();
             await this.writeFrame(authFrame);
             logger.info('[WebTransport] Authentication request sent, waiting for response...');
             await authResult;
+            const authLatency = latencyAnalyzer.recordAuthSuccess();
+            if (authLatency !== null) {
+                logger.info(`[WebTransport] Auth latency=${authLatency.toFixed(2)}ms`);
+            }
 
             if (this.abortController.signal.aborted) {
                 throw new Error('Connection aborted');

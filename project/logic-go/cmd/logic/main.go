@@ -82,9 +82,16 @@ func main() {
 	dispatcherService := service.NewDispatcherService(publisher)
 
 	// 创建 RouterService（编排层）
-	routerService := service.NewRouterService(locationService, dispatcherService)
+	routerService := service.NewRouterServiceWithConfig(locationService, dispatcherService, service.RouterConfig{
+		FanoutWorkerCount:        cfg.Fanout.WorkerCount,
+		FanoutBufferSize:         cfg.Fanout.BufferSize,
+		LargeGroupThreshold:      cfg.Fanout.LargeGroupThreshold,
+		LocationQueryConcurrency: cfg.Fanout.LocationQueryConcurrency,
+		LocationBatchSize:        cfg.Fanout.LocationBatchSize,
+		DispatchConcurrency:      cfg.Fanout.DispatchConcurrency,
+	})
 
-	groupService := service.NewGroupService(db)
+	groupService := service.NewGroupServiceWithCacheTTL(db, cfg.Fanout.GroupMemberCacheTTL)
 	messageService := service.NewMessageService(db, sfNode)
 
 	// 创建消息批量写入器
@@ -142,8 +149,12 @@ func main() {
 
 	// 启动订阅者
 	subscriber := imNats.NewMessageSubscriber(natsClient.Conn(), msgHandler, imNats.SubscriberConfig{
-		WorkerCount: cfg.NATS.WorkerCount,
-		BufferSize:  cfg.NATS.BufferSize,
+		WorkerCount:     cfg.NATS.WorkerCount,
+		BufferSize:      cfg.NATS.BufferSize,
+		RoomWorkerCount: cfg.NATS.RoomWorkerCount,
+		RoomBufferSize:  cfg.NATS.RoomBufferSize,
+		RoomShardCount:  cfg.NATS.RoomShardCount,
+		RoomShardIndex:  cfg.NATS.RoomShardIndex,
 	})
 	if err := subscriber.Start(ctx); err != nil {
 		logger.Error("Failed to start subscriber", "error", err)
@@ -162,6 +173,7 @@ func main() {
 	if err := subscriber.Stop(); err != nil {
 		logger.Error("Failed to stop subscriber", "error", err)
 	}
+	routerService.Stop()
 	messageBatcher.Stop()
 	taskScheduler.Stop()
 	logger.Info("Logic service stopped")

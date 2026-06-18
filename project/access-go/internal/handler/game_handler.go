@@ -26,7 +26,8 @@ func (h *Handler) handleGameRequest(_ctx context.Context, conn *connection.Conne
 		},
 	})
 
-	if err := h.publishUpstream(msg); err != nil {
+	subject := h.logicGameShardSubject(msg.Payload.GameRequest.RoomId, msg.Payload.GameRequest.UserId)
+	if err := h.publishUpstreamToSubject(subject, msg); err != nil {
 		h.logger.Error("Failed to publish game request to NATS", "error", err)
 	}
 	// Game request published

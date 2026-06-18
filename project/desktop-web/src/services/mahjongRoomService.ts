@@ -89,10 +89,7 @@ class MahjongRoomService {
         if (roomConfigOffset) {
             RoomReq.addRoomConfig(builder, roomConfigOffset);
         }
-
-        // 注意：现有协议可能还没有 targetSeatIndex 字段
-        // 如果使用，需要后端更新 schema
-        // RoomReq.addTargetSeatIndex(builder, targetSeatIndex);
+        RoomReq.addTargetSeatIndex(builder, targetSeatIndex);
 
         const roomReqOffset = RoomReq.endRoomReq(builder);
         builder.finish(roomReqOffset);

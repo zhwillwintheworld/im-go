@@ -24,6 +24,10 @@ type RoomManager struct {
 	maxRooms     int
 	evictTimeout time.Duration
 	evictTicker  *time.Ticker
+	stopChan     chan struct{}
+	stopOnce     sync.Once
+
+	snapshotChan chan string
 
 	// 用于发送清理通知
 	roomService interface{} // 使用 interface{} 避免循环依赖，实际类型为 *RoomService
@@ -37,10 +41,13 @@ func NewRoomManager(maxRooms int, evictTimeout time.Duration, evictCheckInterval
 		maxRooms:     maxRooms,
 		evictTimeout: evictTimeout,
 		evictTicker:  time.NewTicker(evictCheckInterval),
+		stopChan:     make(chan struct{}),
+		snapshotChan: make(chan string, 1024),
 		logger:       slog.Default().With("component", "RoomManager"),
 	}
 
 	go m.evictLoop()
+	go m.snapshotLoop()
 
 	return m
 }
@@ -77,6 +84,18 @@ func (m *RoomManager) Remove(roomId string) {
 	m.logger.Info("Removed room", "roomId", roomId)
 }
 
+// TriggerSnapshot 非阻塞触发房间快照，后续可接入 Redis/PostgreSQL 持久化。
+func (m *RoomManager) TriggerSnapshot(roomId string) {
+	if roomId == "" {
+		return
+	}
+	select {
+	case m.snapshotChan <- roomId:
+	default:
+		m.logger.Warn("Room snapshot queue full, skip snapshot", "roomId", roomId)
+	}
+}
+
 // Count 返回当前房间数
 func (m *RoomManager) Count() int {
 	count := 0
@@ -89,8 +108,26 @@ func (m *RoomManager) Count() int {
 
 // evictLoop 淘汰循环
 func (m *RoomManager) evictLoop() {
-	for range m.evictTicker.C {
-		m.evictInactive()
+	for {
+		select {
+		case <-m.evictTicker.C:
+			m.evictInactive()
+		case <-m.stopChan:
+			m.logger.Info("Room evict loop stopped")
+			return
+		}
+	}
+}
+
+func (m *RoomManager) snapshotLoop() {
+	for {
+		select {
+		case roomId := <-m.snapshotChan:
+			m.logger.Debug("Room snapshot requested", "roomId", roomId)
+		case <-m.stopChan:
+			m.logger.Info("Room snapshot loop stopped")
+			return
+		}
 	}
 }
 
@@ -139,6 +176,9 @@ func (m *RoomManager) evictInactive() {
 // Shutdown 关闭管理器
 func (m *RoomManager) Shutdown(ctx context.Context) error {
 	m.evictTicker.Stop()
+	m.stopOnce.Do(func() {
+		close(m.stopChan)
+	})
 
 	m.logger.Info("RoomManager shutdown complete")
 	return nil
